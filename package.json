@@ -8,6 +8,9 @@
   "scripts": {
     "dev": "vite --port 8791",
     "build": "vite build",
+    "build:minitool": "vite build --config vite.minitool.config.js",
+    "validate:minitool": "node scripts/validate_minitool.mjs",
+    "package:minitool": "npm run build:minitool && npm run validate:minitool && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_minitool.ps1",
     "preview": "vite preview",
     "test:fish-pick": "node scripts/test_fish_pick_area.mjs",
     "test:toy-shadow": "node scripts/test_toy_shadows.mjs",
@@ -18,6 +21,12 @@
   "dependencies": {
     "cannon-es": "^0.20.0",
     "three": "^0.178.0"
+  },
+  "imports": {
+    "#bgm": "./src/bgm.js",
+    "#codex-pet-preview": "./src/codexPetPreview.js",
+    "#glb-export": "./src/glbExport.browser.js",
+    "#platform": "./src/platform.browser.js"
   },
   "devDependencies": {
     "vite": "^7.0.0"

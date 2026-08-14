@@ -8,6 +8,7 @@ dist/
 *.docx
 *.pdf
 Exports/
+.codex/
 References/Mesh2Motion/
 
 *.glb

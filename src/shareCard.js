@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getRepositoryMarkup } from '#platform';
 
 const CARD_LAYOUT = Object.freeze({
   windowX: 0.08,
@@ -9,7 +10,6 @@ const CARD_LAYOUT = Object.freeze({
 
 export const SHARE_CARD_REPOSITORY = Object.freeze({
   label: 'github.com/ringhyacinth/Meow-Generator',
-  url: 'https://github.com/ringhyacinth/Meow-Generator',
 });
 
 const CARD_TOTAL = 9999;
@@ -127,6 +127,7 @@ const COPY = Object.freeze({
     camera: '拍照',
     close: '取消',
     saved: '已保存 PNG',
+    saveFailed: '保存失败，请在小红书真机或模拟器中重试',
     hint: '拖动画面调整角度',
     title: '猫猫纪念卡',
     skin: '换一个皮肤',
@@ -136,6 +137,7 @@ const COPY = Object.freeze({
     camera: '撮影',
     close: '閉じる',
     saved: 'PNG を保存しました',
+    saveFailed: '保存できませんでした。小紅書アプリまたはシミュレーターで再試行してください',
     hint: 'ドラッグして角度を調整',
     title: 'ねこ記念カード',
     skin: 'スキンを変更',
@@ -145,6 +147,7 @@ const COPY = Object.freeze({
     camera: 'Capture',
     close: 'Close',
     saved: 'PNG saved',
+    saveFailed: 'Save failed. Try again in the Xiaohongshu app or simulator.',
     hint: 'Drag the scene to adjust the angle',
     title: 'Meow keepsake card',
     skin: 'New skin',
@@ -699,12 +702,7 @@ export function createShareCardCapture({
         <span class="share-card-live-subtitle"></span>
         <span class="share-card-serial"></span>
         <span class="share-card-rarity"></span>
-        <a
-          class="share-card-repo"
-          href="${SHARE_CARD_REPOSITORY.url}"
-          target="_blank"
-          rel="noreferrer"
-        >↗ ${SHARE_CARD_REPOSITORY.label}</a>
+        ${getRepositoryMarkup(SHARE_CARD_REPOSITORY.label)}
       </div>
       <p class="share-card-hint"></p>
       <div class="share-card-actions">
@@ -890,10 +888,14 @@ export function createShareCardCapture({
 
       const blob = await new Promise((resolve) => output.toBlob(resolve, 'image/png'));
       if (blob) {
-        downloadBlob(blob, getShareCardFilename(getSeed()));
+        await downloadBlob(blob, getShareCardFilename(getSeed()));
         statusEl.textContent = localeCopy(getLocale()).saved;
         viewport.dataset.shareCardCaptured = 'true';
       }
+    } catch (error) {
+      console.warn('Share card save failed', error);
+      statusEl.textContent = localeCopy(getLocale()).saveFailed;
+      viewport.dataset.shareCardCaptured = 'false';
     } finally {
       captureButton.disabled = false;
     }

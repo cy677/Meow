@@ -261,6 +261,20 @@ body,
   background: #e9e1ce;
 }
 
+html {
+  touch-action: manipulation;
+}
+
+body {
+  -webkit-touch-callout: none;
+}
+
+.xhs-minitool .music-tool,
+.xhs-minitool #btn-export-glb,
+.xhs-minitool #btn-codex-pet {
+  display: none;
+}
+
 button,
 input,
 select {
@@ -2040,7 +2054,7 @@ select {
   }
 
   #viewport-quick-settings {
-    left: max(8px, env(safe-area-inset-left));
+    left: max(8px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
     top: 8px;
   }
 
@@ -2092,14 +2106,14 @@ select {
 
   #scene-tools {
     top: 48px;
-    right: max(8px, env(safe-area-inset-right));
+    right: max(8px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
     gap: 6px;
     transform: scale(0.7);
     transform-origin: top right;
   }
 
   .panel-footer {
-    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    padding-bottom: calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
 }
 
@@ -2129,7 +2143,7 @@ select {
   }
 
   #scene-tools {
-    right: max(6px, env(safe-area-inset-right));
+    right: max(6px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
     transform: scale(0.66);
   }
 }
@@ -2293,7 +2307,7 @@ select {
   }
 
   #controls {
-    padding: 2px 9px calc(18px + env(safe-area-inset-bottom));
+    padding: 2px 9px calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
 
   #controls > .section {
@@ -2419,7 +2433,7 @@ select {
   }
 
   .panel-footer {
-    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    padding-bottom: calc(14px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
 
   .panel-brand-footer {
@@ -2622,7 +2636,7 @@ select {
   }
 
   #viewport-quick-settings {
-    left: max(7px, env(safe-area-inset-left));
+    left: max(7px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
     top: 7px;
   }
 
@@ -2642,7 +2656,7 @@ select {
 
   #scene-tools {
     top: 7px;
-    right: max(7px, env(safe-area-inset-right));
+    right: max(7px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
     gap: 7px;
     transform: scale(0.58);
     transform-origin: top right;
@@ -2692,7 +2706,7 @@ select {
 
 @media (max-height: 560px) and (orientation: landscape) {
   #viewport-quick-settings {
-    left: max(7px, env(safe-area-inset-left));
+    left: max(7px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
     top: 7px;
   }
 
@@ -2712,7 +2726,7 @@ select {
 
   #scene-tools {
     top: 7px;
-    right: max(7px, env(safe-area-inset-right));
+    right: max(7px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
     gap: 7px;
     transform: scale(0.58);
     transform-origin: top right;

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildCat, EYE_SPACING_RANGE } from './catBuilder.js';
 import { COATS, EYE_COLORS, POSES } from './coats.js';
 import { createRng, randomSeed } from './rng.js';
@@ -12,11 +11,13 @@ import { hatchUniforms, HATCH_PRESETS, HATCH_GLSL } from './hatch.js';
 import { createToyWorld } from './toys.js';
 import { createRugLayer } from './rug.js';
 import { createContainer, getContainerDescriptor } from './container.js';
-import { createRandomBgm } from './bgm.js';
+import { createRandomBgm } from '#bgm';
 import { initI18n } from './i18n.js';
 import { createShareCardCapture } from './shareCard.js';
 import { createSpeechBubbleController } from './speechBubbles.js';
-import { createCodexPetPreview } from './codexPetPreview.js';
+import { createCodexPetPreview } from '#codex-pet-preview';
+import { setupGlbExport } from '#glb-export';
+import { saveBlob } from '#platform';
 import {
   WEATHER_AMOUNT_LIMITS,
   createCloudField,
@@ -2667,14 +2668,6 @@ function randomizeAll() {
 
 document.getElementById('btn-random').addEventListener('click', randomizeAll);
 
-function download(blob, filename) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 const shareCardCapture = createShareCardCapture({
   viewport: document.getElementById('viewport'),
   renderer,
@@ -2691,23 +2684,13 @@ const shareCardCapture = createShareCardCapture({
     accent: params.eyeColor,
   }),
   getLocale: () => i18n.locale,
-  downloadBlob: download,
+  downloadBlob: saveBlob,
 });
 
-document.getElementById('btn-export-glb').addEventListener('click', () => {
-  const restoreDynamicCoat = cat.userData.prepareDynamicCoatExport?.();
-  new GLTFExporter().parse(
-    cat,
-    (result) => {
-      restoreDynamicCoat?.();
-      download(new Blob([result], { type: 'model/gltf-binary' }), `kitten_${params.seed}.glb`);
-    },
-    (err) => {
-      restoreDynamicCoat?.();
-      console.error('GLB export failed', err);
-    },
-    { binary: true }
-  );
+setupGlbExport({
+  button: document.getElementById('btn-export-glb'),
+  getCat: () => cat,
+  getSeed: () => params.seed,
 });
 
 document.getElementById('btn-export-png').addEventListener('click', () => {

@@ -37,7 +37,6 @@ assert.match(alternate.theme.name, /^cat-remix-/);
 assert.notDeepEqual(alternate.theme, catSignature.theme, 'alternate skin should visibly remix the cat palette');
 assert.deepEqual(alternate, alternateRepeat, 'the same skin variant should be reproducible');
 assert.equal(SHARE_CARD_REPOSITORY.label, 'github.com/ringhyacinth/Meow-Generator');
-assert.equal(SHARE_CARD_REPOSITORY.url, 'https://github.com/ringhyacinth/Meow-Generator');
 assert.equal(getShareCardFilename(42), 'meow_card_42.png');
 assert.equal(getShareCardFilename(-42), 'meow_card_42.png');
 
