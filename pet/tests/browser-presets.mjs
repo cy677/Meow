@@ -18,7 +18,7 @@ for (const page of [parent,child]) {
   page.on('request', r => { if (/^https?:/.test(r.url()) && !r.url().startsWith(origin + '/')) external.push(r.url()); });
 }
 const out = new URL('../test-results/', import.meta.url); mkdirSync(out, { recursive:true });
-const shot = async (page, name) => { await page.evaluate(() => { const d=document.querySelector('#preset-dialog'); if(d?.open)d.scrollTop=0; }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await page.screenshot({ path:new URL(name + '.png', out).pathname, fullPage:true }); };
+const shot = async (page, name) => { await page.evaluate(() => { const d=document.querySelector('#preset-dialog'); if(d?.open)d.scrollTop=0; }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); const dialog=page.locator('#preset-dialog');if(await dialog.isVisible())await dialog.screenshot({path:new URL(name + '.png',out).pathname});else await page.screenshot({path:new URL(name + '.png',out).pathname,fullPage:true}); };
 async function begin(category, title, cost, unlockAt) {
   await parent.locator('[data-action=new-preset]').click(); await parent.locator('#preset-dialog').waitFor({ state:'visible' });
   await parent.locator('#preset-form [name=category]').selectOption(category);
@@ -87,6 +87,7 @@ try {
   await parent.locator('[data-parent-tab=award]').click(); await parent.locator('#history-kind').selectOption('earn'); await parent.locator('#history-search').fill('独立整理'); await parent.locator('.history-filters button').click();
   await parent.locator('#history-entries strong').filter({ hasText:'独立整理书包' }).waitFor(); await shot(parent, 'parent-reasons-local');
   await child.locator('[data-view=history]').click(); await child.locator('#history-kind').selectOption('purchase'); await child.locator('#history-search').fill('薄荷三花'); await child.locator('.history-filters button').click();
+  await child.waitForFunction(() => { const rows=document.querySelectorAll('#history-entries .ledger-row'); return rows.length===1&&rows[0].textContent.includes('薄荷三花预设'); });
   await child.locator('#history-entries details summary').click(); assert.ok((await child.locator('#history-entries').innerText()).includes('#70a7a0')); await shot(child, 'redemption-snapshot');
   for (let i = 0; i < 75; i++) app.store.points({ delta:1, reason:`分页历史-${i}`, idempotencyKey:randomUUID() });
   await parent.locator('#history-search').fill(''); await parent.locator('#history-kind').selectOption('all');
