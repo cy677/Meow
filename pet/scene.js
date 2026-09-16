@@ -34,7 +34,8 @@ export function createPetScene(host) {
   }
   function fit() {
     const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);
-    renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();
+    // CSS owns layout; only resize the drawing buffer to avoid stale inline widths on mobile.
+    renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
     const v=THREE.MathUtils.degToRad(camera.fov),fov=Math.min(v,2*Math.atan(Math.tan(v/2)*camera.aspect));
     const distance=radius/Math.sin(fov/2)*1.15;
     controls.target.set(0,height*0.47,0);

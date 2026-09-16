@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -18,7 +18,7 @@ for (const page of [parent,child]) {
   page.on('request', r => { if (/^https?:/.test(r.url()) && !r.url().startsWith(origin + '/')) external.push(r.url()); });
 }
 const out = new URL('../test-results/', import.meta.url); mkdirSync(out, { recursive:true });
-const shot = async (page, name) => { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await page.screenshot({ path:new URL(name + '.png', out).pathname, fullPage:true }); };
+const shot = async (page, name) => { await page.evaluate(() => { const d=document.querySelector('#preset-dialog'); if(d?.open)d.scrollTop=0; }); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); await page.screenshot({ path:new URL(name + '.png', out).pathname, fullPage:true }); };
 async function begin(category, title, cost, unlockAt) {
   await parent.locator('[data-action=new-preset]').click(); await parent.locator('#preset-dialog').waitFor({ state:'visible' });
   await parent.locator('#preset-form [name=category]').selectOption(category);
@@ -52,6 +52,7 @@ try {
   await waitPreview('chubbiness', 1.7); assert.ok(!app.store.catalog().rewards.some(r => r.id === shape));
   await shot(parent, 'preset-shape-desktop');
   await parent.setViewportSize({ width:390, height:844 });
+  await parent.waitForFunction(() => document.querySelector('#preset-dialog').scrollWidth <= document.querySelector('#preset-dialog').clientWidth + 1);
   assert.ok(await parent.evaluate(() => document.querySelector('#preset-dialog').scrollWidth <= document.querySelector('#preset-dialog').clientWidth + 1));
   await shot(parent, 'preset-shape-mobile'); await parent.setViewportSize({ width:1365, height:1000 }); await save();
   const coat = await begin('coat', '薄荷三花预设', 10, 30);
@@ -94,4 +95,10 @@ try {
   await parent.locator('[data-parent-tab=settings]').click(); await parent.locator('#local-data-path').filter({ hasText:'pet.sqlite' }).waitFor(); await shot(parent, 'local-storage-settings');
   assert.deepEqual(external, []); assert.deepEqual(errors, []);
   console.log('PASS: local disk data; mandatory/searchable reasons; parent coat/shape/eye/pose/motion forms and live preview; no-write cancel; save/reload/cold login; child redeem/equip/play; immutable redemption details; >40 history pagination; mobile editor; zero external runtime requests.');
+} catch(error) {
+  await parent.screenshot({path:new URL('failure-parent.png',out).pathname,fullPage:true}).catch(()=>{});
+  await child.screenshot({path:new URL('failure-child.png',out).pathname,fullPage:true}).catch(()=>{});
+  const diagnostic=await parent.evaluate(()=>({status:document.querySelector('#preset-status')?.textContent,preview:document.querySelector('#preset-preview-status')?.textContent,overflow:[...document.querySelectorAll('#preset-dialog *')].filter(e=>e.getBoundingClientRect().right>document.querySelector('#preset-dialog').getBoundingClientRect().right).map(e=>({tag:e.tagName,id:e.id,cls:e.className,width:e.getBoundingClientRect().width})).slice(0,30)})).catch(()=>null);
+  writeFileSync(new URL('failure-details.json',out),JSON.stringify({message:error.message,diagnostic,errors},null,2));
+  throw error;
 } finally { await browser.close(); await app.close(); rmSync(dir, { recursive:true, force:true }); }
