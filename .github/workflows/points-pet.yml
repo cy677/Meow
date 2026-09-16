@@ -1,0 +1,42 @@
+name: Points pet checks
+on:
+  push:
+    branches: ['feature/points-pet-*']
+  pull_request:
+    paths: ['pet/**', 'package.json', '.github/workflows/points-pet.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Domain and HTTP tests
+        run: |
+          mkdir -p pet/test-results
+          npm run test:pet 2>&1 | tee pet/test-results/tests.txt
+      - name: Build pet and original editor
+        run: npm run pet:build && npm run build
+      - name: Install browser test runner
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Browser integration and screenshots
+        run: node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
+      - name: Source snapshot
+        if: always()
+        run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: points-pet-evidence
+          path: pet/test-results/
+          retention-days: 7

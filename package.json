@@ -16,19 +16,13 @@
     "test:toy-shadow": "node scripts/test_toy_shadows.mjs",
     "test:motion": "node scripts/test_mesh2motion_rig.mjs",
     "test:poke": "node scripts/test_soft_poke.mjs",
-    "test:share": "node scripts/test_share_card.mjs"
+    "test:share": "node scripts/test_share_card.mjs",
+    "pet:dev": "node pet/server.mjs --dev",
+    "pet:build": "vite build --config pet/vite.config.mjs",
+    "pet:start": "node pet/server.mjs",
+    "test:pet": "node --test pet/tests/*.test.mjs"
   },
-  "dependencies": {
-    "cannon-es": "^0.20.0",
-    "three": "^0.178.0"
-  },
-  "imports": {
-    "#bgm": "./src/bgm.js",
-    "#codex-pet-preview": "./src/codexPetPreview.js",
-    "#glb-export": "./src/glbExport.browser.js",
-    "#platform": "./src/platform.browser.js"
-  },
-  "devDependencies": {
-    "vite": "^7.0.0"
-  }
+  "dependencies": {"cannon-es": "^0.20.0", "three": "^0.178.0"},
+  "imports": {"#bgm": "./src/bgm.js", "#codex-pet-preview": "./src/codexPetPreview.js", "#glb-export": "./src/glbExport.browser.js", "#platform": "./src/platform.browser.js"},
+  "devDependencies": {"vite": "^7.0.0"}
 }
