@@ -124,8 +124,14 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         authorize(req,parent?'parent':'child',method!=='GET');
         if(method==='GET') {
           if(path==='/api/state'||path==='/api/parent/state')return json(res,200,store.snapshot(parent));
-          if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action}))});}
+          if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
           if(path==='/api/parent/catalog')return json(res,200,store.catalog());
+          if(path==='/api/parent/presets')return json(res,200,{catalog:store.catalog(),revision:store.catalogRevision()});
+          if(path==='/api/parent/storage')return json(res,200,store.storageInfo());
+          if(path==='/api/history'||path==='/api/parent/history') {
+            const q=new URL(req.url,expectedOrigin).searchParams;
+            return json(res,200,store.history({before:q.has('before')?Number(q.get('before')):null,limit:q.has('limit')?Number(q.get('limit')):40,kind:q.get('kind')??'all',q:q.get('q')??''}));
+          }
           if(path==='/api/parent/export'){res.setHeader('Content-Disposition','attachment; filename="meow-progress.json"');return json(res,200,store.exportData());}
         }
         if(method==='POST'||method==='PUT'){
@@ -136,7 +142,11 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
           if(path==='/api/play'&&method==='POST'){object(data,['rewardId']);return json(res,200,store.play(data.rewardId));}
           if(path==='/api/parent/points'&&method==='POST'){object(data,['delta','reason','idempotencyKey']);return json(res,200,store.points(data));}
           if(path==='/api/parent/profile'&&method==='PUT'){object(data,['childName','petName']);return json(res,200,store.profile(data));}
-          if(path==='/api/parent/catalog'&&method==='PUT')return json(res,200,store.saveCatalog(data));
+          if(path==='/api/parent/catalog'&&method==='PUT')return json(res,200,store.saveCatalog(data,req.headers['if-match']));
+          if(path==='/api/parent/presets'&&method==='PUT') {
+            object(data,['reward','expectedRevision']);
+            return json(res,200,store.savePreset(data.reward,data.expectedRevision));
+          }
           if(path==='/api/parent/credentials'&&method==='PUT'){
             object(data,['currentPin','newPin','childCode']);const reset=throttle(req,'credentials');
             if(!await verify('parent',data.currentPin))fail(403,'当前家长密码不正确');
@@ -178,6 +188,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   if(!Number.isInteger(port)||port<1||port>65535)throw new Error('MEOW_PORT 必须是有效端口');
   const app=await createPetServer({dev:process.argv.includes('--dev'),...(process.env.MEOW_DATA_DIR?{dbPath:resolve(process.env.MEOW_DATA_DIR,'pet.sqlite')}:{})});
   app.server.listen(port,host,()=>{
+    console.log(`本地数据文件：${app.store.storageInfo().path}（积分、理由、兑换和预设均保存在此处）`);
     console.log(`\n孩子页面：http://localhost:${port}/\n家长页面：http://localhost:${port}/parent.html`);
     if(app.setupToken)console.log(`\n首次初始化：在家长页面输入以下一次性口令（不要交给孩子）：\n${app.setupToken}\n`);
     if(host==='0.0.0.0')console.log('已开放局域网。仅限可信家庭网络；公网部署必须配置 HTTPS。');

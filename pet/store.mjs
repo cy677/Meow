@@ -1,11 +1,13 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { AppError, fail, text, integer, validateCatalog, composeParams } from './catalog.mjs';
+import { fail, text, integer, validateCatalog, composeParams } from './catalog.mjs';
+import { createLocalLedger } from './localLedger.mjs';
+import { resolve } from 'node:path';
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
 export function createStore(filename, initialCatalog) {
   const db = new DatabaseSync(filename);
-  db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
+  db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS profile (id INTEGER PRIMARY KEY CHECK(id=1), childName TEXT NOT NULL, petName TEXT NOT NULL,
       balance INTEGER NOT NULL CHECK(balance>=0 AND balance<=10000000), lifetime INTEGER NOT NULL CHECK(lifetime>=0 AND lifetime<=10000000), version INTEGER NOT NULL);
@@ -22,7 +24,9 @@ export function createStore(filename, initialCatalog) {
   const catalog = () => validateCatalog(JSON.parse(getSetting('catalog')));
   const tx = fn => { db.exec('BEGIN IMMEDIATE'); try { const result=fn(); db.exec('COMMIT'); return result; } catch(error) { db.exec('ROLLBACK'); throw error; } };
   const bump = () => db.prepare('UPDATE profile SET version=version+1 WHERE id=1').run();
-  const log = (kind,delta,reason,rewardId=null) => db.prepare('INSERT INTO ledger VALUES (?,?,?,?,?,?)').run(randomUUID(),kind,delta,reason,rewardId,new Date().toISOString());
+  const ledger = createLocalLedger(db, catalog);
+  const log = ledger.log;
+  const catalogRevision = () => createHash('sha256').update(JSON.stringify(catalog())).digest('hex');
   const grantMilestones = () => {
     const {lifetime}=db.prepare('SELECT lifetime FROM profile WHERE id=1').get();
     for (const reward of catalog().rewards) {
@@ -40,12 +44,13 @@ export function createStore(filename, initialCatalog) {
     const config=catalog();
     return { ...profile, owned, equipped, params:composeParams(config,equipped),
       rewards:config.rewards.map(r => {
-        const {params,action,...publicData}=r;
+        const {params,action,motion,...publicData}=r;
         return {...publicData, owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
           affordable:profile.balance>=r.cost, equipped:equipped[r.category]===r.id,
-          ...(parent ? {params,action} : {})};
+          ...(parent ? {params,action,...(motion ? {motion} : {})} : {})};
       }),
-      ledger:db.prepare('SELECT * FROM ledger ORDER BY rowid DESC LIMIT 100').all() };
+      ...(parent ? {catalogRevision:catalogRevision()} : {}),
+      ledger:ledger.latest() };
   }
   function mutate(key,payload,fn) {
     if (typeof key !== 'string' || !/^[A-Za-z0-9_-]{16,100}$/.test(key)) fail(400,'需要有效的幂等请求 ID');
@@ -58,8 +63,23 @@ export function createStore(filename, initialCatalog) {
       return true;
     });
   }
+  function saveCatalog(input, expectedRevision) {
+    const next = validateCatalog(input);
+    tx(() => {
+      if (expectedRevision !== undefined && expectedRevision !== catalogRevision()) fail(409,'奖励目录已在其他页面修改。请保留当前草稿，重新读取目录后再保存。');
+      for (const old of catalog().rewards) {
+        const item = next.rewards.find(r => r.id === old.id);
+        if (!item || item.category !== old.category || !!item.starter !== !!old.starter) fail(409,'不能删除已有奖励或改变其类别、初始标记；可添加新奖励');
+      }
+      setSetting('catalog', JSON.stringify(next)); grantMilestones(); bump();
+      log('catalog', 0, '家长更新了奖励配置');
+    });
+    return snapshot(true);
+  }
   return {
-    db, tx, catalog, snapshot, getSetting, setSetting,
+    db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting,
+    history: ledger.history,
+    storageInfo() { return { engine:'SQLite', localOnly:true, persistent:filename!==':memory:', path:filename===':memory:'?null:resolve(filename), ledgerCount:db.prepare('SELECT count(*) AS n FROM ledger').get().n, rewardCount:catalog().rewards.length }; },
     points({delta,reason,idempotencyKey}) {
       integer(delta,'积分变动',-10000,10000); if (!delta) fail(400,'积分变动不能为 0');
       reason=text(reason,'原因',120);
@@ -102,27 +122,22 @@ export function createStore(filename, initialCatalog) {
     play(rewardId) {
       const reward=catalog().rewards.find(r=>r.id===rewardId);
       if (!reward || reward.category!=='trick' || !db.prepare('SELECT id FROM owned WHERE id=?').get(rewardId)) fail(403,'尚未拥有这个互动动作');
-      return {action:reward.action,rewardId,playId:randomUUID()};
+      return {action:reward.action,...(reward.motion ? {motion:reward.motion} : {}),rewardId,playId:randomUUID()};
     },
     profile({childName,petName}) {
       childName=text(childName,'孩子昵称',20); petName=text(petName,'小猫名字',20);
-      tx(()=>{ db.prepare('UPDATE profile SET childName=?,petName=?,version=version+1 WHERE id=1').run(childName,petName); bump(); });
+      tx(()=>{ db.prepare('UPDATE profile SET childName=?,petName=? WHERE id=1').run(childName,petName); bump(); });
       return snapshot(true);
     },
-    saveCatalog(input) {
-      const next=validateCatalog(input);
-      tx(()=>{
-        const previous=catalog();
-        for (const old of previous.rewards) {
-          const item=next.rewards.find(r=>r.id===old.id);
-          // Keep stable IDs and slot meanings, including unowned rewards, for auditability.
-          if (!item || item.category!==old.category || !!item.starter!==!!old.starter) fail(409,'不能删除已有奖励或改变其类别、初始标记；可添加新奖励');
-        }
-        setSetting('catalog',JSON.stringify(next)); grantMilestones(); bump();
-        log('catalog',0,'家长更新了奖励配置');
-      }); return snapshot(true);
+    saveCatalog,
+    savePreset(reward, expectedRevision) {
+      if (typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(expectedRevision)) fail(400,'保存预设需要目录版本');
+      if (!reward || typeof reward !== 'object' || Array.isArray(reward)) fail(400,'需要完整奖励对象');
+      const next = catalog(), index = next.rewards.findIndex(r => r.id === reward.id);
+      if (index < 0) next.rewards.push(reward); else next.rewards[index] = reward;
+      return saveCatalog(next, expectedRevision);
     },
-    exportData() { return {schemaVersion:1,exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),ledger:db.prepare('SELECT * FROM ledger ORDER BY rowid').all()}; },
+    exportData() { return {schemaVersion:1,exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),ledger:ledger.all()}; },
     close() { db.close(); }
   };
 }

@@ -30,7 +30,9 @@ jobs:
       - name: Install browser test runner
         run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
       - name: Browser integration and screenshots
-        run: node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
+        run: |
+          node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
+          node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
       - name: Source snapshot
         if: always()
         run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip

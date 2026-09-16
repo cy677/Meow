@@ -50,8 +50,8 @@ export function createPetScene(host) {
     if(cat){cat.userData.updateEyeAnimation?.(t);cat.userData.updateStaticIdle?.(t,!reduced.matches);}
     pivot.position.y=0;pivot.rotation.y=-0.2;
     if(animation){
-      const f=Math.min(1,(now-animation.start)/1200),ease=f*f*(3-2*f);
-      if(!reduced.matches){if(animation.action==='jump')pivot.position.y=Math.sin(f*Math.PI)*0.5;else if(animation.action==='spin')pivot.rotation.y+=ease*Math.PI*2;}
+      const f=Math.min(1,(now-animation.start)/(animation.duration*1000)),ease=f*f*(3-2*f);
+      if(!reduced.matches){if(animation.action==='jump')pivot.position.y=Math.sin(f*Math.PI)*animation.height;else if(animation.action==='spin')pivot.rotation.y+=ease*Math.PI*2*animation.turns;}
       if(f>=1)animation=null;
     }
     controls.update();renderer.render(scene,camera);
@@ -67,9 +67,13 @@ export function createPetScene(host) {
       if(cat){pivot.remove(cat);release(cat);}cat=next;
       cat.position.set(-center.x,-box.min.y,-center.z);pivot.add(cat);
       height=size.y;radius=Math.max(size.length()/2,1.3);signature=JSON.stringify(params);animation=null;fit();
-      host.dataset.ready='true';host.dataset.coat=params.coatId;host.dataset.pose=params.pose;
+      host.dataset.ready='true';host.dataset.coat=params.coatId;host.dataset.pose=params.pose;host.dataset.params=JSON.stringify(params);
     },
-    play(action) { if(!['jump','spin'].includes(action))throw new Error('未知互动动作');animation={action,start:performance.now()}; },
+    play(action, motion = {}) {
+      if(!['jump','spin'].includes(action))throw new Error('未知互动动作');
+      animation={action,start:performance.now(),duration:motion.duration??1.2,height:motion.height??0.5,turns:motion.turns??1};
+      host.dataset.lastAction=action;host.dataset.actionDuration=String(animation.duration);
+    },
     dispose() {disposed=true;cancelAnimationFrame(frame);observer.disconnect();controls.dispose();if(cat)release(cat);release(floor);renderer.dispose();renderer.domElement.remove();},
   };
 }

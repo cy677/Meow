@@ -1,3 +1,4 @@
+import { PARAM_FIELDS, MOTION_FIELDS } from './presetSchema.mjs';
 /** Strict capability schema shared by the service and tests. No arbitrary JS/URLs. */
 export class AppError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -5,9 +6,6 @@ export class AppError extends Error {
 export const fail = (status, message) => { throw new AppError(status, message); };
 export const SLOTS = ['coat', 'shape', 'eyes', 'pose'];
 export const ACTIONS = ['jump', 'spin'];
-const COATS = ['orange','greyTabby','brownTabby','cream','tuxedo','calico','tortoiseshell','siamese','black','white','blueGrey'];
-const POSES = ['standing','loaf','stretch','biped','slouchSit','sideFlat','banana'];
-const SHAPE = { headSize:[0.78,1.42], chubbiness:[0.72,1.95], legLength:[0.48,1.65], earSize:[0.62,1.48], tailLength:[0.58,1.72], tailCurl:[-0.12,1.18], furFluff:[0.15,1.5] };
 export const DEFAULT_PARAMS = Object.freeze({ seed:20260916, pose:'standing', coatId:'orange', eyeColor:'#d99a2b', oddEyes:false, eyeColorRight:'#5b8fd4', headSize:1.08, chubbiness:1.15, legLength:0.85, earSize:1, eyeSize:1.05, eyeSpacing:1, irisScale:0.65, irisHighlightScale:1, wateryEyes:false, wateryEyeShape:1.1, tailLength:0.95, tailCurl:0.35, fluffy:false, furFluff:0.9, outlineJitter:0.25, dynamicCoat:false, motionDebug:false });
 export function object(value, keys) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail(400,'需要 JSON 对象');
@@ -22,12 +20,28 @@ export function integer(value, name, min=0, max=1000000) {
   if (!Number.isSafeInteger(value) || value < min || value > max) fail(400,`${name}必须是 ${min}–${max} 的整数`);
   return value;
 }
+export function validateFields(params, fields) {
+  object(params, fields.map(f => f.key));
+  if (!Object.keys(params).length) fail(400,'奖励参数不能为空');
+  for (const [key, value] of Object.entries(params)) {
+    const field = fields.find(f => f.key === key);
+    if (field.type === 'select') {
+      if (!field.choices.some(c => c[0] === value)) fail(400,`未知${field.label}`);
+    } else if (field.type === 'checkbox') {
+      if (typeof value !== 'boolean') fail(400,`${field.label}必须为布尔值`);
+    } else if (field.type === 'color') {
+      if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) fail(400,`${field.label}应为六位十六进制颜色`);
+    } else if (!Number.isFinite(value) || value < field.min || value > field.max || (field.step === 1 && !Number.isInteger(value))) {
+      fail(400,`${field.label}超出范围或不是有效数字`);
+    }
+  }
+}
 export function validateCatalog(input) {
   object(input,['schemaVersion','rewards']);
   if (input.schemaVersion !== 1 || !Array.isArray(input.rewards) || input.rewards.length > 200) fail(400,'奖励配置版本或数量不正确');
   const ids = new Set(); const starters = new Set();
   for (const reward of input.rewards) {
-    object(reward,['id','title','description','category','cost','unlockAt','starter','params','action']);
+    object(reward,['id','title','description','category','cost','unlockAt','starter','params','action','motion']);
     if (typeof reward.id !== 'string' || !/^[a-z][a-z0-9-]{2,63}$/.test(reward.id) || ids.has(reward.id)) fail(400,'奖励 ID 无效或重复');
     ids.add(reward.id);
     text(reward.title,'奖励名称',30); text(reward.description,'奖励说明',140);
@@ -40,19 +54,11 @@ export function validateCatalog(input) {
     }
     if (reward.category === 'trick') {
       if (!ACTIONS.includes(reward.action) || reward.params !== undefined) fail(400,'不支持的互动动作');
+      if (reward.motion !== undefined) validateFields(reward.motion, MOTION_FIELDS);
       continue;
     }
-    if (reward.action !== undefined) fail(400,'装扮奖励不能包含互动动作');
-    const keys = reward.category === 'coat' ? ['coatId'] : reward.category === 'pose' ? ['pose'] : reward.category === 'eyes' ? ['eyeColor','eyeColorRight','oddEyes'] : [...Object.keys(SHAPE),'fluffy'];
-    object(reward.params,keys);
-    if (!Object.keys(reward.params).length) fail(400,'奖励参数不能为空');
-    for (const [key,value] of Object.entries(reward.params)) {
-      if (key === 'coatId') { if (!COATS.includes(value)) fail(400,'未知花色'); }
-      else if (key === 'pose') { if (!POSES.includes(value)) fail(400,'未知姿态'); }
-      else if (key === 'fluffy' || key === 'oddEyes') { if (typeof value !== 'boolean') fail(400,'开关参数必须为布尔值'); }
-      else if (key.startsWith('eyeColor')) { if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) fail(400,'眼睛颜色应为六位十六进制颜色'); }
-      else if (!Number.isFinite(value) || value < SHAPE[key][0] || value > SHAPE[key][1]) fail(400,`参数 ${key} 超出安全范围`);
-    }
+    if (reward.action !== undefined || reward.motion !== undefined) fail(400,'装扮奖励不能包含互动动作');
+    validateFields(reward.params, PARAM_FIELDS[reward.category]);
   }
   if (starters.size !== SLOTS.length) fail(400,'缺少花色、外形、眼睛或姿态的初始奖励');
   return structuredClone(input);
