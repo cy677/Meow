@@ -1,5 +1,6 @@
 /** Real Chromium smoke test. Run after pet:build; Playwright is a CI-only dependency. */
 import { chromium } from 'playwright';
+import { revealReward } from './ui-helpers.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { createPetServer } from '../server.mjs';
@@ -22,7 +23,7 @@ try{
   await child.goto(origin+'/');await child.locator('#code').fill('2468');await child.locator('#login-form button').click();
   await child.locator('#pet-scene[data-ready=true]').waitFor();
   assert.ok(await child.locator('#pet-scene canvas').evaluate(c=>c.width>100&&c.height>100));
-  async function purchase(id){await child.locator(`.reward-card[data-reward-id="${id}"] button`).click();await child.locator('#purchase-confirm').click();await child.locator('#purchase-dialog').waitFor({state:'hidden'});}
+  async function purchase(id){await revealReward(child,id);await child.locator(`.reward-card[data-reward-id="${id}"] button`).click();await child.locator('#purchase-confirm').click();await child.locator('#purchase-dialog').waitFor({state:'hidden'});}
   await purchase('coat-grey');await child.locator('.reward-card[data-reward-id="coat-grey"] button').click();
   await child.locator('#pet-scene[data-coat=greyTabby]').waitFor();
   await purchase('pose-stretch');await child.locator('.reward-card[data-reward-id="pose-stretch"] button').click();
@@ -35,18 +36,20 @@ try{
   await child.screenshot({path:new URL('child-desktop.png',out).pathname,fullPage:true});
   await parent.screenshot({path:new URL('parent-desktop.png',out).pathname,fullPage:true});
   await parent.locator('[data-parent-tab=catalog]').click();await parent.locator('input[data-reward-id="pose-loaf"][data-field=cost]').fill('3');await parent.locator('[data-action=save-catalog]').click();
+  await revealReward(child,'pose-loaf');
   await child.waitForFunction(()=>document.querySelector('.reward-card[data-reward-id="pose-loaf"] .reward-foot strong').textContent==='3 积分');
   await parent.screenshot({path:new URL('parent-catalog.png',out).pathname,fullPage:true});
   const s=await (await childContext.request.get(origin+'/api/child/session')).json();
   const authHeaders={'X-Meow-Client':'points-pet','X-CSRF-Token':s.csrf};
   const denied=await childContext.request.post(origin+'/api/parent/points',{headers:authHeaders,data:{delta:999,reason:'bypass',idempotencyKey:'browser-security-check-1'}});assert.equal(denied.status(),401);
   const locked=await childContext.request.post(origin+'/api/equip',{headers:authHeaders,data:{rewardId:'coat-white'}});assert.equal(locked.status(),403);
-  await child.setViewportSize({width:390,height:844});
-  await child.waitForFunction(()=>document.querySelector('#pet-scene canvas').width<1000);
-  assert.ok(await child.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'mobile page must not overflow horizontally');
-  await child.screenshot({path:new URL('child-mobile.png',out).pathname,fullPage:true});
+  await child.locator('[data-action=close-rewards]').click();
+  await child.setViewportSize({width:1024,height:768});
+  await child.waitForFunction(()=>Math.abs(document.querySelector('#pet-scene').clientWidth-innerWidth)<=1);
+  assert.ok(await child.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'landscape page must not overflow horizontally');
+  await child.screenshot({path:new URL('child-ipad-1024.png',out).pathname,fullPage:true});
   await parent.locator('[data-action=logout]').click();await parent.locator('#auth').waitFor({state:'visible'});
   assert.equal((await parentContext.request.get(origin+'/api/parent/state')).status(),401);
   assert.deepEqual(errors,[]);
-  console.log('PASS: parent setup/award, child login, original WebGL cat, buy/equip/play, cross-page sync, catalog edits, auth, mobile layout, logout.');
+  console.log('PASS: parent setup/award, child login, original WebGL cat, buy/equip/play, cross-page sync, catalog edits, auth, landscape iPad layout, logout.');
 }finally{await browser.close();await app.close();}

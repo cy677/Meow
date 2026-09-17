@@ -31,6 +31,7 @@ jobs:
         run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
       - name: Browser integration and screenshots
         run: |
+          node pet/tests/browser-landscape.mjs 2>&1 | tee pet/test-results/browser-landscape.txt
           node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
           node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
           node pet/tests/browser-pad.mjs 2>&1 | tee pet/test-results/browser-pad.txt

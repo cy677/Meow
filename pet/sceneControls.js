@@ -10,12 +10,12 @@ export function createSceneControls(host, { resetView, zoom, setTilt, petAt }) {
     <button type="button" class="button small" data-tablet="zoom-in" aria-label="放大小猫视图">放大 ＋</button>
     <button type="button" class="button small" data-tablet="zoom-out" aria-label="缩小小猫视图">缩小 −</button>
     ${child ? '<button type="button" class="button small" data-tablet="tilt" aria-pressed="false">开启倾斜</button><button type="button" class="button small" data-tablet="calibrate" disabled>校准</button>' : ''}
-    </div><p class="tablet-hint">单指转动 · 双指缩放${child ? ' · 轻触小猫' : ''}。在画面外滑动可滚动页面。</p>
+    </div><p class="tablet-hint">单指转动 · 双指缩放${child ? ' · 轻触小猫' : ''}${child ? '。点奖励小屋或我的收藏打开分页选择。' : '。在画面外滑动可滚动页面。'}</p>
     <p class="tablet-status" role="status" aria-live="polite"></p>`;
   host.after(toolbar);
   const status = toolbar.querySelector('.tablet-status'), toggle = toolbar.querySelector('[data-tablet=tilt]');
   const calibration = toolbar.querySelector('[data-tablet=calibrate]');
-  let disposed = false;
+  let disposed = false, overlayOpen = false;
   function onState(state) {
     status.textContent = state.message; toolbar.dataset.tiltState = state.code;
     toggle?.setAttribute('aria-pressed', String(state.enabled));
@@ -58,13 +58,15 @@ export function createSceneControls(host, { resetView, zoom, setTilt, petAt }) {
       if (petAt(event.clientX, event.clientY)) status.textContent = '轻轻摸到小猫啦。';
     }
     tap = null; pointers.delete(event.pointerId);
-    if (!pointers.size) tilt?.setTouching(false);
+    if (!pointers.size) tilt?.setTouching(overlayOpen);
   }
   canvas.addEventListener('pointerdown', down);
   canvas.addEventListener('pointermove', move);
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, end);
   const contextMenu = event => event.preventDefault(); canvas.addEventListener('contextmenu', contextMenu);
-  const clearGesture = () => { pointers.clear(); tap = null; tilt?.setTouching(false); };
+  const clearGesture = () => { pointers.clear(); tap = null; tilt?.setTouching(overlayOpen); };
+  const overlayChanged = event => { overlayOpen = event.detail === true; clearGesture(); };
+  host.addEventListener('meow:overlay-change', overlayChanged);
   const hidden = () => { if (document.hidden) clearGesture(); };
   document.addEventListener('visibilitychange', hidden);
   // The application hides its workspace on logout; stop sensors even if the scene is retained.
@@ -75,6 +77,7 @@ export function createSceneControls(host, { resetView, zoom, setTilt, petAt }) {
     dispose() {
       if (disposed) return; disposed = true; observer?.disconnect(); tilt?.dispose();
       document.removeEventListener('visibilitychange', hidden);
+      host.removeEventListener('meow:overlay-change', overlayChanged);
       canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
       for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, end);
       canvas.removeEventListener('contextmenu', contextMenu); toolbar.removeEventListener('click', clicks); toolbar.remove();

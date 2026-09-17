@@ -11,7 +11,7 @@ const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshade
 const out=new URL('../test-results/',import.meta.url);mkdirSync(out,{recursive:true});
 const errors=[],external=[],pages=[];
 async function tablet(origin,init) {
-  const context=await browser.newContext({viewport:{width:820,height:1180},isMobile:true,hasTouch:true,deviceScaleFactor:1});
+  const context=await browser.newContext({viewport:{width:1180,height:820},isMobile:true,hasTouch:true,deviceScaleFactor:1});
   if(init)await context.addInitScript(init);
   const page=await context.newPage();pages.push(page);page.setDefaultTimeout(60000);
   page.on('pageerror',e=>errors.push(e.message));
@@ -59,11 +59,12 @@ try {
   await controls(child).locator('[data-tablet=zoom-in]').tap();const zoomed=await view(child);assert.ok(zoomed.distance<initial.distance);
   await controls(child).locator('[data-tablet=zoom-out]').tap();
   assert.deepEqual(app.store.snapshot(),beforeAccount,'view gestures never add points, acquire rewards or equip locked items');
-  await child.evaluate(()=>scrollTo(0,0));await gesture(child,[[810,930]],[[810,320]]);
-  assert.ok(await child.evaluate(()=>scrollY>30),'dragging outside canvas should scroll the page');
-  await child.evaluate(()=>scrollTo(0,0));await shot(child,'pad-touch-portrait');
-  await child.setViewportSize({width:1180,height:820});
-  await child.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+1);await shot(child,'pad-touch-landscape');
+  await child.evaluate(()=>scrollTo(0,0));
+  await gesture(child,[[1170,730]],[[1170,220]]);
+  assert.equal(await child.evaluate(()=>scrollY),0,'full-window cat stage does not scroll');
+  await shot(child,'pad-touch-landscape');
+  await child.setViewportSize({width:1024,height:768});
+  await child.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+1);await shot(child,'pad-touch-standard');
 
   // Loopback is a browser-recognized secure context for automated sensor permission/event tests.
   const {page:sensor}=await tablet(loopback,()=>{
@@ -106,7 +107,7 @@ try {
   await parent.locator('#preset-save').tap();await parent.locator('#preset-dialog').waitFor({state:'hidden'});
   assert.equal(app.store.catalog().rewards.find(r=>r.id===rewardId).params.chubbiness,number);
   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
-  console.log('PASS: actual LAN IP HTTP; real CDP single-touch rotation / multi-touch pinch / pet tap / outside scroll; tablet portrait-landscape; touch parent presets; secure-context SIMULATED sensor activation, calibration, screen changes, visibility pause, denial, timeout, logout; zero gesture account writes and zero external requests. Physical iPad/Android sensors were NOT tested.');
+  console.log('PASS: actual LAN IP HTTP; real CDP single-touch rotation / multi-touch pinch / pet tap / no page scroll; landscape 1180 and 1024; touch parent presets; secure-context SIMULATED sensor activation, calibration, screen changes, visibility pause, denial, timeout, logout; zero gesture account writes and zero external requests. Physical iPad/Android sensors were NOT tested.');
 } catch(error) {
   for(let i=0;i<pages.length;i++)await shot(pages[i],`pad-failure-${i}`).catch(()=>{});
   writeFileSync(new URL('pad-failure.json',out),JSON.stringify({message:error.message,stack:error.stack,errors,external},null,2));throw error;

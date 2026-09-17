@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { revealReward, openChildPage } from './ui-helpers.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,6 +33,7 @@ async function waitPreview(key, value) {
 }
 async function save() { await parent.locator('#preset-save').click(); await parent.locator('#preset-dialog').waitFor({ state:'hidden' }); }
 async function purchase(id, play = false) {
+  await revealReward(child,id);
   await child.locator(`.reward-card[data-reward-id="${id}"] button`).click(); await child.locator('#purchase-confirm').click(); await child.locator('#purchase-dialog').waitFor({ state:'hidden' });
   await child.locator(`.reward-card[data-reward-id="${id}"] button`).click();
   if (play) await child.locator('#pet-scene[data-last-action=spin]').waitFor();
@@ -86,7 +88,7 @@ try {
   await child.waitForFunction(() => document.querySelector('#balance').textContent === '25');
   await parent.locator('[data-parent-tab=award]').click(); await parent.locator('#history-kind').selectOption('earn'); await parent.locator('#history-search').fill('独立整理'); await parent.locator('.history-filters button').click();
   await parent.locator('#history-entries strong').filter({ hasText:'独立整理书包' }).waitFor(); await shot(parent, 'parent-reasons-local');
-  await child.locator('[data-view=history]').click(); await child.locator('#history-kind').selectOption('purchase'); await child.locator('#history-search').fill('薄荷三花'); await child.locator('.history-filters button').click();
+  await openChildPage(child,'history'); await child.locator('#history-kind').selectOption('purchase'); await child.locator('#history-search').fill('薄荷三花'); await child.locator('.history-filters button').click();
   await child.waitForFunction(() => { const rows=document.querySelectorAll('#history-entries .ledger-row'); return rows.length===1&&rows[0].textContent.includes('薄荷三花预设'); });
   await child.locator('#history-entries details summary').click(); assert.ok((await child.locator('#history-entries').innerText()).includes('#70a7a0')); await shot(child, 'redemption-snapshot');
   for (let i = 0; i < 75; i++) app.store.points({ delta:1, reason:`分页历史-${i}`, idempotencyKey:randomUUID() });
