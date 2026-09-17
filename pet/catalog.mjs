@@ -1,3 +1,4 @@
+import { ACTION_IDS, validateScript } from './motionPrograms.mjs';
 import { PARAM_FIELDS, MOTION_FIELDS } from './presetSchema.mjs';
 /** Strict capability schema shared by the service and tests. No arbitrary JS/URLs. */
 export class AppError extends Error {
@@ -5,7 +6,7 @@ export class AppError extends Error {
 }
 export const fail = (status, message) => { throw new AppError(status, message); };
 export const SLOTS = ['coat', 'shape', 'eyes', 'pose'];
-export const ACTIONS = ['jump', 'spin'];
+export const ACTIONS = ACTION_IDS;
 export const DEFAULT_PARAMS = Object.freeze({ seed:20260916, pose:'standing', coatId:'orange', eyeColor:'#d99a2b', oddEyes:false, eyeColorRight:'#5b8fd4', headSize:1.08, chubbiness:1.15, legLength:0.85, earSize:1, eyeSize:1.05, eyeSpacing:1, irisScale:0.65, irisHighlightScale:1, wateryEyes:false, wateryEyeShape:1.1, tailLength:0.95, tailCurl:0.35, fluffy:false, furFluff:0.9, outlineJitter:0.25, dynamicCoat:false, motionDebug:false });
 export function object(value, keys) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail(400,'需要 JSON 对象');
@@ -54,7 +55,14 @@ export function validateCatalog(input) {
     }
     if (reward.category === 'trick') {
       if (!ACTIONS.includes(reward.action) || reward.params !== undefined) fail(400,'不支持的互动动作');
-      if (reward.motion !== undefined) validateFields(reward.motion, MOTION_FIELDS);
+      if (reward.motion !== undefined) {
+        object(reward.motion,[...MOTION_FIELDS.map(f=>f.key),'script']);
+        const {script,...settings}=reward.motion;
+        if(Object.keys(settings).length)validateFields(settings,MOTION_FIELDS);
+        else if(script===undefined)fail(400,'动作参数不能为空');
+      }
+      if (reward.action === 'sequence') { try { validateScript(reward.motion?.script); } catch (error) { fail(400,error.message); } }
+      else if (reward.motion?.script !== undefined) fail(400,'仅自定义动作脚本接受步骤');
       continue;
     }
     if (reward.action !== undefined || reward.motion !== undefined) fail(400,'装扮奖励不能包含互动动作');

@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildCat } from '../src/catBuilder.js';
 import { createSceneControls } from './sceneControls.js';
+import { createSkeletalPlayer } from './skeletalPlayer.js';
+import './motion.css';
+import { ACTION_CHOICES, planMotion, defaultDuration } from './motionPrograms.mjs';
 
 /** Rendering adapter only. Account balances and entitlements never live here. */
 export function createPetScene(host) {
@@ -33,7 +36,17 @@ export function createPetScene(host) {
   const floor=new THREE.Mesh(new THREE.CylinderGeometry(2.05,2.1,0.12,80),new THREE.MeshStandardMaterial({color:'#ede2cd',roughness:1}));
   floor.position.y=-0.08;floor.receiveShadow=true;scene.add(floor);
   const pivot=new THREE.Group();scene.add(pivot);
-  let cat,signature='',frame=0,disposed=false,animation=null,radius=1.5,height=2;
+  let cat,signature='',frame=0,disposed=false,radius=1.5,height=2;
+  let savedParams=null,staticEntry=null,dynamicEntry=null,current=null,swap=null;
+  const entries=[];
+  const motionBar=document.createElement('div');motionBar.className='motion-bar';motionBar.hidden=true;
+  const motionText=document.createElement('span'),stopButton=document.createElement('button');
+  stopButton.type='button';stopButton.textContent='停止动作';stopButton.className='button small';stopButton.dataset.motionStop='';
+  motionBar.append(motionText,stopButton);host.append(motionBar);
+  stopButton.addEventListener('click',()=>dynamicEntry?.player?.stop());
+  const workspace=host.id==='pet-scene'?document.getElementById('workspace'):null;
+  const workspaceObserver=workspace?new MutationObserver(()=>{if(workspace.hidden){dynamicEntry?.player?.cancel();if(staticEntry)selectEntry(staticEntry,false);motionBar.hidden=true;host.dataset.motionPlaying='false';}}):null;
+  workspaceObserver?.observe(workspace,{attributes:true,attributeFilter:['hidden']});
   const start=performance.now();
   function release(object) {
     const geometries=new Set(),materials=new Set(),textures=new Set();
@@ -41,9 +54,41 @@ export function createPetScene(host) {
     for(const g of geometries)g.dispose();for(const m of materials)m.dispose();for(const t of textures)t.dispose();
     // The original builder caches its gradient map globally; do not dispose it here.
   }
+  function fade(entry,alpha) {
+    if(!entry)return;
+    entry.object.visible=alpha>0;
+    entry.object.traverse(o=>{for(const material of (Array.isArray(o.material)?o.material:[o.material]).filter(Boolean)){
+      if(!material.userData.meowFade)material.userData.meowFade={opacity:material.opacity,transparent:material.transparent,depthWrite:material.depthWrite};
+      const base=material.userData.meowFade,transparent=alpha<1||base.transparent;
+      if(material.transparent!==transparent){material.transparent=transparent;material.needsUpdate=true;}
+      material.opacity=base.opacity*alpha;material.depthWrite=alpha===1?base.depthWrite:false;
+    }});
+  }
+  function buildEntry(params,rigged) {
+    const object=buildCat({...params,pose:rigged?'standing':params.pose,motionDebug:rigged},'draft');
+    const box=new THREE.Box3().setFromObject(object),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+    if(!Number.isFinite(size.length())||size.length()===0){release(object);throw new Error('小猫参数无法生成有效模型');}
+    // Bind at the origin, then apply the visual centering offset in the parent group.
+    const player=rigged?createSkeletalPlayer(object):null;
+    const wrapper=new THREE.Group();wrapper.position.set(-center.x,-box.min.y,-center.z);wrapper.add(object);pivot.add(wrapper);
+    if(player)for(const mesh of [player.rig.fur,player.rig.outline].filter(Boolean))mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,size.y/2,0),size.length()*1.5);
+    const entry={object:wrapper,cat:object,player,size};wrapper.visible=false;
+    return entry;
+  }
+  function selectEntry(entry,animate=true) {
+    if(current===entry)return;
+    if(swap){fade(swap.from,0);fade(swap.to,1);swap=null;}
+    const from=current;current=entry;cat=entry.cat;
+    if(from&&animate&&!reduced.matches){fade(entry,0);swap={from,to:entry,time:0};}
+    else {fade(from,0);fade(entry,1);}
+    host.dataset.bindingPose=entry.player?'standing':savedParams?.pose??'standing';
+    host.dataset.motionEngine=entry.player?'fixed-skinned-mesh':'static';
+  }
+  function clearEntries(){for(const entry of entries){entry.player?.dispose();pivot.remove(entry.object);release(entry.object);}entries.length=0;current=null;cat=null;swap=null;staticEntry=null;dynamicEntry=null;}
+  // Public read-only rendering diagnostics for integrations and regression checks.
+  host.getMotionDiagnostics=()=>dynamicEntry?.player?.getDiagnostics()??{type:'static',active:false};
   function fit(reset=false) {
     const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);
-    // CSS owns layout; only resize the drawing buffer to avoid stale inline widths on mobile.
     const sizeKey=`${w}:${h}`;
     if(!reset&&sizeKey===lastSize)return;
     lastSize=sizeKey;
@@ -76,19 +121,21 @@ export function createPetScene(host) {
   function tick(now) {
     if(disposed)return;
     frame=requestAnimationFrame(tick);
-    if(document.hidden||host.offsetParent===null)return;
+    if(document.hidden||host.offsetParent===null){lastFrame=now;return;}
     const t=(now-start)/1000,dt=Math.min(0.1,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
-    if(cat){cat.userData.updateEyeAnimation?.(t);cat.userData.updateStaticIdle?.(t,!reduced.matches);}
+    for(const entry of entries)if(entry.object.visible){entry.cat.userData.updateEyeAnimation?.(t);if(!entry.player)entry.cat.userData.updateStaticIdle?.(t,!reduced.matches);}
     pivot.position.y=0;pivot.rotation.y=-0.2;
     pivot.scale.setScalar(!reduced.matches&&petPulse&&now-petPulse<600?1+Math.sin((now-petPulse)/600*Math.PI)*0.025:1);
-    if(animation){
-      const f=Math.min(1,(now-animation.start)/(animation.duration*1000)),ease=f*f*(3-2*f);
-      if(!reduced.matches){if(animation.action==='jump')pivot.position.y=Math.sin(f*Math.PI)*animation.height;else if(animation.action==='spin')pivot.rotation.y+=ease*Math.PI*2*animation.turns;}
-      if(f>=1)animation=null;
+    if(dynamicEntry?.player&&(dynamicEntry.object.visible||dynamicEntry.player.active)){
+      const wasActive=dynamicEntry.player.active;
+      if(!reduced.matches)dynamicEntry.player.update(dt);
+      else dynamicEntry.player.cancel();
+      if(wasActive&&!dynamicEntry.player.active){motionBar.hidden=true;if(staticEntry)selectEntry(staticEntry);}
+      host.dataset.motionPlaying=String(dynamicEntry.player.active);
     }
+    if(swap){swap.time+=dt;const alpha=Math.min(1,swap.time/0.22);fade(swap.from,1-alpha);fade(swap.to,alpha);if(alpha===1)swap=null;}
     controls.update();
     // Render a bounded sensor offset without feeding it back into OrbitControls.
-    // The base camera remains exclusively under touch/mouse control.
     const blend=1-Math.exp(-8*dt);
     tiltCurrent.x+=(tiltTarget.x-tiltCurrent.x)*blend;tiltCurrent.y+=(tiltTarget.y-tiltCurrent.y)*blend;
     basePosition.copy(camera.position);baseQuaternion.copy(camera.quaternion);
@@ -104,20 +151,26 @@ export function createPetScene(host) {
   return {
     setParams(params) {
       if(disposed||JSON.stringify(params)===signature)return;
-      // Construct first so a failed rebuild leaves the previous pet intact.
-      const next=buildCat(params,'draft');
-      const box=new THREE.Box3().setFromObject(next),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
-      if(!Number.isFinite(size.length())||size.length()===0){release(next);throw new Error('小猫参数无法生成有效模型');}
-      if(cat){pivot.remove(cat);release(cat);}cat=next;
-      cat.position.set(-center.x,-box.min.y,-center.z);pivot.add(cat);
-      height=size.y;radius=Math.max(size.length()/2,1.3);signature=JSON.stringify(params);animation=null;fit(true);
+      const next=buildEntry(params,params.pose==='standing');
+      clearEntries();entries.push(next);savedParams=structuredClone(params);
+      if(next.player)dynamicEntry=next;else staticEntry=next;
+      height=next.size.y;radius=Math.max(next.size.length()/2+0.12,1.3);signature=JSON.stringify(params);selectEntry(next,false);motionBar.hidden=true;fit(true);
       host.dataset.ready='true';host.dataset.coat=params.coatId;host.dataset.pose=params.pose;host.dataset.params=JSON.stringify(params);
     },
-    play(action, motion = {}) {
-      if(!['jump','spin'].includes(action))throw new Error('未知互动动作');
-      animation={action,start:performance.now(),duration:motion.duration??1.2,height:motion.height??0.5,turns:motion.turns??1};
-      host.dataset.lastAction=action;host.dataset.actionDuration=String(animation.duration);
+    play(action, motion = {}, script = motion.script) {
+      if(!savedParams||disposed)throw new Error('小猫尚未准备好');
+      planMotion(action,motion,script);
+      host.dataset.lastAction=action;host.dataset.actionDuration=String(motion.duration??defaultDuration(action));
+      if(reduced.matches){host.dataset.motionPlaying='false';return false;}
+      if(!dynamicEntry){dynamicEntry=buildEntry({...savedParams,pose:'standing'},true);entries.push(dynamicEntry);}
+      selectEntry(dynamicEntry);
+      const duration=dynamicEntry.player.play(action,motion,script);
+      host.dataset.motionPlaying='true';host.dataset.motionDuration=String(duration);
+      motionText.textContent=(ACTION_CHOICES.find(c=>c[0]===action)?.[1]??action)+(staticEntry?' · 临时站立表演，结束恢复原造型':'');motionBar.hidden=false;
+      return true;
     },
-    dispose() {disposed=true;cancelAnimationFrame(frame);input.dispose();observer.disconnect();controls.removeEventListener('change',recordView);controls.dispose();if(cat)release(cat);release(floor);renderer.dispose();renderer.domElement.remove();},
+    stop(immediate=false){if(immediate){dynamicEntry?.player?.cancel();if(staticEntry)selectEntry(staticEntry,false);motionBar.hidden=true;host.dataset.motionPlaying='false';}else dynamicEntry?.player?.stop();},
+    getMotionDiagnostics:()=>host.getMotionDiagnostics(),
+    dispose() {disposed=true;cancelAnimationFrame(frame);input.dispose();observer.disconnect();workspaceObserver?.disconnect();controls.removeEventListener('change',recordView);controls.dispose();clearEntries();motionBar.remove();delete host.getMotionDiagnostics;release(floor);renderer.dispose();renderer.domElement.remove();},
   };
 }

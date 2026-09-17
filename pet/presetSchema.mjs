@@ -1,3 +1,4 @@
+import { ACTION_CHOICES, PROGRAMS } from './motionPrograms.mjs';
 import { COATS, POSES } from '../src/coats.js';
 
 // One schema drives both the parent's form and the server's allow-list.
@@ -36,11 +37,14 @@ export const PARAM_FIELDS = {
   ],
   pose: [select('pose', '小猫姿态', POSES.filter(p => p.id !== 'containerCrouch').map(p => [p.id, p.name]))],
 };
-export const ACTION_FIELD = select('action', '互动动作', [['jump', '开心跳跳'], ['spin', '转个圈圈']]);
+export const ACTION_FIELD = select('action', '骨骼动作 / 动作脚本', ACTION_CHOICES);
 export const MOTION_FIELDS = [
-  number('duration', '一次动作时长（秒）', 0.6, 4, 1.2, 0.1),
+  number('duration', '表演片段时长（秒）', 0.6, 12, 2.6, 0.1),
   number('height', '跳跃高度', 0.05, 0.8, 0.5),
   number('turns', '转圈圈数', 1, 3, 1, 1),
+  number('speed', '整体播放速度', 0.5, 2, 1, 0.1),
+  number('intensity', '骨骼动作幅度', 0.25, 1.1, 0.85, 0.05),
+  number('transition', '动作衔接时间（秒）', 0.1, 0.6, 0.25, 0.05),
 ];
 export function defaultsFor(category, params = {}) {
   const defaults = Object.fromEntries((PARAM_FIELDS[category] || []).map(f => [f.key, f.type === 'select' ? f.choices[0][0] : f.value]));
@@ -68,6 +72,7 @@ export function fieldVisible(category, key, params) {
   if (key === 'eyeColorRight') return !!params.oddEyes;
   if (key === 'furFluff') return !!params.fluffy;
   if (key === 'wateryEyeShape') return !!params.wateryEyes;
+  if (key === 'duration') return !PROGRAMS[params.action] && params.action !== 'sequence';
   if (key === 'height') return params.action === 'jump';
   if (key === 'turns') return params.action === 'spin';
   return true;
@@ -75,8 +80,9 @@ export function fieldVisible(category, key, params) {
 export function parameterDescription(reward) {
   const fields = reward.category === 'trick' ? [ACTION_FIELD, ...MOTION_FIELDS] : PARAM_FIELDS[reward.category] || [];
   const values = reward.category === 'trick' ? { action: reward.action, ...reward.motion } : reward.params || {};
-  return fields.filter(f => values[f.key] !== undefined && fieldVisible(reward.category, f.key, values)).map(f => {
+  const description=fields.filter(f => values[f.key] !== undefined && fieldVisible(reward.category, f.key, values)).map(f => {
     const value = values[f.key];
     return `${f.label}：${f.type === 'select' ? f.choices.find(c => c[0] === value)?.[1] || value : f.type === 'checkbox' ? (value ? '开启' : '关闭') : value}`;
   }).join('；');
+  return description+(reward.motion?.script?'；步骤：'+reward.motion.script.map(s=>`${s.clip} × ${s.cycles??1} (${s.speed??1} 倍速)`).join(' → '):'');
 }

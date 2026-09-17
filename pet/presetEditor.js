@@ -1,6 +1,9 @@
+import { createMotionScriptEditor, installMotionSamples } from './motionScriptEditor.js';
+import { defaultDuration } from './motionPrograms.mjs';
 import { DEFAULT_PARAMS, validateFields, validateCatalog } from './catalog.mjs';
 import { PARAM_FIELDS, ACTION_FIELD, MOTION_FIELDS, CATEGORY_LABELS, defaultsFor, fieldVisible } from './presetSchema.mjs';
 import './preset.css';
+import './motion.css';
 
 const node = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const newId = () => 'custom-' + Array.from(crypto.getRandomValues(new Uint8Array(10)), n => n.toString(16).padStart(2, '0')).join('');
@@ -17,8 +20,8 @@ export function createPresetEditor({ api, onSaved }) {
       <div class="form-grid"><label>解锁所需累计积分<input name="unlockAt" type="number" min="0" max="1000000" step="1" value="10" required></label><label>兑换消耗积分<input name="cost" type="number" min="0" max="1000000" step="1" value="10" required></label></div>
       <p id="preset-rule" class="note"></p>
       <div class="panel-title"><h3>调整小猫参数</h3><button type="button" id="preset-reset" class="button small">重置参数</button></div>
-      <div id="preset-fields"></div>
-      <p class="note">姿态使用原作已有造型；跳跃、转圈是整体互动，不是新骨骼动画。预览不会扣分或替孩子换装。</p>
+      <div id="preset-fields"></div><section id="preset-script" hidden></section>
+      <p class="note">动作使用原作 19 骨蒙皮与真实关键帧。特殊静态造型播放时临时切换站立基准，结束后恢复；不是静态造型间的骨骼变形。叫唤片段不包含猫叫音频。</p>
       <label class="preset-id">固定 ID（自动生成）<input name="id" readonly></label>
     </div><aside class="preset-preview-panel"><div class="panel-title"><h3>三维预览</h3><span class="subtle">默认小猫 + 当前预设</span></div>
       <div id="preset-preview" class="preset-preview"></div><p id="preset-preview-status" class="note" role="status"></p>
@@ -28,12 +31,15 @@ export function createPresetEditor({ api, onSaved }) {
     <footer class="preset-footer"><div><p id="preset-status" role="status" aria-live="polite"></p><p class="note">保存到家长电脑的本地数据库。已兑换奖励不会回收；修改正在使用的预设后，孩子的小猫会随之更新。</p></div><button id="preset-save" class="button primary" type="submit">保存到本地</button></footer>
     <button type="button" class="button small" id="preset-reload" hidden>保留草稿，读取最新目录</button></form>`;
   document.body.append(dialog);
+  installMotionSamples({api,onSaved});
   const find = selector => dialog.querySelector(selector), form = find('#preset-form'), controls = new Map(), wrappers = new Map();
   for (const [id, label] of Object.entries(CATEGORY_LABELS)) { const option = node('option', '', label); option.value = id; form.elements.category.append(option); }
   let loaded, original, dirty = false, saving = false, scene, previewTimer, previewSequence = 0, generation = 0;
   const status = (message, error = false) => { find('#preset-status').textContent = message; find('#preset-status').classList.toggle('error-text', error); };
   const markDirty = () => { dirty = true; status('尚未保存：当前是预览草稿'); };
   const category = () => form.elements.category.value;
+  const scriptUI=createMotionScriptEditor(find('#preset-script'),()=>{markDirty();schedulePreview();});
+  scriptUI.set();
   function values() {
     return Object.fromEntries([...controls].map(([key, input]) => [key, input.type === 'checkbox' ? input.checked : input.type === 'number' ? (input.value === '' ? NaN : Number(input.value)) : input.value]));
   }
@@ -42,7 +48,8 @@ export function createPresetEditor({ api, onSaved }) {
     if (original?.starter) reward.starter = true;
     if (category() === 'trick') {
       const { action, ...motion } = values(); reward.action = action; reward.motion = motion;
-      if (validate) { validateFields({ action }, [ACTION_FIELD]); validateFields(motion, MOTION_FIELDS); }
+      if(action==='sequence')reward.motion.script=scriptUI.read();
+      if (validate) { validateFields({ action }, [ACTION_FIELD]); validateFields(Object.fromEntries(Object.entries(motion).filter(([k])=>k!=='script')), MOTION_FIELDS); }
     } else {
       reward.params = values();
       if (validate) validateFields(reward.params, PARAM_FIELDS[category()]);
@@ -53,6 +60,7 @@ export function createPresetEditor({ api, onSaved }) {
     const v = values();
     for (const [key, wrapper] of wrappers) wrapper.hidden = !fieldVisible(category(), key, v);
     find('#preset-play').hidden = category() !== 'trick';
+    find('#preset-script').hidden=category()!=='trick'||v.action!=='sequence';
     const cost = form.elements.cost.value, at = form.elements.unlockAt.value;
     find('#preset-rule').textContent = original?.starter ? '初始配置免费拥有，价格和门槛固定为 0。' : Number(cost) === 0 ? `累计达到 ${at || '0'} 分后，自动解锁，不扣积分。` : `累计达到 ${at || '0'} 分后开放兑换，孩子确认时消耗 ${cost || '0'} 分。`;
   }
@@ -80,7 +88,7 @@ export function createPresetEditor({ api, onSaved }) {
   function renderFields(params = {}, motion = {}, action = 'jump') {
     controls.clear(); wrappers.clear(); find('#preset-fields').replaceChildren();
     const fields = category() === 'trick' ? [ACTION_FIELD, ...MOTION_FIELDS] : PARAM_FIELDS[category()];
-    const data = category() === 'trick' ? { action, ...Object.fromEntries(MOTION_FIELDS.map(f => [f.key, f.value])), ...motion } : defaultsFor(category(), params);
+    const data = category() === 'trick' ? { action, ...Object.fromEntries(MOTION_FIELDS.map(f => [f.key, f.value])), duration:defaultDuration(action), ...motion } : defaultsFor(category(), params);
     for (const field of fields) {
       const wrapper = node('div', `preset-field field-${field.type}`), label = node('label', '', field.label);
       const input = node(field.type === 'select' ? 'select' : 'input');
@@ -97,6 +105,7 @@ export function createPresetEditor({ api, onSaved }) {
         const row = node('div', 'range-row'); row.append(slider, input); wrapper.append(label, row);
       } else { wrapper.append(label, input); }
       controls.set(field.key, input); wrappers.set(field.key, wrapper); find('#preset-fields').append(wrapper);
+      if(field.key==='action')input.addEventListener('change',()=>{const d=controls.get('duration');d.value=defaultDuration(input.value);const slider=wrappers.get('duration')?.querySelector('[type=range]');if(slider)slider.value=d.value;visibility();schedulePreview();});
       if (field.key === 'coatId') input.addEventListener('change', () => {
         const dynamicCoat = controls.get('dynamicCoat').checked;
         renderFields({ coatId: input.value, dynamicCoat }); markDirty();
@@ -157,7 +166,7 @@ export function createPresetEditor({ api, onSaved }) {
       for (const key of ['cost', 'unlockAt']) { form.elements[key].value = duplicate && item?.starter ? 10 : item?.[key] ?? 10; form.elements[key].disabled = !!original?.starter; }
       find('#preset-heading').textContent = original ? '编辑奖励预设' : '新增奖励预设'; find('#preset-reload').hidden = true;
       dirty = false; status('未保存的参数调整只影响预览。'); dialog.showModal();
-      renderFields(item?.params, item?.motion, item?.action);
+      scriptUI.set(item?.motion?.script);renderFields(item?.params, item?.motion, item?.action);
       form.elements.title.focus();
     },
     close() { generation++; if (dialog.open) dialog.close(); else teardown(); },
