@@ -1,4 +1,7 @@
 import http from 'node:http';
+import https from 'node:https';
+import { createSecureContext } from 'node:tls';
+import { launchOptions, accessUrls, requestOrigin } from './lan.mjs';
 import { readFileSync, mkdirSync, createReadStream, statSync, realpathSync } from 'node:fs';
 import { resolve, relative, extname, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +18,10 @@ const equal=(a,b)=>{const x=Buffer.from(String(a)),y=Buffer.from(String(b));retu
 const pin=value=>{if(typeof value!=='string'||!/^\d{6,12}$/.test(value))fail(400,'家长密码必须为 6–12 位数字');return value;};
 const childCode=value=>{if(typeof value!=='string'||!/^\d{4,12}$/.test(value))fail(400,'孩子进入码必须为 4–12 位数字');return value;};
 
-export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), catalogPath=resolve(here,'rewards.json'), staticDir=resolve(here,'dist'), dev=false, publicOrigin=process.env.MEOW_ORIGIN || '' }={}) {
+export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), catalogPath=resolve(here,'rewards.json'), staticDir=resolve(here,'dist'), dev=false, publicOrigin=process.env.MEOW_ORIGIN || '', tls=null }={}) {
+  // Validate TLS before touching the local database; never silently downgrade.
+  if(tls){if(!tls.key||!tls.cert)throw new Error('HTTPS 缺少证书或私钥');createSecureContext(tls);if(dev)throw new Error('HTTPS 模式需要先构建页面');}
+  if(publicOrigin){const url=new URL(publicOrigin);if(!['http:','https:'].includes(url.protocol)||url.origin!==publicOrigin)throw new Error('MEOW_ORIGIN 必须是完整 origin，不含路径或结尾斜杠');if(tls&&url.protocol!=='https:')throw new Error('HTTPS 服务不能配置 HTTP origin');}
   if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true,mode:0o700});
   const store=createStore(dbPath,JSON.parse(readFileSync(catalogPath,'utf8')));
   const db=store.db;
@@ -69,21 +75,18 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   }
   const knownHosts=new Set(['localhost','127.0.0.1','[::1]',hostname().toLowerCase()]);
   for(const list of Object.values(networkInterfaces()))for(const item of list||[])knownHosts.add(item.address.includes(':')?`[${item.address}]`:item.address);
-  if(publicOrigin){const url=new URL(publicOrigin);if(!['http:','https:'].includes(url.protocol)||url.origin!==publicOrigin)throw new Error('MEOW_ORIGIN 必须是完整 origin，不含路径或结尾斜杠');}
   let vite;
   if(dev){const {createServer}=await import('vite');vite=await createServer({configFile:resolve(here,'vite.config.mjs'),server:{middlewareMode:true},appType:'mpa'});}
   const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'};
-  const server=http.createServer(async(req,res)=>{
+  const handler=async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
-    res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
+    res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=(), accelerometer=(self), gyroscope=(self), magnetometer=()');
     if(!dev)res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     try {
       if(!req.headers.host)fail(400,'缺少 Host');
-      const hostUrl=new URL(`http://${req.headers.host}`);
-      if(hostUrl.username||hostUrl.password)fail(403,'无效的 Host');
-      const expectedOrigin=publicOrigin||`${secureCookie(req)?'https':'http'}://${req.headers.host}`;
-      if(publicOrigin){if(hostUrl.host!==new URL(publicOrigin).host)fail(403,'Host 不在允许列表');}
-      else if(!knownHosts.has(hostUrl.hostname.toLowerCase())||Number(hostUrl.port||80)!==server.address().port)fail(403,'Host 不在允许列表');
+      let expectedOrigin;
+      try{expectedOrigin=requestOrigin(req.headers.host,{protocol:tls?'https:':'http:',port:server.address().port,knownHosts,publicOrigin});}
+      catch{fail(403,'Host 不在允许列表');}
       if(req.headers.origin&&req.headers.origin!==expectedOrigin)fail(403,'不允许跨站请求');
       const path=new URL(req.url,expectedOrigin).pathname;
       const method=req.method;
@@ -178,20 +181,33 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
       if(!(error instanceof AppError))console.error(error);
       if(!res.headersSent)json(res,error.status||500,{error:error instanceof AppError?error.message:'服务暂时出错，请重试'});else res.destroy();
     }
-  });
+  };
+  const server=tls?https.createServer(tls,handler):http.createServer(handler);
   server.requestTimeout=15000;server.headersTimeout=10000;
   return {server,store,get setupToken(){return setupToken;},async close(){await vite?.close();await new Promise((r,j)=>server.close(e=>e?j(e):r()));store.close();}};
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const host=process.env.MEOW_HOST||'127.0.0.1',port=Number(process.env.MEOW_PORT||8792);
-  if(!Number.isInteger(port)||port<1||port>65535)throw new Error('MEOW_PORT 必须是有效端口');
-  const app=await createPetServer({dev:process.argv.includes('--dev'),...(process.env.MEOW_DATA_DIR?{dbPath:resolve(process.env.MEOW_DATA_DIR,'pet.sqlite')}:{})});
-  app.server.listen(port,host,()=>{
-    console.log(`本地数据文件：${app.store.storageInfo().path}（积分、理由、兑换和预设均保存在此处）`);
-    console.log(`\n孩子页面：http://localhost:${port}/\n家长页面：http://localhost:${port}/parent.html`);
-    if(app.setupToken)console.log(`\n首次初始化：在家长页面输入以下一次性口令（不要交给孩子）：\n${app.setupToken}\n`);
-    if(host==='0.0.0.0')console.log('已开放局域网。仅限可信家庭网络；公网部署必须配置 HTTPS。');
-  });
-  const shutdown=()=>app.close().then(()=>process.exit(0));process.once('SIGINT',shutdown);process.once('SIGTERM',shutdown);
+  try {
+    const options=launchOptions(process.argv.slice(2));
+    const {host,port,dev,useTls,certPath,keyPath}=options;
+    const tls=useTls?{cert:readFileSync(certPath),key:readFileSync(keyPath)}:null;
+    const app=await createPetServer({dev,tls,...(process.env.MEOW_DATA_DIR?{dbPath:resolve(process.env.MEOW_DATA_DIR,'pet.sqlite')}:{})});
+    app.server.on('error',error=>{
+      console.error(error.code==='EADDRINUSE'?`端口 ${port} 已被占用，请关闭旧服务或设置 MEOW_PORT。`:error.message);
+      app.store.close();process.exitCode=1;
+    });
+    app.server.listen(port,host,()=>{
+      console.log(`本地数据文件：${app.store.storageInfo().path}（积分、理由、兑换和预设均保存在此处）`);
+      console.log(`监听地址：${host}:${port}`);
+      for(const url of accessUrls(options))console.log(`\n孩子页面：${url}/\n家长页面：${url}/parent.html`);
+      if(app.setupToken)console.log(`\n首次初始化口令（仅家长保管）：\n${app.setupToken}\n`);
+      if(host==='0.0.0.0'||host==='::')console.log('Pad 请连接同一局域网，选择电脑实际使用的 IP；VPN/虚拟网卡地址不一定可达。');
+      console.log(useTls?'倾斜功能需 Pad 信任此证书，再在页面主动授权。':'HTTP 支持触摸；倾斜传感器需可信 HTTPS，参见 pet/PAD.md。');
+      console.log('仅限可信家庭网络。请勿直接映射到公网；不要关闭系统防火墙。');
+    });
+    let stopping=false;
+    const shutdown=()=>{if(stopping)return;stopping=true;app.close().then(()=>process.exit(0)).catch(()=>process.exit(1));};
+    process.once('SIGINT',shutdown);process.once('SIGTERM',shutdown);
+  } catch(error) { console.error(`启动失败：${error.message}`);process.exitCode=1; }
 }

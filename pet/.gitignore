@@ -4,3 +4,10 @@ test-results/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Local certificate/private-key material must never be committed.
+certs/
+*.pem
+*.key
+*.p12
+*.pfx

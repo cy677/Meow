@@ -1,0 +1,28 @@
+/* Only the 3D canvas captures gestures. The rest of the page remains scrollable/zoomable. */
+.tablet-controls{padding:10px 18px 15px;position:relative;z-index:2}
+.tablet-buttons{display:flex;flex-wrap:wrap;gap:9px}
+.tablet-buttons .button{min-width:44px;min-height:44px;white-space:normal}
+.tablet-buttons [aria-pressed=true]{background:#2b654f;color:#fff}
+.tablet-hint,.tablet-status{font-size:12px;line-height:1.7;color:#65745f;margin:9px 0 0;overflow-wrap:anywhere}
+.tablet-status:empty{display:none}
+#pet-scene canvas,#preset-preview canvas{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.preset-preview-panel .tablet-controls{padding:8px 0}
+body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.site-footer{padding-bottom:max(35px,env(safe-area-inset-bottom))}
+@media(pointer:coarse){
+  button,.button,.chip,.section-tabs button,.quick-reasons button,.point-options button,summary{min-height:44px;min-width:44px}
+  input,select,textarea{font-size:16px!important}
+  input:not([type=checkbox]):not([type=range]),select{min-height:44px}
+  input[type=range]{min-height:44px;touch-action:pan-y}
+  input[type=checkbox]{min-width:24px;min-height:24px}
+  .preset-field label{min-height:32px;display:flex;align-items:center}
+  .preset-field.field-checkbox{min-height:44px}
+  .top-actions a{display:inline-flex;align-items:center;min-height:44px}
+}
+@media(min-width:761px) and (max-width:1100px){
+  .child-layout{grid-template-columns:minmax(0,1fr) 245px}
+  .tablet-buttons{gap:7px}
+  #pet-scene{height:380px}
+}
+@media(max-width:760px){.tablet-controls{padding:8px 14px 14px}.tablet-buttons .button{flex:1 1 92px}.tablet-hint,.tablet-status{font-size:11px}}
+@media(orientation:landscape) and (max-height:600px){#pet-scene{height:300px}.preset-dialog{max-height:96dvh}}

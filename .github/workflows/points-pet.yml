@@ -33,9 +33,10 @@ jobs:
         run: |
           node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
           node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
+          node pet/tests/browser-pad.mjs 2>&1 | tee pet/test-results/browser-pad.txt
       - name: Source snapshot
         if: always()
-        run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip
+        run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip && cp -R pet/dist pet/test-results/pet-dist
       - uses: actions/upload-artifact@v4
         if: always()
         with:
