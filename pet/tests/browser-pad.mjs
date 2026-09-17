@@ -99,8 +99,13 @@ try {
   await parent.locator('[data-parent-tab=catalog]').tap();await parent.locator('[data-action=new-preset]').tap();
   await parent.locator('#preset-form [name=category]').selectOption('shape');
   await parent.locator('#preset-form [name=title]').fill('Pad 触摸预设');await parent.locator('#preset-form [name=description]').fill('通过触摸滑块预设体型');
-  const slider=parent.locator('[data-slider=chubbiness]');await slider.scrollIntoViewIfNeeded();box=await slider.boundingBox();
-  await parent.touchscreen.tap(box.x+box.width*.72,box.y+box.height*.5);
+  const slider=parent.locator('[data-slider=chubbiness]');
+  await slider.evaluate(e=>e.scrollIntoView({block:'center',inline:'nearest'}));
+  box=await slider.boundingBox();
+  // Locator-based native touch waits for modal scrolling/preview layout to settle
+  // and verifies the hit target instead of tapping a stale absolute coordinate.
+  await slider.tap({position:{x:box.width*.72,y:box.height*.5}});
+  await parent.waitForFunction(()=>Number(document.querySelector('#preset-param-chubbiness').value)>1.4);
   const number=Number(await parent.locator('#preset-param-chubbiness').inputValue());assert.ok(number>1.4);
   await parent.waitForFunction(value=>{const h=document.querySelector('#preset-preview');return h?.dataset.params&&JSON.parse(h.dataset.params).chubbiness===value;},number);
   const rewardId=await parent.locator('#preset-form [name=id]').inputValue();
@@ -112,5 +117,6 @@ try {
   console.log('PASS: actual LAN IP HTTP; real CDP single-touch rotation / multi-touch pinch / pet tap / no page scroll; landscape 1180 and 1024; touch parent presets; secure-context SIMULATED sensor activation, calibration, screen changes, visibility pause, denial, timeout, logout; zero gesture account writes and zero external requests. Physical iPad/Android sensors were NOT tested.');
 } catch(error) {
   for(let i=0;i<pages.length;i++)await shot(pages[i],`pad-failure-${i}`).catch(()=>{});
-  writeFileSync(new URL('pad-failure.json',out),JSON.stringify({message:error.message,stack:error.stack,errors,external},null,2));throw error;
+  const diagnostics=await Promise.all(pages.map(p=>p.evaluate(()=>({viewport:{width:innerWidth,height:innerHeight},tilt:document.querySelector('#pet-scene')?.dataset.tilt,sensor:document.querySelector('.tablet-controls')?.dataset.tiltState,slider:document.querySelector('[data-slider=chubbiness]')?.value,number:document.querySelector('#preset-param-chubbiness')?.value})).catch(()=>null)));
+  writeFileSync(new URL('pad-failure.json',out),JSON.stringify({message:error.message,stack:error.stack,errors,external,diagnostics},null,2));throw error;
 } finally {await browser.close();await app.close();}
