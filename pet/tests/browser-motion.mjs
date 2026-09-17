@@ -36,7 +36,6 @@ try{
  await child.locator('#rewards-dialog').waitFor({state:'hidden'});await child.locator('#pet-scene[data-motion-playing=true]').waitFor();
  const result=await (await childContext.request.get(origin+'/api/pet/config')).json();assert.deepEqual(result.actions.find(x=>x.id===custom.id).motion.script,custom.motion.script);
  await child.locator('[data-motion-stop]').tap();await child.locator('#pet-scene[data-motion-playing=false]').waitFor();
- // Independent rendering harness uses the SAME built scene module, not a fake test rig.
  const sceneFile=readdirSync(new URL('../dist/assets/',import.meta.url)).find(n=>/^scene-.*\.js$/.test(n));assert.ok(sceneFile);
  videoContext=await browser.newContext({viewport:{width:1024,height:768},recordVideo:{dir:new URL('motion-videos/',out).pathname,size:{width:1024,height:768}}});
  lab=await videoContext.newPage();lab.setDefaultTimeout(60000);lab.on('pageerror',e=>errors.push(e.message));
@@ -53,12 +52,13 @@ try{
    let changed=0;for(let i=0;i<19;i++)if(first.boneQuaternions[i].some((q,j)=>Math.abs(q-second.boneQuaternions[i][j])>1e-5))changed++;
    if(c.id!=='rest-pose')assert.ok(changed>=2,`${c.id} must move multiple bones, not only the root`);
    reports.push({action:c.id,changedBones:changed,bones:second.bones,sourceFrame:second.sourceFrame,weightError:second.weights.maxWeightError,vertices:second.vertices,geometryId:second.geometryId});
+   writeFileSync(new URL('motion-report-partial.json',out),JSON.stringify(reports,null,2));
    if(['walk','run','jump','sit','fetch'].includes(c.id))await shot(lab,`motion-${c.id}`);
  }
  await lab.evaluate(()=>{document.querySelector('#label').textContent='蓄力跳跃：真实骨骼关键帧';scene.play('jump',{duration:4,transition:.25});});
- for(const [time,name]of [[.25,'takeoff'],[1.3,'airborne'],[3.2,'landing']]){await lab.waitForFunction(t=>scene.getMotionDiagnostics().elapsed>=t,time);await shot(lab,`jump-${name}`);}
+ for(const [time,name]of [[.25,'takeoff'],[1.3,'airborne'],[3.2,'landing']]){await lab.waitForFunction(t=>scene.getMotionDiagnostics().elapsed>=t,time);const framing=await diag();assert.ok(framing.screenY[1]<1.02&&framing.screenY[0]>-1.02,`jump ${name} outside viewport: ${framing.screenY}`);await shot(lab,`jump-${name}`);}
  await lab.evaluate(()=>{scene.play('walk',{duration:6});window.samples=[];window.record=true;const sample=()=>{if(!window.record)return;window.samples.push(scene.getMotionDiagnostics().boneQuaternions);requestAnimationFrame(sample);};sample();});
- await lab.waitForTimeout(400);await lab.evaluate(()=>scene.play('run',{duration:3}));await lab.waitForTimeout(800);await lab.evaluate(()=>scene.stop());await lab.waitForTimeout(400);
+ await lab.waitForTimeout(400);await lab.evaluate(()=>scene.play('run',{duration:3}));await lab.waitForTimeout(800);await lab.evaluate(()=>scene.stop());await lab.waitForFunction(()=>!scene.getMotionDiagnostics().active);
  const maxDelta=await lab.evaluate(()=>{window.record=false;let d=0;for(let t=1;t<samples.length;t++)for(let b=0;b<19;b++){const q=samples[t-1][b],p=samples[t][b];const dot=Math.min(1,Math.abs(q.reduce((s,x,i)=>s+x*p[i],0)));d=Math.max(d,2*Math.acos(dot));}return d;});assert.ok(maxDelta<1.2,`unexpected single-frame skeletal discontinuity ${maxDelta}`);
  assert.equal((await diag()).active,false);
  await lab.evaluate(params=>{window.params=params;scene.setParams({...params,pose:'loaf'});scene.play('greet',{speed:2});},params);
@@ -68,5 +68,5 @@ try{
  assert.deepEqual(errors,[]);writeFileSync(new URL('motion-report.json',out),JSON.stringify({reports,maxDelta,notes:'Chromium software-rendered WebGL; source bones/geometry, real GUI/API, no physical iPad measurement.'},null,2));
  await videoContext.close();await lab.video().saveAs(new URL('skeletal-motion-demo.webm',out).pathname);videoContext=null;
  console.log('PASS: 14 native sources; real 19-bone fixed SkinnedMesh, multi-bone changes, unchanged vertex buffers; crossfades/interrupt/stop; static pose restore; reduced motion; parent script form and child authorized playback.');
-}catch(error){if(lab)await shot(lab,'motion-failure').catch(()=>{});await shot(parent,'motion-parent-failure').catch(()=>{});writeFileSync(new URL('motion-error.txt',out),String(error.stack));throw error;}
+}catch(error){if(lab)await shot(lab,'motion-failure').catch(()=>{});await shot(parent,'motion-parent-failure').catch(()=>{});writeFileSync(new URL('motion-error.txt',out),String(error.stack)+'\nPage errors: '+JSON.stringify(errors));throw error;}
 finally{await videoContext?.close();await browser.close();await app.close();}

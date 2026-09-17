@@ -24,6 +24,7 @@ export function createPetScene(host) {
   controls.touches.ONE=THREE.TOUCH.ROTATE;controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;
   renderer.domElement.style.touchAction='none';
   const tiltTarget={x:0,y:0},tiltCurrent={x:0,y:0},viewCamera=camera.clone();
+  const motionFocus=new THREE.Vector3(),motionFocusTarget=new THREE.Vector3(),renderTarget=new THREE.Vector3();let motionZoom=1;
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
   let petPulse=0,lastFrame=performance.now(),lastSize='';
   const recordView=()=>{host.dataset.view=JSON.stringify({azimuth:controls.getAzimuthalAngle(),polar:controls.getPolarAngle(),distance:controls.getDistance()});};
@@ -85,8 +86,12 @@ export function createPetScene(host) {
     host.dataset.motionEngine=entry.player?'fixed-skinned-mesh':'static';
   }
   function clearEntries(){for(const entry of entries){entry.player?.dispose();pivot.remove(entry.object);release(entry.object);}entries.length=0;current=null;cat=null;swap=null;staticEntry=null;dynamicEntry=null;}
-  // Public read-only rendering diagnostics for integrations and regression checks.
-  host.getMotionDiagnostics=()=>dynamicEntry?.player?.getDiagnostics()??{type:'static',active:false};
+  // Read-only on-demand diagnostics; skin sampling is not part of normal frame evaluation.
+  host.getMotionDiagnostics=()=>{
+    const d=dynamicEntry?.player?.getDiagnostics()??{type:'static',active:false};
+    if(d.deformed){let minY=Infinity,maxY=-Infinity;for(let i=0;i<d.deformed.length;i+=3){const p=new THREE.Vector3(...d.deformed.slice(i,i+3));dynamicEntry.player.rig.fur.localToWorld(p);p.project(viewCamera);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);}d.screenY=[minY,maxY];}
+    return d;
+  };
   function fit(reset=false) {
     const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);
     const sizeKey=`${w}:${h}`;
@@ -135,14 +140,19 @@ export function createPetScene(host) {
     }
     if(swap){swap.time+=dt;const alpha=Math.min(1,swap.time/0.22);fade(swap.from,1-alpha);fade(swap.to,alpha);if(alpha===1)swap=null;}
     controls.update();
-    // Render a bounded sensor offset without feeding it back into OrbitControls.
+    // Motion framing and sensors are render-only offsets, preserving the user's orbit.
     const blend=1-Math.exp(-8*dt);
+    const lift=current?.player?Math.max(0,current.cat.position.y):0;
+    motionFocusTarget.set(0,lift*0.8,0);motionFocus.lerp(motionFocusTarget,1-Math.exp(-10*dt));
+    motionZoom+=(1+Math.min(0.25,lift*0.16)-motionZoom)*blend;
+    renderTarget.copy(controls.target).add(motionFocus);
     tiltCurrent.x+=(tiltTarget.x-tiltCurrent.x)*blend;tiltCurrent.y+=(tiltTarget.y-tiltCurrent.y)*blend;
     basePosition.copy(camera.position);baseQuaternion.copy(camera.quaternion);
     orbit.setFromVector3(camera.position.clone().sub(controls.target));
     orbit.theta+=tiltCurrent.x*0.3;
     orbit.phi=THREE.MathUtils.clamp(orbit.phi+tiltCurrent.y*0.22,controls.minPolarAngle,controls.maxPolarAngle);
-    camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(orbit));camera.lookAt(controls.target);
+    orbit.radius*=motionZoom;
+    camera.position.copy(renderTarget).add(new THREE.Vector3().setFromSpherical(orbit));camera.lookAt(renderTarget);
     camera.updateMatrixWorld(true);viewCamera.copy(camera);
     renderer.render(scene,camera);
     camera.position.copy(basePosition);camera.quaternion.copy(baseQuaternion);camera.updateMatrixWorld(true);
