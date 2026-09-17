@@ -1,0 +1,7 @@
+{
+  "port": 8792,
+  "publicIp": "",
+  "dataDir": "pet/data",
+  "openBrowser": true,
+  "configureFirewall": true
+}

@@ -1,0 +1,12 @@
+/* Landscape stage stays the primary UI; scene controls never create another long page. */
+.room-tools{position:absolute;right:22px;top:86px;z-index:3;display:flex;align-items:center;gap:8px;max-width:60%;flex-wrap:wrap;justify-content:flex-end}
+.room-tools .button{min-height:44px;background:#fffdf4df;border-radius:12px;font-size:12px}
+.room-hint{font-size:11px;color:#355346;background:#fffdf4ca;border-radius:9px;padding:6px 10px}
+.preset-preview .room-tools{top:auto;bottom:8px;right:8px;max-width:95%}.preset-preview .room-hint{display:none}
+.scene-filter{border:1px solid #c7d5c3;border-radius:20px;background:#eef3e7;color:#2b654f;padding:7px 12px;min-height:44px;min-width:132px;max-width:160px;font:inherit;font-size:13px}
+.child-dialog .category-tabs{overflow-x:auto;overscroll-behavior:contain;scrollbar-width:thin}.child-dialog .chip{flex:none;padding-left:14px;padding-right:14px}
+#preset-theme{padding:12px;background:#edf1e6;border-radius:12px;margin:16px 0}#preset-theme label{margin:10px 0}
+#preset-theme select{width:100%;min-height:44px}.scene-catalog-filter{display:flex;gap:12px;align-items:center;margin:12px 0}
+.art-floor{background:#ecdbc0}.art-rug{background:#edcfbc}.art-bed{background:#ddcab0}.art-toy{background:#f3dfa8}
+.art-weather{background:#dce7ef}.art-lighting{background:#f1deae}.art-camera{background:#d6dfcf}.art-effect{background:#e1e7e7}.art-theme{background:#dbd8e9}
+@media(max-height:650px){.room-tools{top:70px}.room-hint{display:none}.room-tools .button{padding:5px 9px}}

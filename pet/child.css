@@ -1,0 +1,91 @@
+/* A landscape iPad stage, not a vertically stacked dashboard. Parent styles are untouched. */
+body[data-role=child].child-active { padding:0; overflow:hidden; overscroll-behavior:none; }
+body[data-role=child].child-active > #app > .topbar,
+body[data-role=child].child-active > #app > .site-footer { display:none; }
+body[data-role=child] #workspace { position:fixed; inset:0; width:100%; height:100vh; height:100dvh; max-width:none; margin:0; padding:0; }
+.child-stage { position:absolute; inset:0; overflow:hidden; background:radial-gradient(ellipse at 52% 40%,#fffdf3 0%,#efe6d3 74%,#e1d5bd 100%); }
+body[data-role=child] #pet-scene { position:absolute; inset:0; width:100%; height:100%; }
+body[data-role=child] #pet-scene canvas { width:100%; height:100%; }
+.child-hud { position:absolute; inset:max(20px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) auto max(24px,env(safe-area-inset-left)); display:flex; align-items:center; justify-content:space-between; gap:20px; pointer-events:none; }
+.child-identity { display:flex; align-items:center; gap:14px; min-width:0; }
+.child-mark { width:48px; height:48px; display:grid; place-items:center; background:#2b654f; color:#fff; font:34px Georgia,serif; border-radius:17px 17px 17px 5px; }
+.child-identity h1 { margin:0; font-size:26px; line-height:1.3; max-width:350px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.child-identity p { margin:3px 0 0; font-size:12px; color:#74806e; max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.child-account { display:flex; align-items:center; gap:12px; pointer-events:auto; }
+.child-balance { display:flex; align-items:center; gap:10px; padding:8px 22px; border:1px solid #eee8d7; border-radius:28px; background:#fffdf4e8; box-shadow:0 4px 18px #4c4b2410; }
+.child-balance > span:first-child { color:#ba8827; font-size:25px; }
+.child-balance strong { font-size:24px; line-height:1.3; color:#37513e; }
+.child-balance > span:last-child { font-size:12px; color:#7b806c; }
+.child-account .button.quiet,.child-parent { font-size:12px; min-height:44px; min-width:44px; display:inline-grid; place-items:center; }
+.child-account .button.quiet { padding:8px; }
+.child-dock { position:absolute; right:max(24px,env(safe-area-inset-right)); bottom:max(24px,env(safe-area-inset-bottom)); display:flex; gap:12px; z-index:3; }
+.child-dock .button { min-height:54px; padding:12px 24px; border-radius:18px; font-size:16px; box-shadow:0 6px 25px #4d533014; }
+.child-dock .button span { font-size:21px; margin-right:5px; }
+.child-stage > .tablet-controls { position:absolute; left:max(24px,env(safe-area-inset-left)); bottom:max(24px,env(safe-area-inset-bottom)); padding:0; max-width:calc(100% - 375px); }
+.child-stage .tablet-buttons { flex-wrap:nowrap; gap:7px; }
+.child-stage .tablet-buttons .button { flex:none; font-size:12px; white-space:nowrap; border-radius:12px; min-height:46px; padding:8px 13px; background:#fffdf4d9; }
+.child-stage .tablet-buttons .button[aria-pressed=true] { background:#2b654f; color:#fff; }
+.child-stage .tablet-hint { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); }
+.child-stage .tablet-status { position:absolute; bottom:calc(100% + 12px); left:0; max-width:410px; font-size:12px; margin:0; padding:9px 13px; border-radius:10px; background:#fffdf4db; }
+.child-stage .tablet-controls[data-tilt-state=insecure] .tablet-status,
+.child-stage .tablet-controls[data-tilt-state=available] .tablet-status { display:none; }
+.child-stage .network { position:absolute; top:84px; left:50%; transform:translateX(-50%); max-width:80%; z-index:4; }
+/* showModal keeps the visible cat behind an inert, non-interactive backdrop. */
+dialog.child-dialog { width:calc(100vw - 64px); max-width:1030px; height:calc(100vh - 40px); height:min(720px,calc(100dvh - 40px)); max-height:calc(100dvh - 24px); margin:auto; padding:0; border:1px solid #ffffffa6; border-radius:26px; overflow:hidden; box-shadow:0 24px 100px #273b3445; background:#fbfaf4; }
+.child-dialog[open] { display:flex; flex-direction:column; }
+.child-dialog::backdrop { background:#344b3e45; backdrop-filter:blur(5px); }
+.child-dialog-heading { display:flex; flex:none; align-items:center; justify-content:space-between; gap:20px; padding:18px 24px 12px; }
+.child-dialog-heading h2 { margin:3px 0 0; font-size:25px; }
+.child-dialog-heading .button { min-height:44px; padding:8px 18px; border-radius:14px; font-size:13px; }
+.child-dialog .section-tabs.compact { flex:none; align-items:center; margin:0 24px; gap:6px; }
+.child-dialog .section-tabs.compact button { font-size:14px; padding:9px 19px; min-height:46px; white-space:nowrap; }
+.child-dialog #owned-count { display:inline-block; margin-left:5px; font-size:11px; background:#e4eadb; padding:0 7px; border-radius:12px; }
+.child-growth { margin-left:auto; font-size:12px; color:#77876d; white-space:nowrap; }
+#reward-panel { flex:1; min-height:0; display:flex; flex-direction:column; padding:14px 24px 0; }
+.child-dialog .category-tabs { flex:none; gap:8px; flex-wrap:nowrap; margin:0 0 12px; }
+.child-dialog .chip { min-height:44px; padding:7px 19px; font-size:13px; }
+.child-dialog .reward-grid { flex:1; min-height:0; grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); gap:12px; overflow:auto; overscroll-behavior:contain; }
+.child-dialog .reward-card { display:flex; flex-direction:column; border-radius:16px; min-height:0; }
+.child-dialog .reward-art { flex:1 1 48px; min-height:32px; max-height:70px; height:auto; }
+.child-dialog .reward-art > span:first-child { font-size:30px; }
+.child-dialog .reward-art > small { font-size:11px; letter-spacing:2px; }
+.child-dialog .reward-tag { top:8px; font-size:10px; }
+.child-dialog .reward-content { padding:10px 13px; display:flex; flex-direction:column; flex:1; min-height:0; }
+.child-dialog .reward-content h3 { font-size:15px; margin:0 0 3px; line-height:1.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.child-dialog .reward-content p { font-size:11px; line-height:1.5; margin:0 0 6px; min-height:0; overflow:auto; overscroll-behavior:contain; overflow-wrap:anywhere; flex:1; }
+.child-dialog .reward-foot { flex:none; flex-wrap:nowrap; gap:5px; }
+.child-dialog .reward-foot strong { font-size:12px; }
+.child-dialog .reward-foot .button { width:auto; min-height:44px; font-size:12px; margin:0; padding:7px 12px; border-radius:10px; }
+.reward-pagination { flex:none; min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.reward-pagination .button { min-height:44px; padding:8px 22px; font-size:13px; }
+.reward-pagination p { margin:0; color:#7b8871; font-size:12px; }
+.child-dialog .empty { padding:20px; align-self:center; }
+#history-panel { flex:1; min-height:0; padding:16px 24px 0; }
+.child-dialog #ledger { max-height:none; height:100%; display:flex; flex-direction:column; overflow:hidden; background:transparent; border:0; border-radius:0; padding:0; }
+.child-dialog .history-filters { flex:none; flex-wrap:nowrap; }
+.child-dialog .history-filters input { flex:1; min-width:100px; font-size:14px; }
+.child-dialog .history-list { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+.child-dialog .ledger-row { padding:12px 4px; }
+.child-dialog .ledger-row strong { font-size:14px; }
+.child-dialog .ledger-row small { font-size:11px; }
+.child-dialog .history-detail summary { min-height:32px; font-size:12px; }
+.history-pagination { display:flex; flex:none; justify-content:space-between; align-items:center; min-height:64px; gap:12px; }
+.history-pagination .button { min-height:44px; padding:8px 22px; }
+.history-pagination [role=status] { font-size:12px; color:#7b8871; }
+.child-dialog-message { flex:none; padding:9px 24px; margin:0; background:#ecf0df; font-size:12px; }
+.child-dialog-message.error,#purchase-error { color:#8b5345; }
+.child-purchase { max-height:calc(100dvh - 32px); overflow:auto; }
+body[data-role=child] #toast { bottom:92px; }
+@media (orientation:landscape) and (max-height:650px) {
+  .child-dialog-heading { padding-top:10px; padding-bottom:8px; }
+  .child-dialog-heading .eyebrow { display:none; }
+  .child-dialog .reward-art { flex:0 0 28px; min-height:28px; }
+  .child-dialog .reward-art > span:first-child { font-size:20px; }
+  .child-dialog .reward-tag { top:3px; }
+  .child-dialog .reward-content { padding:6px 10px; }
+  .child-dialog .reward-content h3 { font-size:14px; }
+  #reward-panel { padding-top:9px; }
+  .child-dialog .category-tabs { margin-bottom:8px; }
+  .reward-pagination { min-height:56px; }
+}
+/* Deliberately no separate portrait child layout; the task targets landscape iPad. */
