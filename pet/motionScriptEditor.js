@@ -21,7 +21,7 @@ export function createMotionScriptEditor(host,onChange) {
     row.append(element('span',String(i+1)),clip,cycles,speed,operations);list.append(row);
   });add.disabled=rows.length>=8;}
   add.addEventListener('click',()=>{if(rows.length<8){rows.push({clip:'walk',cycles:1,speed:1});render();onChange();}});
-  return {read(){return validateScript(rows);},set(script){rows=structuredClone(script??[{clip:'idle-alert',cycles:1,speed:1},{clip:'walk',cycles:2,speed:1},{clip:'sit',cycles:1,speed:1}]);render();}};
+  return {read(){return validateScript(rows);},set(script){rows=validateScript(script??[{clip:'idle-alert',cycles:1,speed:1},{clip:'walk',cycles:2,speed:1},{clip:'sit',cycles:1,speed:1}]);render();}};
 }
 
 /** Parent-only UI extension uses the existing versioned catalog API and application callback. */
