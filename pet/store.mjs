@@ -2,6 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { fail, text, integer, validateCatalog, composeParams } from './catalog.mjs';
 import { createLocalLedger } from './localLedger.mjs';
+import { SCENE_SLOTS, composeScene } from './environmentSchema.mjs';
+import { SCENE_CATALOG_ADDITIONS } from './environmentRewards.mjs';
 import { resolve } from 'node:path';
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
@@ -27,12 +29,19 @@ export function createStore(filename, initialCatalog) {
   const ledger = createLocalLedger(db, catalog);
   const log = ledger.log;
   const catalogRevision = () => createHash('sha256').update(JSON.stringify(catalog())).digest('hex');
+  const grantMembers = reward => {
+    if(reward.category!=='theme')return;
+    for(const id of Object.values(reward.params.members)){
+      const result=db.prepare('INSERT OR IGNORE INTO owned VALUES (?,?)').run(id,new Date().toISOString());
+      if(result.changes)log('gift',0,`套装物品：${reward.title}`,id);
+    }
+  };
   const grantMilestones = () => {
     const {lifetime}=db.prepare('SELECT lifetime FROM profile WHERE id=1').get();
     for (const reward of catalog().rewards) {
       if (reward.cost !== 0 || reward.unlockAt > lifetime) continue;
       const result=db.prepare('INSERT OR IGNORE INTO owned VALUES (?,?)').run(reward.id,new Date().toISOString());
-      if (result.changes) log('gift',0,`成长礼物：${reward.title}`,reward.id);
+      if (result.changes) { log('gift',0,`成长礼物：${reward.title}`,reward.id); grantMembers(reward); }
       if (reward.starter) db.prepare('INSERT OR IGNORE INTO equipped VALUES (?,?)').run(reward.category,reward.id);
     }
   };
@@ -42,7 +51,7 @@ export function createStore(filename, initialCatalog) {
     const owned=db.prepare('SELECT id FROM owned').all().map(r=>r.id);
     const equipped=Object.fromEntries(db.prepare('SELECT slot,id FROM equipped').all().map(r=>[r.slot,r.id]));
     const config=catalog();
-    return { ...profile, owned, equipped, params:composeParams(config,equipped),
+    return { ...profile, owned, equipped, params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
       rewards:config.rewards.map(r => {
         const {params,action,motion,...publicData}=r;
         return {...publicData, owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
@@ -69,6 +78,7 @@ export function createStore(filename, initialCatalog) {
       if (expectedRevision !== undefined && expectedRevision !== catalogRevision()) fail(409,'奖励目录已在其他页面修改。请保留当前草稿，重新读取目录后再保存。');
       for (const old of catalog().rewards) {
         const item = next.rewards.find(r => r.id === old.id);
+        if(old.category==='theme'&&JSON.stringify(item?.params?.members)!==JSON.stringify(old.params.members))fail(409,'已有套装的成员不可变，请复制为新套装');
         if (!item || item.category !== old.category || !!item.starter !== !!old.starter) fail(409,'不能删除已有奖励或改变其类别、初始标记；可添加新奖励');
       }
       setSetting('catalog', JSON.stringify(next)); grantMilestones(); bump();
@@ -79,6 +89,30 @@ export function createStore(filename, initialCatalog) {
   return {
     db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting,
     history: ledger.history,
+    installSceneRewards() {
+      // One-time transaction. Never reset existing prices, ownership, history or appearance.
+      if(getSetting('sceneRewardsVersion')==='1')return;
+      tx(()=>{
+        const next=catalog();
+        for(const item of SCENE_CATALOG_ADDITIONS){
+          const existing=next.rewards.find(r=>r.id===item.id);
+          if(existing&&existing.category!==item.category)fail(409,'场景预置 ID 与自定义奖励冲突，请先重命名自定义奖励');
+          if(!existing)next.rewards.push(structuredClone(item));
+        }
+        setSetting('catalog',JSON.stringify(validateCatalog(next)));
+        grantMilestones();setSetting('sceneRewardsVersion','1');bump();
+        log('catalog',0,'本地升级：加入场景奖励，原积分与已有预设保持不变');
+      });
+    },
+    unequip(slot) {
+      if(!SCENE_SLOTS.includes(slot))fail(400,'仅支持卸下场景槽位');
+      tx(()=>{
+        const starter=catalog().rewards.find(r=>r.category===slot&&r.starter);
+        if(!starter)fail(409,'此槽位尚未初始化');
+        db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(slot,starter.id);
+        db.prepare("DELETE FROM equipped WHERE slot='theme'").run();bump();
+      });return snapshot();
+    },
     storageInfo() { return { engine:'SQLite', localOnly:true, persistent:filename!==':memory:', path:filename===':memory:'?null:resolve(filename), ledgerCount:db.prepare('SELECT count(*) AS n FROM ledger').get().n, rewardCount:catalog().rewards.length }; },
     points({delta,reason,idempotencyKey}) {
       integer(delta,'积分变动',-10000,10000); if (!delta) fail(400,'积分变动不能为 0');
@@ -105,7 +139,7 @@ export function createStore(filename, initialCatalog) {
         if (p.balance<reward.cost) fail(409,'可兑换积分不足');
         db.prepare('UPDATE profile SET balance=balance-? WHERE id=1').run(reward.cost);
         db.prepare('INSERT INTO owned VALUES (?,?)').run(rewardId,new Date().toISOString());
-        log('purchase',-reward.cost,`兑换：${reward.title}`,rewardId);
+        log('purchase',-reward.cost,`兑换：${reward.title}`,rewardId); grantMembers(reward);
       });
       return snapshot();
     },
@@ -115,6 +149,12 @@ export function createStore(filename, initialCatalog) {
         const reward=catalog().rewards.find(r=>r.id===rewardId);
         if (!reward || !db.prepare('SELECT id FROM owned WHERE id=?').get(rewardId)) fail(403,'尚未拥有这个奖励');
         if (reward.category==='trick') fail(400,'互动动作请使用播放接口');
+        if(reward.category==='theme'){
+          for(const [slot,id]of Object.entries(reward.params.members)){
+            if(!db.prepare('SELECT id FROM owned WHERE id=?').get(id))fail(409,'套装成员拥有权不完整');
+            db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(slot,id);
+          }
+        } else if(SCENE_SLOTS.includes(reward.category))db.prepare("DELETE FROM equipped WHERE slot='theme'").run();
         db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(reward.category,rewardId);
         bump();
       }); return snapshot();

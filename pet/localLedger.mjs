@@ -16,7 +16,9 @@ export function createLocalLedger(db, getCatalog) {
   return {
     log(kind, delta, reason, rewardId = null) {
       const reward = rewardId ? getCatalog().rewards.find(r => r.id === rewardId) : null;
-      write.run(randomUUID(), kind, delta, reason, rewardId, new Date().toISOString(), reward ? JSON.stringify(reward) : null);
+      const snapshot=reward?structuredClone(reward):null;
+      if(snapshot?.category==='theme')snapshot.memberSnapshots=Object.values(snapshot.params.members).map(id=>structuredClone(getCatalog().rewards.find(r=>r.id===id)));
+      write.run(randomUUID(), kind, delta, reason, rewardId, new Date().toISOString(), snapshot ? JSON.stringify(snapshot) : null);
     },
     latest() { return db.prepare('SELECT * FROM ledger ORDER BY rowid DESC LIMIT 100').all().map(decode); },
     all() { return db.prepare('SELECT * FROM ledger ORDER BY rowid').all().map(decode); },

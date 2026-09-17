@@ -15,7 +15,7 @@ export function createSceneControls(host, { resetView, zoom, setTilt, petAt }) {
   host.after(toolbar);
   const status = toolbar.querySelector('.tablet-status'), toggle = toolbar.querySelector('[data-tablet=tilt]');
   const calibration = toolbar.querySelector('[data-tablet=calibrate]');
-  let disposed = false, overlayOpen = false;
+  let disposed = false, overlayOpen = false, toyDragging=false;
   function onState(state) {
     status.textContent = state.message; toolbar.dataset.tiltState = state.code;
     toggle?.setAttribute('aria-pressed', String(state.enabled));
@@ -58,15 +58,17 @@ export function createSceneControls(host, { resetView, zoom, setTilt, petAt }) {
       if (petAt(event.clientX, event.clientY)) status.textContent = '轻轻摸到小猫啦。';
     }
     tap = null; pointers.delete(event.pointerId);
-    if (!pointers.size) tilt?.setTouching(overlayOpen);
+    if (!pointers.size) tilt?.setTouching(overlayOpen||toyDragging);
   }
   canvas.addEventListener('pointerdown', down);
   canvas.addEventListener('pointermove', move);
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, end);
   const contextMenu = event => event.preventDefault(); canvas.addEventListener('contextmenu', contextMenu);
-  const clearGesture = () => { pointers.clear(); tap = null; tilt?.setTouching(overlayOpen); };
+  const clearGesture = () => { pointers.clear(); tap = null; tilt?.setTouching(overlayOpen||toyDragging); };
   const overlayChanged = event => { overlayOpen = event.detail === true; clearGesture(); };
   host.addEventListener('meow:overlay-change', overlayChanged);
+  const toyChanged=event=>{toyDragging=event.detail===true;clearGesture();};
+  host.addEventListener('meow:toy-drag',toyChanged);
   const hidden = () => { if (document.hidden) clearGesture(); };
   document.addEventListener('visibilitychange', hidden);
   // The application hides its workspace on logout; stop sensors even if the scene is retained.
@@ -77,7 +79,7 @@ export function createSceneControls(host, { resetView, zoom, setTilt, petAt }) {
     dispose() {
       if (disposed) return; disposed = true; observer?.disconnect(); tilt?.dispose();
       document.removeEventListener('visibilitychange', hidden);
-      host.removeEventListener('meow:overlay-change', overlayChanged);
+      host.removeEventListener('meow:overlay-change', overlayChanged);host.removeEventListener('meow:toy-drag',toyChanged);
       canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move);
       for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.removeEventListener(type, end);
       canvas.removeEventListener('contextmenu', contextMenu); toolbar.removeEventListener('click', clicks); toolbar.remove();

@@ -1,3 +1,4 @@
+import { SCENE_FIELDS, SCENE_LABELS, sceneDefaults, sceneFieldVisible } from './environmentSchema.mjs';
 import { ACTION_CHOICES, PROGRAMS } from './motionPrograms.mjs';
 import { COATS, POSES } from '../src/coats.js';
 
@@ -6,8 +7,9 @@ const select = (key, label, choices) => ({ key, label, type: 'select', choices }
 const number = (key, label, min, max, value, step = 0.01) => ({ key, label, type: 'number', min, max, value, step });
 const check = (key, label, value = false) => ({ key, label, type: 'checkbox', value });
 const color = (key, label, value) => ({ key, label, type: 'color', value });
-export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作' };
+export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', ...SCENE_LABELS, theme:'场景套装' };
 export const PARAM_FIELDS = {
+  ...SCENE_FIELDS,
   coat: [
     select('coatId', '基础花色', COATS.map(c => [c.id, c.name])),
     check('dynamicCoat', '启用自定义配色'),
@@ -47,6 +49,7 @@ export const MOTION_FIELDS = [
   number('transition', '动作衔接时间（秒）', 0.1, 0.6, 0.25, 0.05),
 ];
 export function defaultsFor(category, params = {}) {
+  if(SCENE_FIELDS[category])return sceneDefaults(category,params);
   const defaults = Object.fromEntries((PARAM_FIELDS[category] || []).map(f => [f.key, f.type === 'select' ? f.choices[0][0] : f.value]));
   if (category === 'coat') {
     const c = COATS.find(c => c.id === params.coatId) || COATS[0], s = c.soft;
@@ -63,6 +66,7 @@ export function defaultsFor(category, params = {}) {
   return { ...defaults, ...params };
 }
 export function fieldVisible(category, key, params) {
+  if(SCENE_FIELDS[category])return sceneFieldVisible(category,key,params);
   if (category === 'coat' && key.startsWith('dynamicCoat') && key !== 'dynamicCoat') {
     if (!params.dynamicCoat) return false;
     const kind = COATS.find(c => c.id === params.coatId)?.kind;
@@ -78,6 +82,7 @@ export function fieldVisible(category, key, params) {
   return true;
 }
 export function parameterDescription(reward) {
+  if(reward.category==='theme')return Object.entries(reward.params?.members||{}).map(([slot,id])=>`${SCENE_LABELS[slot]}：${id}`).join('；');
   const fields = reward.category === 'trick' ? [ACTION_FIELD, ...MOTION_FIELDS] : PARAM_FIELDS[reward.category] || [];
   const values = reward.category === 'trick' ? { action: reward.action, ...reward.motion } : reward.params || {};
   const description=fields.filter(f => values[f.key] !== undefined && fieldVisible(reward.category, f.key, values)).map(f => {

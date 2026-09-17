@@ -19,7 +19,7 @@ try{
  for(const [name,value]of Object.entries({setupToken:app.setupToken,pin:'864209',childCode:'2468',childName:'测试小朋友',petName:'小橘'}))await parent.locator(`#setup-form [name="${name}"]`).fill(value);
  await parent.locator('#setup-form button[type=submit]').tap();await parent.locator('#workspace').waitFor({state:'visible'});
  await parent.locator('[data-parent-tab=catalog]').tap();await parent.locator('[data-motion-add-rewards]').tap();
- await parent.waitForFunction(()=>document.querySelectorAll('#catalog-body tr').length===31);
+ await parent.waitForFunction(()=>document.querySelectorAll('#catalog-body tr').length===79);
  await parent.locator('[data-action=new-preset]').tap();await parent.locator('#preset-form [name=category]').selectOption('trick');
  await parent.locator('#preset-form [name=title]').fill('连续骨骼动作');await parent.locator('#preset-form [name=description]').fill('警觉、行走、坐下，平滑衔接');
  await parent.locator('#preset-param-action').selectOption('sequence');await parent.locator('[data-script-add]').tap();

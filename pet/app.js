@@ -1,4 +1,7 @@
 import './style.css';
+import {CATEGORY_LABELS} from './presetSchema.mjs';
+import {SCENE_SLOTS} from './environmentSchema.mjs';
+import './environment.css';
 import './child.css';
 import { childMarkup, createChildOverlay } from './childLayout.js';
 import { rewardPage } from './rewardPages.mjs';
@@ -8,8 +11,8 @@ const parent=document.body.dataset.role==='parent';
 const role=parent?'parent':'child';
 const $=selector=>document.querySelector(selector);
 const el=(tag,cls,content)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(content!==undefined)e.textContent=content;return e;};
-const labels={coat:'花色',shape:'外形',eyes:'眼睛',pose:'姿态',trick:'互动'};
-const icons={coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦'};
+const labels=CATEGORY_LABELS;
+const icons={coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
 const uid=()=>Array.from(crypto.getRandomValues(new Uint8Array(20)),n=>n.toString(16).padStart(2,'0')).join('');
 let state=null,csrf='',scene=null,sceneLoading=null,category='all',view='shop',catalog=null,online=true,selectedReward=null,toastTimer,catalogRevision='',presetEditor=null,historyView=null,childOverlay=null,rewardPageIndex=0,rewardRenderKey='';
 const operationKeys=new Map();
@@ -73,7 +76,14 @@ function renderRewards(){
   const key=JSON.stringify([view,category,rewardPageIndex,online,state.rewards]);
   if(key===rewardRenderKey)return;rewardRenderKey=key;
   const focused=document.activeElement;const focusId=focused?.dataset.id,focusCategory=focused?.dataset.category;
-  if(!$('#categories').children.length)for(const [value,name]of [['all','全部'],...Object.entries(labels)]){const b=button(name,'category','chip');b.dataset.category=value;$('#categories').append(b);}
+  if(!$('#categories').children.length){
+    for(const [value,name]of [['all','全部'],...Object.entries(labels).filter(([id])=>!SCENE_SLOTS.includes(id)&&id!=='theme')]){const b=button(name,'category','chip');b.dataset.category=value;$('#categories').append(b);}
+    const select=el('select','scene-filter');select.id='scene-category';select.setAttribute('aria-label','场景布置分类');
+    select.append(new Option('场景布置…',''));for(const slot of [...SCENE_SLOTS,'theme'])select.append(new Option(labels[slot],slot));
+    select.addEventListener('change',()=>{if(!select.value)return;category=select.value;rewardPageIndex=0;renderRewards();});
+    $('#categories').append(select);
+  }
+  $('#scene-category').value=[...SCENE_SLOTS,'theme'].includes(category)?category:'';
   $('#categories').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.category===category));
   const root=$('#reward-grid');root.replaceChildren();root.dataset.page=String(result.page+1);root.dataset.pages=String(result.pages);
   $('#reward-prev').disabled=result.page===0;$('#reward-next').disabled=result.page>=result.pages-1;
@@ -86,7 +96,11 @@ function renderRewards(){
     const content=el('div','reward-content');content.append(el('h3','',reward.title),el('p','',reward.description));
     const foot=el('div','reward-foot');foot.append(el('strong','',reward.owned?'永久拥有':reward.cost===0?'成长礼物':`${reward.cost} 积分`));
     let b;
-    if(reward.owned){b=button(reward.category==='trick'?'玩一下':reward.equipped?'正在使用':'换上它',reward.category==='trick'?'play':'equip','button small');b.disabled=reward.equipped||!online;}
+    if(reward.owned){
+      const canRemove=SCENE_SLOTS.includes(reward.category)&&reward.equipped&&!reward.starter;
+      b=button(canRemove?'卸下':reward.category==='trick'?'玩一下':reward.equipped?'正在使用':reward.category==='theme'?'应用整套':'换上它',canRemove?'unequip':reward.category==='trick'?'play':'equip','button small');
+      b.dataset.slot=reward.category;b.disabled=(!canRemove&&reward.equipped)||!online;
+    }
     else if(!reward.eligible){b=button(`还差 ${reward.unlockAt-state.lifetime} 成长分`,'purchase','button small');b.disabled=true;}
     else{b=button(reward.affordable?'兑换':'余额不足','purchase','button small');b.disabled=!reward.affordable||!online;}
     b.dataset.id=reward.id;foot.append(b);content.append(foot);card.append(art,content);root.append(card);
@@ -100,7 +114,7 @@ async function updateScene(){
   try{
     if(!sceneLoading)sceneLoading=import('./scene.js').then(({createPetScene})=>scene=createPetScene($('#pet-scene')));
     await sceneLoading;if(!state)return;
-    scene.setParams(state.params);$('#scene-loading').hidden=true;
+    scene.applyState(state);$('#scene-loading').hidden=true;
   }catch(error){$('#scene-loading').hidden=false;$('#scene-loading').textContent='三维小猫暂时没有加载成功，请刷新页面重试。积分和收藏仍然保留。';console.error(error);}
 }
 function apply(next){
@@ -117,9 +131,16 @@ function apply(next){
   }
 }
 function renderCatalog(){
+  if(!$('#catalog-filter')){
+    const wrap=el('label','scene-catalog-filter','筛选奖励类别');
+    const select=el('select','scene-filter');select.id='catalog-filter';
+    select.append(new Option('所有奖励','all'));for(const [id,label]of Object.entries(labels))select.append(new Option(label,id));
+    select.addEventListener('change',()=>{for(const row of $('#catalog-body').children)row.hidden=select.value!=='all'&&row.dataset.category!==select.value;});
+    wrap.append(select);$('#panel-catalog .table-scroll').before(wrap);
+  }
   $('#catalog-body').replaceChildren();
   for(const reward of catalog.rewards){
-    const tr=el('tr');tr.append(el('td','',reward.title),el('td','',labels[reward.category]));
+    const tr=el('tr');tr.dataset.category=reward.category;tr.hidden=$('#catalog-filter').value!=='all'&&$('#catalog-filter').value!==reward.category;tr.append(el('td','',reward.title),el('td','',labels[reward.category]));
     for(const field of ['cost','unlockAt']){const td=el('td'),input=el('input');input.type='number';input.min='0';input.max='1000000';input.step='1';input.value=reward[field];input.dataset.rewardId=reward.id;input.dataset.field=field;input.setAttribute('aria-label',`${reward.title}的${field==='cost'?'价格':'解锁积分'}`);input.disabled=!!reward.starter;td.append(input);tr.append(td);}
     const td=el('td'),operations=el('div','catalog-operations');
     for(const [action,label]of [['edit-preset','调参数'],['copy-preset','复制']]){const b=button(label,action,'button small');b.dataset.id=reward.id;operations.append(b);}
@@ -148,7 +169,7 @@ document.addEventListener('click',event=>{
   if(action==='close-rewards'){childOverlay.close();return;}
   if(action==='open-rewards'){childOverlay.open('shop',b);return;}
   if(action==='collection'){childOverlay.open('owned',b);return;}
-  if(action==='purchase'){selectedReward=state.rewards.find(r=>r.id===b.dataset.id);$('#purchase-title').textContent=`把「${selectedReward.title}」带回家？`;$('#purchase-description').textContent=selectedReward.description;$('#purchase-balance').textContent=`使用 ${selectedReward.cost} 积分 · 兑换后剩余 ${state.balance-selectedReward.cost} 积分`;$('#purchase-error').hidden=true;$('#purchase-dialog').showModal();return;}
+  if(action==='purchase'){selectedReward=state.rewards.find(r=>r.id===b.dataset.id);$('#purchase-title').textContent=`把「${selectedReward.title}」带回家？`;$('#purchase-description').textContent=selectedReward.description+(selectedReward.category==='theme'?' 本次扣除整套价格；已有物品不会重复发放，暂不按已有物品折价。':'');$('#purchase-balance').textContent=`使用 ${selectedReward.cost} 积分 · 兑换后剩余 ${state.balance-selectedReward.cost} 积分`;$('#purchase-error').hidden=true;$('#purchase-dialog').showModal();return;}
   run(b,async()=>{
     if(['new-preset','edit-preset','copy-preset'].includes(action)){
       if(!allowTableDiscard())return;
@@ -156,7 +177,8 @@ document.addEventListener('click',event=>{
     }
     if(action==='reload-catalog'){if(allowTableDiscard())await reloadCatalog();}
     if(action==='logout'){await api(`/api/${role}/logout`,'POST',{});lock();}
-    if(action==='equip'){apply(await api('/api/equip','POST',{rewardId:b.dataset.id}));childOverlay.close();toast('小猫已经换好啦');}
+    if(action==='unequip'){apply(await api('/api/unequip','POST',{slot:b.dataset.slot}));childOverlay.close();toast('已卸下场景物品，拥有权仍然保留');}
+    if(action==='equip'){apply(await api('/api/equip','POST',{rewardId:b.dataset.id}));childOverlay.close();toast('已经应用，回到小猫看看吧');}
     if(action==='play'){const result=await api('/api/play','POST',{rewardId:b.dataset.id});await updateScene();if(!scene)throw new Error('三维小猫尚未准备好，请刷新后重试');childOverlay.close();scene.play(result.action,result.motion);toast(matchMedia('(prefers-reduced-motion: reduce)').matches?'小猫完成了互动（已遵循减少动态效果设置）':'小猫来表演啦');}
     if(action==='confirm-purchase'){const reward=selectedReward;if(!reward)return;const intent=`purchase:${reward.id}:${reward.cost}`;apply(await api('/api/purchase','POST',{rewardId:reward.id,expectedCost:reward.cost,idempotencyKey:keyFor(intent)}));operationKeys.delete(intent);$('#purchase-dialog').close();toast(`已经收藏「${reward.title}」，去试试看吧`);}
     if(action==='save-catalog'){

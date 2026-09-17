@@ -24,6 +24,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   if(publicOrigin){const url=new URL(publicOrigin);if(!['http:','https:'].includes(url.protocol)||url.origin!==publicOrigin)throw new Error('MEOW_ORIGIN 必须是完整 origin，不含路径或结尾斜杠');if(tls&&url.protocol!=='https:')throw new Error('HTTPS 服务不能配置 HTTP origin');}
   if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true,mode:0o700});
   const store=createStore(dbPath,JSON.parse(readFileSync(catalogPath,'utf8')));
+  store.installSceneRewards();
   const db=store.db;
   const configured=()=>!!db.prepare("SELECT role FROM credentials WHERE role='parent'").get();
   let setupToken=configured()?null:random();
@@ -127,7 +128,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         authorize(req,parent?'parent':'child',method!=='GET');
         if(method==='GET') {
           if(path==='/api/state'||path==='/api/parent/state')return json(res,200,store.snapshot(parent));
-          if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
+          if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,sceneParams:s.sceneParams,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
           if(path==='/api/parent/catalog')return json(res,200,store.catalog());
           if(path==='/api/parent/presets')return json(res,200,{catalog:store.catalog(),revision:store.catalogRevision()});
           if(path==='/api/parent/storage')return json(res,200,store.storageInfo());
@@ -141,6 +142,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
           const data=await body(req);
           authorize(req,parent?'parent':'child',true);
           if(path==='/api/purchase'&&method==='POST'){object(data,['rewardId','idempotencyKey','expectedCost']);return json(res,200,store.purchase(data));}
+          if(path==='/api/unequip'&&method==='POST'){object(data,['slot']);return json(res,200,store.unequip(data.slot));}
           if(path==='/api/equip'&&method==='POST'){object(data,['rewardId']);return json(res,200,store.equip(data.rewardId));}
           if(path==='/api/play'&&method==='POST'){object(data,['rewardId']);return json(res,200,store.play(data.rewardId));}
           if(path==='/api/parent/points'&&method==='POST'){object(data,['delta','reason','idempotencyKey']);return json(res,200,store.points(data));}

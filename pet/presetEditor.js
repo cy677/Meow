@@ -1,5 +1,6 @@
 import { createMotionScriptEditor, installMotionSamples } from './motionScriptEditor.js';
 import { defaultDuration } from './motionPrograms.mjs';
+import { DEFAULT_SCENE, SCENE_SLOTS, SCENE_LABELS } from './environmentSchema.mjs';
 import { DEFAULT_PARAMS, validateFields, validateCatalog } from './catalog.mjs';
 import { PARAM_FIELDS, ACTION_FIELD, MOTION_FIELDS, CATEGORY_LABELS, defaultsFor, fieldVisible } from './presetSchema.mjs';
 import './preset.css';
@@ -50,6 +51,8 @@ export function createPresetEditor({ api, onSaved }) {
       const { action, ...motion } = values(); reward.action = action; reward.motion = motion;
       if(action==='sequence')reward.motion.script=scriptUI.read();
       if (validate) { validateFields({ action }, [ACTION_FIELD]); validateFields(Object.fromEntries(Object.entries(motion).filter(([k])=>k!=='script')), MOTION_FIELDS); }
+    } else if(category()==='theme'){
+      reward.params={members:Object.fromEntries(Object.entries(values()).filter(([,id])=>id))};
     } else {
       reward.params = values();
       if (validate) validateFields(reward.params, PARAM_FIELDS[category()]);
@@ -77,7 +80,13 @@ export function createPresetEditor({ api, onSaved }) {
       const { createPetScene } = await import('./scene.js');
       if (!dialog.open || ticket !== previewSequence) return false;
       if (!scene) scene = createPetScene(find('#preset-preview'));
-      scene.setParams({ ...DEFAULT_PARAMS, ...(reward.params || {}) });
+      const environment=structuredClone(DEFAULT_SCENE);
+      const isScene=SCENE_SLOTS.includes(reward.category),isTheme=reward.category==='theme';
+      if(isScene)environment[reward.category]={...environment[reward.category],...reward.params};
+      if(isTheme)for(const [slot,id]of Object.entries(reward.params.members)){
+        const member=loaded.catalog.rewards.find(r=>r.id===id);if(member)environment[slot]={...environment[slot],...member.params};
+      }
+      scene.applyState({params:{...DEFAULT_PARAMS,...(!isScene&&!isTheme?reward.params||{}:{})},sceneParams:environment});
       find('#preset-preview-status').textContent = category() === 'trick' ? '点击“试播动作”查看效果；孩子只能播放已解锁动作。' : '预览已更新，保存后才加入本地奖励目录。';
       return true;
     } catch (error) {
@@ -87,8 +96,10 @@ export function createPresetEditor({ api, onSaved }) {
   }
   function renderFields(params = {}, motion = {}, action = 'jump') {
     controls.clear(); wrappers.clear(); find('#preset-fields').replaceChildren();
-    const fields = category() === 'trick' ? [ACTION_FIELD, ...MOTION_FIELDS] : PARAM_FIELDS[category()];
-    const data = category() === 'trick' ? { action, ...Object.fromEntries(MOTION_FIELDS.map(f => [f.key, f.value])), duration:defaultDuration(action), ...motion } : defaultsFor(category(), params);
+    const fields = category()==='theme'
+      ?SCENE_SLOTS.map(slot=>({key:slot,label:SCENE_LABELS[slot],type:'select',choices:[['','不包含此槽位'],...loaded.catalog.rewards.filter(r=>r.category===slot).map(r=>[r.id,r.title])]}))
+      :category() === 'trick' ? [ACTION_FIELD, ...MOTION_FIELDS] : PARAM_FIELDS[category()];
+    const data = category()==='theme'?{...Object.fromEntries(SCENE_SLOTS.map(s=>[s,''])),...params.members}:category() === 'trick' ? { action, ...Object.fromEntries(MOTION_FIELDS.map(f => [f.key, f.value])), duration:defaultDuration(action), ...motion } : defaultsFor(category(), params);
     for (const field of fields) {
       const wrapper = node('div', `preset-field field-${field.type}`), label = node('label', '', field.label);
       const input = node(field.type === 'select' ? 'select' : 'input');
@@ -104,13 +115,21 @@ export function createPresetEditor({ api, onSaved }) {
         input.addEventListener('input', () => { if (input.value !== '' && input.checkValidity()) slider.value = input.value; });
         const row = node('div', 'range-row'); row.append(slider, input); wrapper.append(label, row);
       } else { wrapper.append(label, input); }
+      if(category()==='theme'&&original)input.disabled=true;
+      if(category()==='toy'&&field.key==='kind')input.addEventListener('change',()=>{
+        const limit={ball:1,fish:3,duck:3,yarn:5,mixed:5,none:5}[input.value],count=controls.get('count');
+        if(count){count.value=Math.min(Number(count.value),limit);count.max=limit;const slider=wrappers.get('count').querySelector('[type=range]');slider.max=limit;slider.value=count.value;}
+        visibility();schedulePreview();
+      });
       controls.set(field.key, input); wrappers.set(field.key, wrapper); find('#preset-fields').append(wrapper);
+      if(category()==='bed'&&field.key==='kind')input.addEventListener('change',()=>{if(input.value==='cushion')controls.get('placement').value='beside';visibility();schedulePreview();});
       if(field.key==='action')input.addEventListener('change',()=>{const d=controls.get('duration');d.value=defaultDuration(input.value);const slider=wrappers.get('duration')?.querySelector('[type=range]');if(slider)slider.value=d.value;visibility();schedulePreview();});
       if (field.key === 'coatId') input.addEventListener('change', () => {
         const dynamicCoat = controls.get('dynamicCoat').checked;
         renderFields({ coatId: input.value, dynamicCoat }); markDirty();
       });
     }
+    if(category()==='toy')controls.get('kind')?.dispatchEvent(new Event('change'));
     visibility(); schedulePreview();
   }
   const teardown = () => { clearTimeout(previewTimer); previewSequence++; generation++; scene?.dispose(); scene = null; find('#preset-preview').replaceChildren(); delete find('#preset-preview').dataset.ready; dirty = false; };

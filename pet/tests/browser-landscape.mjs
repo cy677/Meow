@@ -8,7 +8,7 @@ import { revealReward, openChildPage } from './ui-helpers.mjs';
 const app=await createPetServer({dbPath:':memory:'});
 await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${app.server.address().port}`;
-const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
+const browser=await chromium.launch({...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
 const context=await browser.newContext({viewport:{width:1024,height:768},hasTouch:true,isMobile:true,deviceScaleFactor:1});
 const page=await context.newPage(),errors=[],external=[];
 page.setDefaultTimeout(60000);page.on('pageerror',error=>errors.push(error.message));
@@ -44,13 +44,13 @@ try {
   await page.locator('[data-action=open-rewards]').tap();await assertDialog();await shot('landscape-rewards-1024');
   const ids=[];
   while(true){ids.push(...await page.locator('.reward-card').evaluateAll(cards=>cards.map(c=>c.dataset.rewardId)));if(await page.locator('#reward-next').isDisabled())break;await page.locator('#reward-next').tap();}
-  assert.equal(ids.length,20);assert.equal(new Set(ids).size,20);assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),'4');
+  assert.equal(ids.length,app.store.catalog().rewards.length);assert.equal(new Set(ids).size,app.store.catalog().rewards.length);const lastPage=String(Math.ceil(ids.length/6));assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),lastPage);
   // A new award must not send a child back to the first page or remove focus.
   await page.locator('#reward-prev').focus();app.store.points({delta:2,reason:'翻页时新增的积分',idempotencyKey:randomUUID()});
   await page.waitForFunction(()=>document.querySelector('#balance').textContent==='323');
-  assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),'4');assert.equal(await page.evaluate(()=>document.activeElement.id),'reward-prev');
+  assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),lastPage);assert.equal(await page.evaluate(()=>document.activeElement.id),'reward-prev');
   await page.locator('[data-action=category][data-category=trick]').tap();assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),'1');assert.equal(await page.locator('.reward-card').count(),2);
-  await page.locator('[data-view=owned]').tap();assert.equal(await page.locator('.reward-card').count(),6);assert.equal(await page.locator('#reward-next').isDisabled(),true);
+  await page.locator('[data-view=owned]').tap();assert.equal(await page.locator('.reward-card').count(),6);assert.equal(await page.locator('#reward-next').isDisabled(),app.store.snapshot().owned.length<=6);
   // Two native dialogs: Escape dismisses only confirmation; cancel never spends points.
   await revealReward(page,'coat-grey');const oldBalance=app.store.snapshot().balance;
   await page.locator('.reward-card[data-reward-id="coat-grey"] button').tap();await page.locator('#purchase-dialog').waitFor({state:'visible'});
