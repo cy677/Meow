@@ -10,6 +10,7 @@ export function createWeatherAudio() {
   let rainGain = null;
   let rainAmount = 1;
   let thunderVoices = 0;
+  let muted = false;
 
   const rainGainValue = () => Math.max(0.0001, 0.105 * Math.min(rainAmount, 1.8));
 
@@ -18,7 +19,7 @@ export function createWeatherAudio() {
     if (!context) {
       context = new AudioContextCtor();
       master = context.createGain();
-      master.gain.value = 0.72;
+      master.gain.value = muted ? 0 : 0.72;
       master.connect(context.destination);
     }
     if (context.state === 'suspended') context.resume().catch(() => {});
@@ -130,6 +131,13 @@ export function createWeatherAudio() {
       const previous=context;context=null;master=null;
       if(previous&&previous.state!=='closed')previous.close().catch(()=>{});
     },
+    setMuted(value) {
+      muted = Boolean(value);
+      if (master && context) {
+        master.gain.cancelScheduledValues(context.currentTime);
+        master.gain.setTargetAtTime(muted ? 0 : 0.72, context.currentTime, 0.025);
+      }
+    },
     prepare: ensureContext,
     setRain,
     setRainAmount,
@@ -140,6 +148,7 @@ export function createWeatherAudio() {
       rainActive: !!rainSource,
       rainAmount,
       thunderVoices,
+      muted,
     }),
   };
 }

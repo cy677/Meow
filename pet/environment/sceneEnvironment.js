@@ -37,7 +37,7 @@ export function createSceneEnvironment({scene,renderer,platform,keyLight,ambient
    if(!toyWorld)return;
    const p=config.toy,rng=createRng(p.seed);
    for(const [i,t]of activeToys.entries()){
-     const angle=-.3+i*1.2,x=Math.cos(angle)*1.65,z=Math.sin(angle)*1.5+.3;
+     const angle=-.3+i*1.2+rng.range(-.14,.14),radius=rng.range(1.5,1.8),x=Math.cos(angle)*radius,z=Math.sin(angle)*radius*.9+.3;
      t.body.position.set(x,.45+t.radius,z);t.body.quaternion.setFromEuler(0,rng.range(-3,3),0);
      t.body.velocity.set(0,0,0);t.body.angularVelocity.set(0,0,0);t.body.force.set(0,0,0);t.body.torque.set(0,0,0);t.body.wakeUp();
      t.mesh.position.copy(t.body.position);
@@ -109,6 +109,7 @@ export function createSceneEnvironment({scene,renderer,platform,keyLight,ambient
  }
  function syncAudio(){
    if(!audio)return;
+   audio.setMuted(!audioEnabled||paused);
    const rainOn=audioEnabled&&!paused&&['rain','thunder','fishRain'].includes(config.weather.mode);
    audio.setRainAmount(Math.min(1,config.weather.rainAmount));audio.setRain(rainOn);
  }
@@ -176,11 +177,11 @@ export function createSceneEnvironment({scene,renderer,platform,keyLight,ambient
      if(audioEnabled&&config.weather.mode==='thunder'&&phase<dt)audio?.playThunder(.3);
    },
    diagnostics(){
-     return {slots:structuredClone(config),roomExtent:this.roomExtent,wood:!!wood?.mesh.visible,rug:rug?.getState()??null,
+     return {slots:structuredClone(config),roomExtent:this.roomExtent,wood:!!wood?.mesh.visible,rug:rug?{...rug.getState(),bounds:{width:config.rug.size,depth:config.rug.size*(['striped','confetti'].includes(config.rug.style)?.78:1),centerX:0,centerZ:0}}:null,
        container:bed?.userData.container?.id??(config.bed.placement==='inside'?config.bed.kind:null),
        toys:activeToys.map(t=>({kind:t.kind,position:t.body.position.toArray(),id:t.body.id})),toyCount:activeToys.length,
        bodyCount:toyWorld?.world.bodies.length??0,clouds:clouds?.count??0,rain:rain?.count??0,fish:fish?.count??0,
-       fog:scene.fog?{near:scene.fog.near,far:scene.fog.far}:null,audioEnabled,paused,dragging:this.dragging};
+       fog:scene.fog?{near:scene.fog.near,far:scene.fog.far}:null,audioEnabled,audioState:audio?.getState()??null,paused,dragging:this.dragging};
    },
    dispose(){
      if(disposed)return;disposed=true;stopDrag();audio?.dispose();rememberFishTextures();fish?.setEnabled(false);fish?.clear();for(const texture of fishTextures)texture.dispose();

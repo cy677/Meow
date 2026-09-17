@@ -47,7 +47,7 @@ export function sceneFieldVisible(category,key,params) {
  if(category==='floor'&&key!=='kind')return params.kind==='wood';
  if(['rug','bed','toy'].includes(category)&&key!==(category==='rug'?'style':'kind')&&params[category==='rug'?'style':'kind']==='none')return false;
  if(category==='bed'&&['x','z'].includes(key))return params.placement!=='inside';
- if(category==='bed'&&key==='placement')return params.kind!=='cushion';
+ if(category==='bed'&&['placement','seed'].includes(key))return params.kind!=='cushion';
  if(category==='weather') {
    if(key==='lightning')return params.mode==='thunder';
    if(key==='rainAmount')return ['rain','thunder','fishRain'].includes(params.mode);

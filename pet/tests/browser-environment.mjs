@@ -57,7 +57,7 @@ try{
  await parent.locator('#preset-save').tap();await parent.locator('#preset-dialog').waitFor({state:'hidden'});
  await child.waitForFunction(()=>document.querySelector('#pet-scene').getSceneDiagnostics().slots.floor.direction===45);
  assert.equal((await diag()).geometryId,geometry);
- // Create and preview a new bundle with the form, cancel first, no write.
+ // Create and preview a new bundle using the actual form.
  await parent.locator('[data-action=new-preset]').tap();await parent.locator('#preset-form [name=category]').selectOption('theme');
  await parent.locator('#preset-form [name=title]').fill('我的场景套装');await parent.locator('#preset-form [name=description]').fill('本地保存的猫咪房间');
  await parent.locator('#preset-param-floor').selectOption('scene-floor-rose');await parent.locator('#preset-param-toy').selectOption('scene-toy-duck');await parent.locator('#preset-param-bed').selectOption('scene-bed-cardboard');
@@ -82,7 +82,7 @@ try{
    if(reward.category==='rug')assert.equal(d.rug.style,RUG_CHOICES.find(c=>c[0]===reward.params.style)[1]);
    if(reward.category==='bed'&&reward.params.kind!=='cushion')assert.equal(d.container,reward.params.kind);
    if(reward.category==='toy')assert.equal(d.toyCount,reward.params.count);
-   reports.push({reward:reward.id,...d});
+   reports.push({reward:reward.id,...d});console.log('Rendered source preset:',reward.id);
  }
  await lab.evaluate(()=>{env.weather.mode='fishRain';scene.applyState({params,sceneParams:env});});
  await lab.waitForFunction(()=>scene.getSceneDiagnostics().fish>0);const fish=await lab.evaluate(()=>scene.getSceneDiagnostics());assert.ok(fish.fish<=12);await shot(lab,'scene-fish-rain');
@@ -95,12 +95,21 @@ try{
  await lab.evaluate(()=>scene.play('jump',{duration:1.2}));await lab.waitForFunction(()=>!scene.getMotionDiagnostics().active);await lab.waitForTimeout(300);
  assert.equal((await lab.evaluate(()=>scene.getSceneDiagnostics())).bindingPose,'containerCrouch');
  // Resource-count bound after repeatedly replacing containers, rugs/weather textures.
- await lab.evaluate(()=>{env.bed.placement='beside';env.weather.mode='sunny';scene.applyState({params,sceneParams:env});});
+ await lab.evaluate(()=>{env.bed.placement='beside';env.bed.kind='basket';env.rug.style='pizza';env.weather.mode='rain';scene.applyState({params,sceneParams:env});});
  await lab.waitForTimeout(200);const before=await lab.evaluate(()=>scene.getSceneDiagnostics().memory);
  for(let i=0;i<12;i++)await lab.evaluate(i=>{env.bed.kind=i%2?'basket':'cardboard';env.rug.style=i%2?'pizza':'checker';env.weather.mode=i%2?'rain':'sunny';scene.applyState({params,sceneParams:env});},i);
  await lab.waitForTimeout(300);const after=await lab.evaluate(()=>scene.getSceneDiagnostics().memory);
  assert.ok(after.geometries<=before.geometries+12,`unbounded geometry growth ${JSON.stringify({before,after})}`);
  assert.ok(after.textures<=before.textures+4,'unbounded texture growth');
+ // Explicit audio activation, overlay muting (including existing thunder), and off switch.
+ await lab.locator('[data-room=audio]').click();
+ assert.equal((await lab.evaluate(()=>scene.getSceneDiagnostics())).audioEnabled,true);
+ await lab.evaluate(()=>document.querySelector('#lab').dispatchEvent(new CustomEvent('meow:overlay-change',{detail:true})));
+ assert.equal((await lab.evaluate(()=>scene.getSceneDiagnostics())).audioState.muted,true);
+ await lab.evaluate(()=>document.querySelector('#lab').dispatchEvent(new CustomEvent('meow:overlay-change',{detail:false})));
+ assert.equal((await lab.evaluate(()=>scene.getSceneDiagnostics())).audioState.muted,false);
+ await lab.locator('[data-room=audio]').click();
+ assert.equal((await lab.evaluate(()=>scene.getSceneDiagnostics())).audioState.muted,true);
  // Modal/tablet height remains usable with new scene-category selector.
  await child.locator('[data-action=open-rewards]').tap();await child.locator('#scene-category').selectOption('rug');await shot(child,'scene-reward-pages');
  for(const size of [{width:1024,height:600},{width:1180,height:820}]){
