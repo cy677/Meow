@@ -41,11 +41,11 @@ export function createHistoryView(root, { api, parent, onError, paginated = fals
     more.hidden = !paginated && cursor === null;
     more.disabled = busy || cursor === null; prev.disabled = busy || page === 0;
     pageLabel.textContent = `第 ${page + 1} / ${Math.max(1, Math.ceil(total / pageSize))} 页`;
-    list.dataset.page = String(page + 1); list.scrollTop = 0;
+    list.dataset.page = String(page + 1); list.dataset.kind = active.kind; list.dataset.query = active.q; list.scrollTop = 0;
   }
   async function load(reset = true, targetPage = page) {
     const ticket = ++sequence, requestedNewest = newest;
-    busy = true; more.disabled = prev.disabled = submit.disabled = true;
+    busy = true; root.setAttribute('aria-busy', 'true'); more.disabled = prev.disabled = submit.disabled = true;
     const query = new URLSearchParams({ ...active, limit: String(pageSize) });
     const before = reset ? null : paginated ? (targetPage > page ? cursor : starts[targetPage]) : cursor;
     if (before !== null && before !== undefined) query.set('before', before);
@@ -60,7 +60,7 @@ export function createHistoryView(root, { api, parent, onError, paginated = fals
     } catch (error) {
       if (ticket === sequence) { info.textContent = '记录读取失败，可重新查询；本地已保存的数据不会删除。'; onError(error); }
     } finally {
-      if (ticket === sequence) { busy = false; submit.disabled = false; more.disabled = cursor === null; prev.disabled = page === 0; }
+      if (ticket === sequence) { busy = false; root.setAttribute('aria-busy', 'false'); submit.disabled = false; more.disabled = cursor === null; prev.disabled = page === 0; }
     }
   }
   function refresh() {
@@ -77,7 +77,7 @@ export function createHistoryView(root, { api, parent, onError, paginated = fals
     update(latestId) { newest = latestId; refresh(); },
     refresh,
     reset() {
-      sequence++; busy = loaded = false; newest = loadedNewest = undefined; entries = []; cursor = null; total = page = 0; starts = [null];
+      sequence++; root.setAttribute('aria-busy', 'false'); busy = loaded = false; newest = loadedNewest = undefined; entries = []; cursor = null; total = page = 0; starts = [null];
       active = { q:'',kind:'all' }; form.reset(); list.replaceChildren(); info.textContent = ''; fresh.hidden = true; more.hidden = !paginated;
       more.disabled = prev.disabled = true; submit.disabled = false; pageLabel.textContent = '';
     },

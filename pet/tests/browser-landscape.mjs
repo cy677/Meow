@@ -61,12 +61,12 @@ try {
   assert.ok(await page.evaluate(canvas=>canvas===document.querySelector('#pet-scene canvas'),canvas),'no canvas recreation on close/equip');
   await revealReward(page,'trick-jump');await page.locator('.reward-card[data-reward-id="trick-jump"] button').tap();await page.locator('#purchase-confirm').tap();await page.locator('#purchase-dialog').waitFor({state:'hidden'});
   await page.locator('.reward-card[data-reward-id="trick-jump"] button').tap();await page.locator('#rewards-dialog').waitFor({state:'hidden'});await page.locator('#pet-scene[data-last-action=jump]').waitFor();
-  await openChildPage(page,'history');await page.locator('#history-kind').selectOption('earn');await page.waitForFunction(()=>document.querySelectorAll('#history-entries .ledger-row').length===5);
+  await openChildPage(page,'history');await page.locator('#history-kind').selectOption('earn');await page.waitForFunction(()=>document.querySelector('#history-entries').dataset.kind==='earn'&&document.querySelectorAll('#history-entries .ledger-row').length===5);
   const firstPage=await page.locator('#history-entries .ledger-row').evaluateAll(rows=>rows.map(r=>r.dataset.recordId));
   await page.locator('#history-more').tap();await page.waitForFunction(()=>document.querySelector('#history-entries').dataset.page==='2');
   assert.equal(await page.locator('#history-entries .ledger-row').count(),5);assert.ok((await page.locator('#history-entries .ledger-row').evaluateAll(rows=>rows.map(r=>r.dataset.recordId))).every(id=>!firstPage.includes(id)));
   await page.locator('#history-prev').tap();await page.waitForFunction(()=>document.querySelector('#history-entries').dataset.page==='1');assert.deepEqual(await page.locator('#history-entries .ledger-row').evaluateAll(rows=>rows.map(r=>r.dataset.recordId)),firstPage);
-  await page.locator('#history-search').fill('阅读记录 1');await page.locator('.history-filters button').tap();await page.waitForFunction(()=>[...document.querySelectorAll('#history-entries strong')].every(n=>n.textContent.includes('阅读记录 1')));await shot('landscape-history');
+  await page.locator('#history-search').fill('阅读记录 1');await page.locator('.history-filters button').tap();await page.waitForFunction(()=>document.querySelector('#history-entries').dataset.query==='阅读记录 1'&&document.querySelector('#ledger').getAttribute('aria-busy')==='false'&&[...document.querySelectorAll('#history-entries strong')].every(n=>n.textContent.includes('阅读记录 1')));await shot('landscape-history');
   await page.locator('#history-kind').selectOption('purchase');await page.locator('#history-search').fill('');await page.locator('.history-filters button').tap();await page.locator('#history-entries details summary').first().waitFor();await page.locator('#history-entries details summary').first().tap();
   await page.locator('[data-view=shop]').tap();
   // All standard landscape widths, including browser chrome reducing usable height.
