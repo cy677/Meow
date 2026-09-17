@@ -1,0 +1,59 @@
+name: Points pet checks
+on:
+  push:
+    branches: ['feature/points-pet-*']
+  pull_request:
+    paths: ['pet/**', 'package.json', '.github/workflows/points-pet.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Reproducible offline build dependencies
+        run: tar -czf /tmp/meow-node-tools.tgz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meow-node-tools
+          path: /tmp/meow-node-tools.tgz
+          retention-days: 1
+      - name: Domain and HTTP tests
+        run: |
+          mkdir -p pet/test-results
+          npm run test:pet 2>&1 | tee pet/test-results/tests.txt
+      - name: Build pet and original editor
+        run: npm run pet:build && npm run build
+      - name: Install browser test runner
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Full local scene reward regression
+        run: node pet/tests/browser-environment.mjs 2>&1 | tee pet/test-results/browser-environment.txt
+      - name: Real skeletal motion and script regression
+        run: node pet/tests/browser-motion.mjs 2>&1 | tee pet/test-results/browser-motion.txt
+      - name: Pad touch and orientation regression
+        run: node pet/tests/browser-pad.mjs 2>&1 | tee pet/test-results/browser-pad.txt
+      - name: Landscape viewport and modal regression
+        run: node pet/tests/browser-landscape.mjs 2>&1 | tee pet/test-results/browser-landscape.txt
+      - name: Parent and child integration
+        run: node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
+      - name: Presets and local records regression
+        run: node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
+      - name: Source snapshot
+        if: always()
+        run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip && cp -R pet/dist pet/test-results/pet-dist
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: points-pet-evidence
+          path: pet/test-results/
+          retention-days: 7

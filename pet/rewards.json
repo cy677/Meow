@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "rewards": [
+    {"id":"coat-orange","title":"阳光橘猫","description":"像阳光一样暖暖的第一位小伙伴。","category":"coat","cost":0,"unlockAt":0,"params":{"coatId":"orange"},"starter":true},
+    {"id":"shape-original","title":"经典小猫","description":"圆圆的脸，刚刚好的可爱。","category":"shape","cost":0,"unlockAt":0,"params":{"headSize":1.08,"chubbiness":1.15},"starter":true},
+    {"id":"eyes-amber","title":"琥珀眼睛","description":"把小小的阳光装进眼睛里。","category":"eyes","cost":0,"unlockAt":0,"params":{"eyeColor":"#d99a2b"},"starter":true},
+    {"id":"pose-standing","title":"乖乖站好","description":"随时准备陪伴你的小猫。","category":"pose","cost":0,"unlockAt":0,"params":{"pose":"standing"},"starter":true},
+    {"id":"pose-stretch","title":"伸个懒腰","description":"换一个舒舒服服的伸展姿态。","category":"pose","cost":10,"unlockAt":10,"params":{"pose":"stretch"}},
+    {"id":"trick-jump","title":"开心跳跳","description":"点击播放一次轻轻跃起的互动。","category":"trick","cost":15,"unlockAt":20,"action":"jump"},
+    {"id":"coat-cream","title":"奶油小猫","description":"累计获得 30 分，免费送给你的成长礼物。","category":"coat","cost":0,"unlockAt":30,"params":{"coatId":"cream"}},
+    {"id":"pose-loaf","title":"猫咪面包","description":"把小爪子收好，变成一块猫咪面包。","category":"pose","cost":20,"unlockAt":30,"params":{"pose":"loaf"}},
+    {"id":"coat-grey","title":"灰色狸花","description":"一件有细细条纹的新衣服。","category":"coat","cost":25,"unlockAt":40,"params":{"coatId":"greyTabby"}},
+    {"id":"shape-round","title":"圆圆团子","description":"圆润一点，腿短一点，更像小团子。","category":"shape","cost":30,"unlockAt":50,"params":{"chubbiness":1.8,"legLength":0.55,"headSize":1.18}},
+    {"id":"trick-spin","title":"转个圈圈","description":"点击播放一次完整转圈的互动。","category":"trick","cost":25,"unlockAt":50,"action":"spin"},
+    {"id":"eyes-green","title":"森林眼睛","description":"藏着一小片绿色森林。","category":"eyes","cost":25,"unlockAt":60,"params":{"eyeColor":"#7fae52"}},
+    {"id":"pose-rest","title":"侧躺休息","description":"努力过后，也要好好休息。","category":"pose","cost":30,"unlockAt":70,"params":{"pose":"sideFlat"}},
+    {"id":"coat-calico","title":"三花小猫","description":"橘色、白色和深色拼成的特别花纹。","category":"coat","cost":40,"unlockAt":80,"params":{"coatId":"calico"}},
+    {"id":"coat-tuxedo","title":"奶牛小猫","description":"穿上黑白相间的小礼服。","category":"coat","cost":40,"unlockAt":90,"params":{"coatId":"tuxedo"}},
+    {"id":"pose-biped","title":"站起来啦","description":"看看小猫双脚站立的样子。","category":"pose","cost":45,"unlockAt":100,"params":{"pose":"biped"}},
+    {"id":"shape-fluffy","title":"蓬松小云朵","description":"毛茸茸的小伙伴，像一朵柔软的云。","category":"shape","cost":50,"unlockAt":120,"params":{"fluffy":true,"furFluff":1.15,"chubbiness":1.35}},
+    {"id":"eyes-odd","title":"双色眼睛","description":"一只蓝眼睛，一只琥珀眼睛。","category":"eyes","cost":60,"unlockAt":150,"params":{"eyeColor":"#5b8fd4","eyeColorRight":"#d99a2b","oddEyes":true}},
+    {"id":"pose-banana","title":"香蕉小猫","description":"原作里的特别造型，送给坚持的你。","category":"pose","cost":70,"unlockAt":180,"params":{"pose":"banana"}},
+    {"id":"coat-white","title":"白云小猫","description":"累计获得 200 分，免费领取白云伙伴。","category":"coat","cost":0,"unlockAt":200,"params":{"coatId":"white"}}
+  ]
+}
