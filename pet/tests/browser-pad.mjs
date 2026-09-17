@@ -75,7 +75,9 @@ try {
   await controls(sensor).locator('[data-tablet=tilt]').tap();assert.equal(await sensor.evaluate(()=>window.__sensorActivation),true);
   const send=async(beta,gamma)=>sensor.evaluate(({beta,gamma})=>window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{alpha:0,beta,gamma})),{beta,gamma});
   await send(40,0);await send(55,25);
-  await sensor.waitForFunction(()=>JSON.parse(document.querySelector('#pet-scene').dataset.tilt).x>.5);
+  // Landscape emulation can start at 90/-90 degrees. Verify movement magnitude,
+  // not the portrait-only X component; the explicit axis rotation is tested below.
+  await sensor.waitForFunction(()=>{const t=JSON.parse(document.querySelector('#pet-scene').dataset.tilt);return Math.hypot(t.x,t.y)>.5;});
   await controls(sensor).locator('[data-tablet=calibrate]').tap();await send(55,25);
   assert.deepEqual(await sensor.locator('#pet-scene').evaluate(e=>JSON.parse(e.dataset.tilt)),{x:0,y:0});
   await sensor.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});

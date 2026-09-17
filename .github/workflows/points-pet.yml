@@ -29,12 +29,15 @@ jobs:
         run: npm run pet:build && npm run build
       - name: Install browser test runner
         run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
-      - name: Browser integration and screenshots
-        run: |
-          node pet/tests/browser-landscape.mjs 2>&1 | tee pet/test-results/browser-landscape.txt
-          node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
-          node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
-          node pet/tests/browser-pad.mjs 2>&1 | tee pet/test-results/browser-pad.txt
+      - name: Pad touch and orientation regression
+        run: node pet/tests/browser-pad.mjs 2>&1 | tee pet/test-results/browser-pad.txt
+      - name: Landscape viewport and modal regression
+        if: ${{ !cancelled() && success() }}
+        run: node pet/tests/browser-landscape.mjs 2>&1 | tee pet/test-results/browser-landscape.txt
+      - name: Parent and child integration
+        run: node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
+      - name: Presets and local records regression
+        run: node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
       - name: Source snapshot
         if: always()
         run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip && cp -R pet/dist pet/test-results/pet-dist
