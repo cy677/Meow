@@ -32,7 +32,14 @@ jobs:
         run: |
           npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
           npx playwright install --with-deps chromium
-          node pet/tests/browser-growth.mjs
+          set -o pipefail
+          mkdir -p pet/test-results
+          node pet/tests/browser-growth.mjs 2>&1 | tee pet/test-results/browser-growth.txt
+      - name: Native kitten and parent creation regression
+        if: ${{ !cancelled() && hashFiles('pet/tests/browser-creation.mjs') != '' }}
+        run: |
+          set -o pipefail
+          node pet/tests/browser-creation.mjs 2>&1 | tee pet/test-results/browser-creation.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
