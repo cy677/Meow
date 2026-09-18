@@ -1,13 +1,13 @@
-import { CLIPS, planMotion } from './motionPrograms.mjs';
+import { planMotion } from './motionPrograms.mjs';
 import { PARAM_FIELDS } from './presetSchema.mjs';
 import { rugSeedForStyle } from './environment/upstreamAdapters.js';
 import { containerSeed } from './environment/containerAdapter.js';
 import { RUG_CHOICES } from './environmentSchema.mjs';
 
 export function mountHomeRuntime(runtime,data,defaults){
-  let state=data.state,timers=[],disposed=false;
+  let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+2500,activePlan=null,lastAction='';
   const initial=defaults||runtime.capture();
-  const stop=()=>{timers.forEach(clearTimeout);timers=[];runtime.clearKeys();runtime.stop();};
+  const stop=()=>{activePlan=null;runtime.clearKeys();runtime.stop();nextAt=performance.now()+5000+Math.random()*4000;};
   function applyState(next,first=false){
     if(disposed)return;
     if(next.creation){
@@ -40,33 +40,50 @@ export function mountHomeRuntime(runtime,data,defaults){
   }
   applyState(state,true);
   function play(action,motion={}){
-    if(disposed)return;stop();const plan=planMotion(action,motion,motion.script);
-    for(const segment of plan.segments)timers.push(setTimeout(()=>window.__setAnimation({enabled:true,stateMachine:false,action:segment.clip,speed:CLIPS.find(c=>c.id===segment.clip).duration/segment.duration,intensity:motion.intensity??1}),segment.start*1000));
-    timers.push(setTimeout(()=>runtime.stop(),plan.duration*1000));
+    if(disposed||paused||document.hidden)return;
+    if(!state.access.actions.some(a=>a.action===action&&JSON.stringify(a.motion||{})===JSON.stringify(motion)))return;
+    activePlan=planMotion(action,motion,motion.script);
+    lastAction=action;runtime.clearKeys();runtime.playProgram(activePlan);
   }
-  const canvas=document.getElementById('scene');canvas.tabIndex=0;
-  const focus=()=>canvas.focus({preventScroll:true});
-  const keydown=e=>{
-    if(disposed||document.querySelector('#viewport[data-share-card-open="true"]')||document.body.classList.contains('codex-pet-modal-open')||e.target.closest('input,select,textarea,button'))return;
-    if(/^(Key[WASDQEFHGKCZX]|Arrow(Up|Down|Left|Right)|Space|ShiftLeft|ControlLeft)$/.test(e.code)){
-      timers.forEach(clearTimeout);timers=[];const a=window.__getAnimation();
-      if(!a.enabled||!a.stateMachine)window.__setAnimation({enabled:true,stateMachine:true,action:'idle'});
+  // One render clock drives the program. A background tab never catches up by
+  // firing a queue of expired segment timers. Rest restores the selected pose.
+  function tick(now){
+    if(disposed)return;
+    const blocked=paused||pointerHeld||document.hidden||document.querySelector('#viewport[data-share-card-open="true"]');
+    if(blocked){if(activePlan)stop();nextAt=now+2500;}
+    else if(activePlan){if(window.__getAnimation().elapsed>=activePlan.duration)stop();}
+    else if(now>=nextAt){
+      const pool=state.access.actions.filter(a=>a.action!==lastAction);
+      const choices=pool.length?pool:state.access.actions;
+      const chosen=choices[Math.floor(Math.random()*choices.length)];
+      if(chosen)play(chosen.action,chosen.motion||{});else nextAt=now+5000;
     }
+    raf=requestAnimationFrame(tick);
+  }
+  // Keep the upstream tools directly on the stage; export tools belong to parents.
+  const photo=document.getElementById('btn-export-png');
+  photo.classList.add('child-photo');photo.textContent='📷 拍照 · 留影';
+  document.getElementById('viewport').append(photo);
+  for(const id of ['btn-export-glb','btn-codex-pet'])document.getElementById(id)?.remove();
+  photo.addEventListener('click',stop,true);
+  const canvas=document.getElementById('scene');canvas.tabIndex=0;
+  const pointers=new Set();
+  const down=e=>{pointers.add(e.pointerId);pointerHeld=true;if(activePlan)stop();};
+  const up=e=>{if(e.type==='blur')pointers.clear();else pointers.delete(e.pointerId);pointerHeld=pointers.size>0;nextAt=performance.now()+4000;};
+  // Restore the selected pose before upstream picking captures mesh references.
+  canvas.addEventListener('pointerdown',down,true);
+  window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);window.addEventListener('blur',up);
+  const keydown=e=>{
+    if(e.target?.closest?.('input,select,textarea,button'))return;
+    if(/^(Key[WASDQEFHGKCZX]|Arrow(Up|Down|Left|Right)|Space|ShiftLeft|ControlLeft)$/.test(e.code)){e.preventDefault();e.stopImmediatePropagation();}
   };
   window.addEventListener('keydown',keydown,true);
-  const pad=document.querySelector('.studio-pad');
-  const select=document.createElement('select');select.setAttribute('aria-label','原版互动动作');select.append(new Option('选择动作',''));
-  for(const clip of CLIPS)select.append(new Option(clip.name,clip.id));
-  select.addEventListener('change',()=>{if(select.value)play(select.value);});pad.prepend(select);
-  pad.addEventListener('pointerdown',e=>{if(e.target.closest('button')){timers.forEach(clearTimeout);timers=[];}},true);
-  focus();
-  return {applyState,play,overlay(open){if(open)stop();},feature(name){
+  raf=requestAnimationFrame(tick);
+  return {applyState,play,overlay(open){paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
     if(disposed)return;
-    const id={capture:'btn-export-png',glb:'btn-export-glb',codex:'btn-codex-pet',music:'bgm-toggle'}[name];
-    if(id){stop();document.getElementById(id).click();}
-    if(['lighting','weather'].includes(name)){document.body.classList.toggle(`studio-${name}-open`);document.getElementById(name==='lighting'?'light-orb':'weather-control').scrollIntoView({block:'nearest'});}
+    if(name==='capture')photo.click();
+    if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}
-    if(!['capture','codex','parameters'].includes(name))focus();
-  },dispose(){disposed=true;stop();window.removeEventListener('keydown',keydown,true);}};
+  },dispose(){disposed=true;cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);}};
 }

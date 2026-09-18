@@ -86,7 +86,8 @@ try {
         exit 0
     }
 
-    $node = Get-Command node.exe -ErrorAction SilentlyContinue
+    $bundledNode = Join-Path $projectRoot 'runtime/node.exe'
+    $node = if (Test-Path -LiteralPath $bundledNode -PathType Leaf) { [pscustomobject]@{ Source = $bundledNode } } else { Get-Command node.exe -ErrorAction SilentlyContinue }
     if (-not $node) { throw '请先安装 Node.js 22.16 或更高版本，再双击一键启动。' }
     $nodeVersion = [version]((& $node.Source --version).Trim().TrimStart('v'))
     if ($LASTEXITCODE -ne 0 -or $nodeVersion.Major -lt 22 -or ($nodeVersion.Major -eq 22 -and $nodeVersion.Minor -lt 16)) { throw 'Node.js 版本过低，需要 22.16 或更高版本。' }

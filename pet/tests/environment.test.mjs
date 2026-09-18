@@ -109,7 +109,7 @@ test('disk restart preserves scene presets, bundle snapshots and equipped room; 
 test('HTTP child scene writes are role/CSRF checked, returned config includes only equipped state',async t=>{
  const a=await createPetServer({dbPath:':memory:'});await new Promise(r=>a.server.listen(0,'127.0.0.1',r));t.after(()=>a.close());
  const origin=`http://127.0.0.1:${a.server.address().port}`,headers={'Content-Type':'application/json','X-Meow-Client':'points-pet'};
- const setup=await fetch(origin+'/api/parent/setup',{method:'POST',headers,body:JSON.stringify({setupToken:a.setupToken,pin:'864209',childCode:'2468',childName:'test',petName:'cat'})});assert.equal(setup.status,200);
+ const setup=await fetch(origin+'/api/parent/setup',{method:'POST',headers,body:JSON.stringify({setupToken:a.setupToken,age:6,mode:'school_basic',timeZone:'Asia/Shanghai',pin:'864209',childCode:'2468',childName:'test',petName:'cat'})});assert.equal(setup.status,200);
  const login=await fetch(origin+'/api/child/login',{method:'POST',headers,body:JSON.stringify({code:'2468'})});const auth=await login.json();
  const h={...headers,Cookie:login.headers.get('set-cookie').split(';')[0],'X-CSRF-Token':auth.csrf};
  for(const [path,data,status]of [

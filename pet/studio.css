@@ -8,8 +8,8 @@ body.studio-child #panel,body.studio-child .panel-actions,body.studio-child .mob
 .creation-actions{display:flex;gap:10px;justify-content:flex-end}.creation-actions [type=submit]{background:#386550;color:white;cursor:pointer}.creation-dialog [role=alert]{color:#a33628}
 #panel :disabled{opacity:.45;cursor:not-allowed}
 body.studio-embedded #app{padding-top:0!important}
-.studio-embedded .studio-bar,.studio-embedded .panel-actions,.studio-embedded .mobile-panel-toggle,.studio-embedded .music-tool{display:none!important}
-.studio-embedded:not(.studio-lighting-open) .light-tool,.studio-embedded:not(.studio-weather-open) #weather-control{display:none!important}
+.studio-embedded .studio-bar,.studio-embedded .panel-actions,.studio-embedded .mobile-panel-toggle{display:none!important}
+
 .studio-embedded .studio-pad{bottom:30px;left:12px;right:12px;max-width:none;gap:5px;align-items:center}
 .studio-pad select{min-height:40px;padding:7px 10px;border:1px solid #cbbb9f;border-radius:12px;background:#fffdf7;color:#493a30;font:inherit}
 .studio-embedded .mobile-section-nav{display:none!important}
@@ -25,3 +25,7 @@ body.studio-limited #panel,body.studio-limited #weather-control,body.studio-limi
 .studio-pad{position:fixed;z-index:60;left:14px;bottom:55px;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100vw - 28px)}.studio-pad button{touch-action:none;user-select:none;min-width:52px;background:#fffaf0dd}
 body:has(#viewport[data-share-card-open="true"]) .studio-pad,body.codex-pet-modal-open .studio-pad{display:none}
 @media(max-width:850px){body #app{padding-top:var(--studio-toolbar-height,116px)}.studio-bar{font-size:12px;gap:5px;padding:6px 10px}.studio-bar [role=status]{flex-basis:100%;order:4}.studio-bar button,.studio-bar a,.studio-bar select{padding:5px 8px;min-height:34px}.studio-pad{bottom:52px}.studio-pad button{padding:6px 8px;min-width:45px}}
+
+.studio-child .child-photo{position:absolute;bottom:40px;left:18px;z-index:5;min-height:44px;padding:9px 18px;background:#fff9df;border:2px solid #b9a887;border-radius:14px;color:#5d493a;box-shadow:0 3px 0 #5d493a25}
+.studio-child #viewport[data-share-card-open="true"] .child-photo{display:none}
+.studio-child #scene-tools{max-width:calc(100% - 24px);right:12px;gap:7px}

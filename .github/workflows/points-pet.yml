@@ -36,20 +36,10 @@ jobs:
         run: npm run pet:build && npm run build
       - name: Install browser test runner
         run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
-      - name: Original studio, saved parameters and exports
-        run: node pet/tests/browser-studio.mjs 2>&1 | tee pet/test-results/browser-studio.txt
-      - name: Full local scene reward regression
-        run: node pet/tests/browser-environment.mjs 2>&1 | tee pet/test-results/browser-environment.txt
-      - name: Real skeletal motion and script regression
-        run: node pet/tests/browser-motion.mjs 2>&1 | tee pet/test-results/browser-motion.txt
-      - name: Pad touch and orientation regression
-        run: node pet/tests/browser-pad.mjs 2>&1 | tee pet/test-results/browser-pad.txt
-      - name: Landscape viewport and modal regression
-        run: node pet/tests/browser-landscape.mjs 2>&1 | tee pet/test-results/browser-landscape.txt
-      - name: Parent and child integration
-        run: node pet/tests/browser.mjs 2>&1 | tee pet/test-results/browser.txt
-      - name: Presets and local records regression
-        run: node pet/tests/browser-presets.mjs 2>&1 | tee pet/test-results/browser-presets.txt
+      - name: Current native home, parent creations and exports
+        run: node pet/tests/browser-creation.mjs 2>&1 | tee pet/test-results/browser-creation.txt
+      - name: Age modes, parent guidance and six-category growth
+        run: node pet/tests/browser-growth.mjs 2>&1 | tee pet/test-results/browser-growth.txt
       - name: Source snapshot
         if: always()
         run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip && cp -R pet/dist pet/test-results/pet-dist

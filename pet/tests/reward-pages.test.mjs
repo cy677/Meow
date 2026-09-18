@@ -2,20 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rewardPage, REWARDS_PER_PAGE, mysteryRewardIds } from '../rewardPages.mjs';
 const items=Array.from({length:20},(_,i)=>({id:`reward-${i}`,category:i%2?'coat':'shape',owned:i<8}));
-test('前两项未解锁可见，第三项起隐藏；已拥有和功能菜单不计入',()=>{
+test('所有奖励的名称、价格和门槛始终可见，兼容接口不再产生问号奖励',()=>{
   const rewards=[{id:'one'},{id:'owned'},{id:'menu',menuOnly:true},{id:'two'},{id:'three'},{id:'four'}];
-  assert.deepEqual([...mysteryRewardIds(rewards,['owned'])],['three','four']);
-  assert.deepEqual([...mysteryRewardIds(rewards,['owned','one'])],['four']);
+  assert.deepEqual([...mysteryRewardIds(rewards,['owned'])],[]);
+  assert.deepEqual([...mysteryRewardIds(rewards,['owned','one'])],[]);
   assert.deepEqual([...mysteryRewardIds(rewards,['owned','one','three'])],[]);
   assert.deepEqual([...mysteryRewardIds([] ,[])],[]);
 });
-test('分类和分页不重新计算隐藏位置，拥有的奖励始终揭晓',()=>{
+test('分类和分页不改变奖励可见性，拥有状态只影响收藏过滤',()=>{
   const owned=items.filter(r=>r.owned).map(r=>r.id),hidden=mysteryRewardIds(items,owned);
   const marked=items.map(r=>({...r,mystery:hidden.has(r.id)}));
   const page=rewardPage(marked,{category:'coat',page:1});
-  assert.ok(page.items.every(r=>r.mystery));
+  assert.ok(page.items.every(r=>!r.mystery));
   assert.ok(rewardPage(marked,{ownedOnly:true}).items.every(r=>!r.mystery));
-  assert.equal(marked[8].mystery,false);assert.equal(marked[9].mystery,false);assert.equal(marked[10].mystery,true);
+  assert.equal(marked[8].mystery,false);assert.equal(marked[9].mystery,false);assert.equal(marked[10].mystery,false);
 });
 test('奖励分页默认六项，末页完整覆盖，没有重复或遗漏',()=>{
   assert.equal(REWARDS_PER_PAGE,6);

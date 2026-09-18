@@ -62,7 +62,7 @@ test('原版奖励迁移幂等，保留旧自定义奖励、进度和已装备�
   assert.ok(twice.owned.includes(custom.id));
   assert.deepEqual(store.catalog().rewards.find(reward => reward.id === custom.id), custom);
   assert.deepEqual(store.exportData().ledger.slice(0, beforeLedger.length), beforeLedger);
-  assert.equal(store.getSetting('upstreamRewardsVersion'), '2');
+  assert.equal(store.getSetting('upstreamRewardsVersion'), '3');
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'coat').length, COATS.length);
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'pose').length, POSES.length - 1);
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'eyes').length, EYE_COLORS.length);
@@ -137,7 +137,7 @@ async function fixture(t) {
   }
   const setup = await request('/api/parent/setup', {
     method: 'POST',
-    data: { setupToken: app.setupToken, pin: '864209', childCode: '2468', childName: '测试孩子', petName: '测试猫' },
+    data: { setupToken: app.setupToken,age:6,mode:'school_basic',timeZone:'Asia/Shanghai', pin: '864209', childCode: '2468', childName: '测试孩子', petName: '测试猫' },
   });
   assert.equal(setup.status, 200);
   roles.parent = { cookie: setup.headers.get('set-cookie').split(';')[0], csrf: setup.data.csrf };
@@ -147,19 +147,22 @@ async function fixture(t) {
   return { app, request, roles };
 }
 
-test('零积分原版互动免费，家长草稿隔离，保存作品后孩子须解锁并使用', async t => {
+test('零积分基础动作免费，特殊动作需拥有；家长草稿隔离，保存作品后孩子须解锁并使用', async t => {
   const { request, roles } = await fixture(t);
   const limited = await request('/api/studio', { role: 'child' });
   assert.equal(limited.status, 200);
   assert.equal(limited.data.access.full, true);
   assert.deepEqual(limited.data.access.editors, []);
   assert.equal(limited.data.state.balance,0);
+  const basic = new Set(['idle','idle-alert','walk','run','sneak']);
+  assert.deepEqual(new Set(limited.data.access.actions.map(action => action.action)), basic);
   for(const clip of CLIPS){
-    const action=limited.data.access.actions.find(a=>a.action===clip.id);
-    assert.ok(action,clip.id);
-    assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:action.id}})).status,200);
+    const rewardId=`original-motion-${clip.id}`;
+    const status=(await request('/api/play',{role:'child',method:'POST',data:{rewardId}})).status;
+    assert.equal(status,basic.has(clip.id)?200:403,clip.id);
   }
-  for(const cap of ['capture','export','keyboard','music','lighting','weather','speech'])assert.ok(limited.data.access.capabilities.includes(cap));
+  for(const cap of ['capture','music','lighting','weather','speech'])assert.ok(limited.data.access.capabilities.includes(cap));
+  for(const cap of ['export','keyboard'])assert.ok(!limited.data.access.capabilities.includes(cap));
   assert.deepEqual(limited.data.preset, {});
   assert.ok(limited.data.access.actions.some(action => action.action === 'idle'));
   assert.equal((await request('/api/parent/studio', { role: 'child' })).status, 401);
@@ -187,8 +190,8 @@ test('零积分原版互动免费，家长草稿隔离，保存作品后孩子�
   assert.equal((await request('/api/parent/presets',{role:'parent',method:'PUT',data:{reward,expectedRevision:catalog.data.revision}})).status,200);
   assert.equal((await request('/api/equip',{role:'child',method:'POST',data:{rewardId:reward.id}})).status,403);
   assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:{rewardId:reward.id,expectedCost:15,idempotencyKey:key()}})).status,409);
-  const hidden=(await request('/api/state',{role:'child'})).data.rewards.find(r=>r.id===reward.id);
-  assert.equal(hidden.title,'???');assert.equal(hidden.preset,undefined);assert.equal(hidden.cost,undefined);
+  const visible=(await request('/api/state',{role:'child'})).data.rewards.find(r=>r.id===reward.id);
+  assert.equal(visible.title,'小猫作品');assert.equal(visible.cost,15);assert.equal(visible.unlockAt,50);assert.equal(visible.preset,undefined);
   await request('/api/parent/points',{role:'parent',method:'POST',data:grant(60)});
   const purchase={rewardId:reward.id,expectedCost:15,idempotencyKey:key()};
   assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:purchase})).status,200);

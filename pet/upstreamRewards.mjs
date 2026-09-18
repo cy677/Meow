@@ -1,5 +1,6 @@
 import { COATS, POSES, EYE_COLORS } from '../src/coats.js';
 import { CLIPS, MOTION_REWARDS, defaultDuration } from './motionPrograms.mjs';
+export const BASIC_ACTIONS = ['idle','idle-alert','walk','run','sneak'];
 
 
 const slug = value => value.replace(/[A-Z]/g, c => '-'+c.toLowerCase());
@@ -25,7 +26,7 @@ export function missingUpstreamRewards(catalog) {
 export function upstreamAccess(catalog, owned) {
   const rewards=catalog.rewards.filter(r=>isFreeOriginal(r)||owned.includes(r.id));
 
-  return {full:true, capabilities:['keyboard','capture','export','music','weather','lighting','speech'],
+  return {full:true, capabilities:['capture','music','weather','lighting','speech'],
     editors:[],
     coats:rewards.filter(r=>r.category==='coat').map(r=>r.params.coatId),poses:rewards.filter(r=>r.category==='pose').map(r=>r.params.pose),
     actions:rewards.filter(r=>r.category==='trick').map(r=>({id:r.id,title:r.title,action:r.action,motion:r.motion}))};
@@ -35,7 +36,15 @@ export function upstreamAccess(catalog, owned) {
 export function isFreeOriginal(reward) {
   return (reward.category==='capability'&&['keyboard','capture','export','music'].includes(reward.params.capability))
     || ['weather','lighting'].includes(reward.category)
-    || (reward.category==='trick' && CLIPS.some(c=>c.id===reward.action));
+    || (reward.category==='trick' && BASIC_ACTIONS.includes(reward.action));
+}
+// Version 2 made every source clip free. Restore only those generated defaults;
+// custom prices and all existing ownership/ledger entries remain intact.
+export function restoreSpecialPrices(catalog) {
+  return {...catalog,rewards:catalog.rewards.map(r=>{
+    if(r.category!=='trick'||BASIC_ACTIONS.includes(r.action)||r.cost!==0||r.unlockAt!==0||!r.description.endsWith('，默认开放，可直接使用。'))return r;
+    return {...r,cost:r.action==='jump'?15:25,unlockAt:r.action==='jump'?20:40,description:`${r.title}，解锁后加入小猫的随机动作脚本。`};
+  })};
 }
 export function unlockOriginals(catalog) {
   return {...catalog,rewards:catalog.rewards.map(r=>isFreeOriginal(r)?{...r,cost:0,unlockAt:0,description:`${r.title}，默认开放，可直接使用。`}:r)};

@@ -4,25 +4,16 @@ export function childMarkup() {
     <div id="pet-scene"><p id="scene-loading" role="status">正在把你的小猫接过来…</p></div>
     <header class="child-hud">
       <div class="child-identity"><span class="child-mark" aria-hidden="true">m.</span><div><h1 id="pet-name"></h1><p id="greeting"></p></div></div>
-      <div class="child-account"><div class="child-balance"><span aria-hidden="true">✦</span><strong id="balance">0</strong><span>积分</span></div><details class="child-functions"><summary>功能菜单</summary><div class="child-function-list">
-        <button type="button" data-feature="capture">拍照与分享卡</button>
-        <button type="button" data-feature="glb">导出 GLB</button>
-        <button type="button" data-feature="codex">导出给 Codex</button>
-        <button type="button" data-feature="music">音乐（播放 / 暂停）</button>
-        <button type="button" data-feature="lighting">光照</button>
-        <button type="button" data-feature="weather">天气</button>
-        <button type="button" data-feature="speech">随机对白</button>
-        <button type="button" data-feature="reset">还原小猫与场景</button>
-      </div></details><a href="./parent.html" class="child-parent">家长</a><button type="button" class="button quiet" data-action="logout">退出</button></div>
+      <div class="child-account"><div class="child-balance"><span aria-hidden="true">✦</span><strong id="balance">0</strong><span>积分</span></div><button type="button" class="button quiet" data-action="logout">退出</button></div>
     </header>
     <p id="network" class="network" role="status" hidden>连接暂时中断，正在重连。积分和收藏仍保存在电脑上。</p>
     <nav class="child-dock" aria-label="小猫的宝藏屋">
       <button type="button" class="button child-collection" data-action="collection" aria-haspopup="dialog" aria-controls="rewards-dialog"><span aria-hidden="true">♧</span> 我的收藏</button>
-      <button type="button" class="button primary" data-action="open-rewards" aria-haspopup="dialog" aria-controls="rewards-dialog"><span aria-hidden="true">✦</span> 奖励小屋</button>
+      <button type="button" class="button primary" data-action="open-rewards" aria-haspopup="dialog" aria-controls="rewards-dialog"><span aria-hidden="true">⌂</span> 收藏小屋</button>
     </nav>
   </section>
   <dialog id="rewards-dialog" class="child-dialog" aria-labelledby="rewards-title">
-    <header class="child-dialog-heading"><div><span class="eyebrow">给小猫挑一份喜欢的礼物</span><h2 id="rewards-title">小猫的宝藏屋</h2></div><button type="button" class="button" data-action="close-rewards" autofocus aria-label="关闭宝藏屋，回到小猫">回到小猫 ×</button></header>
+    <header class="child-dialog-heading"><div><span class="eyebrow">积分解锁 · 永久收藏</span><h2 id="rewards-title">⌂ 收藏小屋</h2></div><button type="button" class="button" data-action="close-rewards" aria-label="收起收藏小屋">收起 ×</button></header>
     <nav class="section-tabs compact" role="tablist" aria-label="宝藏屋页面">
       <button type="button" id="tab-shop" data-view="shop" role="tab" aria-controls="reward-panel" aria-selected="true">发现奖励</button>
       <button type="button" id="tab-owned" data-view="owned" role="tab" aria-controls="reward-panel" aria-selected="false" tabindex="-1">我的收藏 <span id="owned-count">0</span></button>
@@ -45,11 +36,14 @@ export function createChildOverlay({ onOpen }) {
   const purchase = document.getElementById('purchase-dialog');
   let launcher = null, backdropDown = false;
   purchase.addEventListener('close', () => {
+    signal(false);
     if (dialog.open && !dialog.contains(document.activeElement)) dialog.querySelector('[data-action=close-rewards]').focus({ preventScroll:true });
   });
   const signal = open => document.getElementById('pet-scene')?.dispatchEvent(new CustomEvent('meow:overlay-change', { detail: open }));
+  new MutationObserver(() => signal(purchase.open)).observe(purchase,{attributes:true,attributeFilter:['open']});
   function close() { purchase.close(); if (dialog.open) dialog.close(); }
   dialog.addEventListener('close', () => {
+    document.body.classList.remove('house-open');
     signal(false);
     if (!document.getElementById('workspace').hidden && launcher?.isConnected) launcher.focus({ preventScroll: true });
   });
@@ -62,7 +56,7 @@ export function createChildOverlay({ onOpen }) {
     open(view, source) {
       launcher = source || launcher;
       onOpen(view);
-      if (!dialog.open) { dialog.showModal(); signal(true); }
+      if (!dialog.open) { dialog.show(); document.body.classList.add('house-open'); }
     },
     close,
     get isOpen() { return dialog.open; },

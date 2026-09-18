@@ -1,3 +1,4 @@
+import { createGrowthStore } from './growthStore.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { fail, text, integer, validateCatalog, composeParams } from './catalog.mjs';
@@ -5,10 +6,9 @@ import { createLocalLedger } from './localLedger.mjs';
 import { SCENE_SLOTS, composeScene } from './environmentSchema.mjs';
 import { SCENE_CATALOG_ADDITIONS } from './environmentRewards.mjs';
 import { resolve } from 'node:path';
-import { missingUpstreamRewards, upstreamAccess, unlockOriginals } from './upstreamRewards.mjs';
+import { missingUpstreamRewards, upstreamAccess, unlockOriginals, restoreSpecialPrices } from './upstreamRewards.mjs';
 import { validateStudio } from './studioSchema.mjs';
 import { isMenuOnly } from './editorRewards.mjs';
-import { mysteryRewardIds } from './rewardPages.mjs';
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
 export function createStore(filename, initialCatalog) {
@@ -51,17 +51,16 @@ export function createStore(filename, initialCatalog) {
     }
   };
   tx(grantMilestones);
+  const growth = createGrowthStore({db,tx,mutate,bump,log,getSetting,setSetting,snapshot});
   function snapshot(parent=false) {
     const profile=db.prepare('SELECT childName,petName,balance,lifetime,version FROM profile WHERE id=1').get();
     const owned=db.prepare('SELECT id FROM owned').all().map(r=>r.id);
     const equipped=Object.fromEntries(db.prepare('SELECT slot,id FROM equipped').all().map(r=>[r.slot,r.id]));
     const config=catalog();
     const active=config.rewards.find(r=>r.category==='creation'&&r.id===equipped.creation&&owned.includes(r.id));
-    const hidden=mysteryRewardIds(config.rewards.map(r=>({...r,menuOnly:isMenuOnly(r)})),owned);
-    return { ...profile, owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
+    return { ...profile, growthProfile:growth.profile(), owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
       rewards:config.rewards.map(r => {
         const {params,action,motion,preset,...publicData}=r;
-        if(!parent&&hidden.has(r.id))return {id:r.id,category:r.category,title:'???',description:'解锁前面的奖励后揭晓',mystery:true,menuOnly:false,owned:false,equipped:false};
         return {...publicData, menuOnly:isMenuOnly(r), owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
           affordable:profile.balance>=r.cost, equipped:equipped[r.category]===r.id&&(!active||r.category==='creation'),
           ...(parent ? {params,action,...(motion ? {motion} : {}),...(preset?{preset}:{})} : {})};
@@ -82,7 +81,7 @@ export function createStore(filename, initialCatalog) {
   }
   function saveCatalog(input, expectedRevision) {
     const validated = validateCatalog(input);
-    const next = getSetting('upstreamRewardsVersion')==='2'?unlockOriginals(validated):validated;
+    const next = ['2','3'].includes(getSetting('upstreamRewardsVersion'))?unlockOriginals(validated):validated;
     tx(() => {
       if (expectedRevision !== undefined && expectedRevision !== catalogRevision()) fail(409,'奖励目录已在其他页面修改。请保留当前草稿，重新读取目录后再保存。');
       for (const old of catalog().rewards) {
@@ -97,7 +96,7 @@ export function createStore(filename, initialCatalog) {
     return snapshot(true);
   }
   return {
-    db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting,
+    db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting, growth,
     studio(parent=false) {
       const state=snapshot(parent),access=upstreamAccess(catalog(),state.owned);
       const saved=JSON.parse(getSetting('studioPreset')||'{}');
@@ -113,12 +112,23 @@ export function createStore(filename, initialCatalog) {
       });
       return this.studio(true);
     },
+    installGrowthReward() {
+      if(getSetting('growthRewardVersion')==='1')return;
+      tx(()=>{
+        const next=catalog();
+        if(!next.rewards.some(r=>r.id==='growth-eyes-mint')){
+          next.rewards.unshift({id:'growth-eyes-mint',title:'薄荷小眼睛',description:'2枚喵币的小礼物，换一双柔和的薄荷色眼睛。',category:'eyes',cost:2,unlockAt:0,params:{eyeColor:'#8cb7a1'}});
+          setSetting('catalog',JSON.stringify(validateCatalog(next)));
+        }
+        setSetting('growthRewardVersion','1');bump();
+      });
+    },
     installUpstreamRewards() {
-      if(getSetting('upstreamRewardsVersion')==='2')return;
+      if(getSetting('upstreamRewardsVersion')==='3')return;
       tx(()=>{
         const next=catalog();next.rewards.push(...missingUpstreamRewards(next));
-        setSetting('catalog',JSON.stringify(validateCatalog(unlockOriginals(next))));grantMilestones();
-        setSetting('upstreamRewardsVersion','2');bump();log('catalog',0,'本地升级：原版互动免费，参数与随机生成由家长管理，作品按积分解锁');
+        setSetting('catalog',JSON.stringify(validateCatalog(unlockOriginals(restoreSpecialPrices(next)))));grantMilestones();
+        setSetting('upstreamRewardsVersion','3');bump();log('catalog',0,'本地升级：收藏全部可见，基础动作自动播放，特殊动作按积分解锁；保留已有收藏');
       });
     },
     history: ledger.history,
@@ -213,7 +223,7 @@ export function createStore(filename, initialCatalog) {
       if (index < 0) next.rewards.push(reward); else next.rewards[index] = reward;
       return saveCatalog(next, expectedRevision);
     },
-    exportData() { return {schemaVersion:1,exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),studioPreset:JSON.parse(getSetting('studioPreset')||'{}'),ledger:ledger.all()}; },
+    exportData() { return {schemaVersion:2,growth:growth.exportData(),exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),studioPreset:JSON.parse(getSetting('studioPreset')||'{}'),ledger:ledger.all()}; },
     close() { db.close(); }
   };
 }

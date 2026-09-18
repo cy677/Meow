@@ -4,11 +4,48 @@ import { containerBuild as petContainerBuild } from '../pet/environment/containe
 import { scaleToy as petScaleToy } from '../pet/environment/upstreamAdapters.js';
 import { disposeObjects as petDisposeObjects } from '../pet/environment/dispose.js';
 import * as petCannon from 'cannon-es';
+import { createMotionTimeline as petCreateMotionTimeline } from '../pet/motionTimeline.js';
+import { timelineLayers as petTimelineLayers } from '../pet/motionPrograms.mjs';
+import { SPEECH_BUBBLE_COPY as petSpeechCopy } from '../src/speechBubbles.js';
+import { CAT_DIALOGUE as petCatDialogue, TOY_DIALOGUE as petToyDialogue } from '../pet/catDialogue.js';
+petSpeechCopy['zh-CN'].cat.push(...petCatDialogue);
+for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy['zh-CN'][role].push(...lines);
+let petActivePlan=null,petTimeline=null,petTimelineRig=null;
+let petChildMotion=false,petLastElapsed=0;
+const petWander={x:0,z:0,heading:0,targetX:0,targetZ:.8};
+function petChooseDestination(){
+  const angle=Math.random()*Math.PI*2,radius=.65+Math.random()*.4;
+  petWander.targetX=Math.sin(angle)*radius;petWander.targetZ=Math.cos(angle)*radius;
+  if(Math.hypot(petWander.targetX-petWander.x,petWander.targetZ-petWander.z)<.45){petWander.targetX=-petWander.targetX;petWander.targetZ=-petWander.targetZ;}
+}
+function petAdvanceWander(plan,elapsed){
+  const dt=Math.max(0,Math.min(.1,elapsed-petLastElapsed));petLastElapsed=elapsed;
+  if(plan.action==='spin')return;
+  const speed=petTimelineLayers(plan,elapsed).reduce((sum,layer)=>sum+({walk:.56,run:1.05,sneak:.28}[layer.clip]||0)*layer.weight,0)*(plan.motion.speed??1);
+  if(!speed)return;
+  if(Math.hypot(petWander.targetX-petWander.x,petWander.targetZ-petWander.z)<.2)petChooseDestination();
+  const target=Math.atan2(petWander.targetX-petWander.x,petWander.targetZ-petWander.z);
+  const turn=Math.atan2(Math.sin(target-petWander.heading),Math.cos(target-petWander.heading));
+  petWander.heading+=Math.max(-2.6*dt,Math.min(2.6*dt,turn));
+  const distance=speed*dt*Math.max(0,Math.cos(turn));
+  petWander.x+=Math.sin(petWander.heading)*distance;petWander.z+=Math.cos(petWander.heading)*distance;
+  const radius=Math.hypot(petWander.x,petWander.z);
+  if(radius>1.25){petWander.x*=1.25/radius;petWander.z*=1.25/radius;petWander.targetX=0;petWander.targetZ=0;}
+}
+function petSampleMotion(elapsed,options){
+  if(!petActivePlan)return motionRig.update(elapsed,options);
+  if(petTimelineRig!==motionRig){petTimelineRig=motionRig;petTimeline=petCreateMotionTimeline(motionRig,cat);}
+  const state=petTimeline(petActivePlan,elapsed);
+  petAdvanceWander(petActivePlan,elapsed);
+  params.motionAction=state.actionId;
+  return state;
+}
 let petRoomBed=null,petRoomBedBody=null;
 const petOriginalRoom={keyColor:key.color.clone(),keyIntensity:key.intensity,ambientColor:ambient.color.clone(),ambientIntensity:ambient.intensity,fov:camera.fov,fog:scene.fog.clone()};
 const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
 export const petStudio = {
   setAccess(access) {
+    petChildMotion=true;
     // Called only for a child session. Editing and random generation belong to parents.
     for(const el of document.querySelectorAll('#controls input,#controls select,#controls button,#btn-random'))el.disabled=true;
   },
@@ -47,9 +84,14 @@ export const petStudio = {
     for(const t of toyWorld.toys){const visible=active.has(t)||(t.kind==='bed'&&cushion);if(visible)shown++;t.mesh.visible=visible;t.shadowProxy.visible=visible;t.body.collisionFilterMask=visible?-1:0;if(!visible)t.body.position.set(0,-100-hidden++,0);}
     toyWorld.group.visible=shown>0;
   },
-  stop(){window.__setAnimation({enabled:false});},
+  playProgram(plan){petActivePlan=plan;petLastElapsed=0;window.__setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});},
+  stop(){
+    petActivePlan=null;window.__setAnimation({enabled:false,stateMachine:false});
+    if(petChildMotion&&cat){cat.position.x=petWander.x;cat.position.z=petWander.z;cat.rotation.set(0,petWander.heading,0);cat.updateMatrixWorld(true);}
+  },
   clearKeys(){motionMachine.clearKeys();},
   resetRoom(){
+    Object.assign(petWander,{x:0,z:0,heading:0,targetX:0,targetZ:.8});petLastElapsed=0;
     if(petRoomBed){petDisposeObjects([petRoomBed]);petRoomBed=null;}
     if(petRoomBedBody){toyWorld.world.removeBody(petRoomBedBody);petRoomBedBody=null;}
     scene.fog=petOriginalRoom.fog.clone();key.color.copy(petOriginalRoom.keyColor);key.intensity=petOriginalRoom.keyIntensity;

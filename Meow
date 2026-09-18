@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+NODE="$ROOT/runtime/node"
+SETTINGS="$ROOT/pet-settings.json"
+ACTION="start"
+NO_BROWSER=0
+
+for arg in "$@"; do
+  case "$arg" in
+    start|reset|info) ACTION="$arg" ;;
+    --no-browser) NO_BROWSER=1 ;;
+    -h|--help)
+      printf '%s\n' '用法：./Meow [start|info|reset] [--no-browser]'
+      exit 0
+      ;;
+    *) printf '不支持的参数：%s\n' "$arg" >&2; exit 2 ;;
+  esac
+done
+
+if [[ ! -x "$NODE" ]]; then
+  printf '%s\n' '缺少内置运行环境，或 runtime/node 没有执行权限。请重新解压完整的 tar.gz 包。' >&2
+  exit 1
+fi
+if [[ ! -f "$SETTINGS" || ! -f "$ROOT/pet/dist/index.html" ]]; then
+  printf '%s\n' '便携包文件不完整，请重新解压完整的 tar.gz 包。' >&2
+  exit 1
+fi
+
+readarray -d '' -t CONFIG < <("$NODE" - "$SETTINGS" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const values = [config.port ?? 8792, config.dataDir ?? 'pet/data', config.publicIp ?? '', config.openBrowser !== false ? '1' : '0'];
+for (const value of values) process.stdout.write(String(value) + '\0');
+NODE
+)
+
+PORT="${MEOW_PORT:-${CONFIG[0]}}"
+DATA_SETTING="${MEOW_DATA_DIR:-${CONFIG[1]}}"
+PUBLIC_IP="${MEOW_PUBLIC_IP:-${CONFIG[2]}}"
+OPEN_BROWSER="${CONFIG[3]}"
+[[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || { printf '%s\n' '端口必须是 1 到 65535 的整数。' >&2; exit 1; }
+if [[ "$DATA_SETTING" = /* ]]; then DATA_DIR="$DATA_SETTING"; else DATA_DIR="$ROOT/$DATA_SETTING"; fi
+mkdir -p -- "$DATA_DIR"
+DATA_DIR="$(cd -- "$DATA_DIR" && pwd -P)"
+DB_PATH="$DATA_DIR/pet.sqlite"
+
+if [[ "$ACTION" == "info" ]]; then
+  printf '数据文件：%s\n网页端口：%s\n' "$DB_PATH" "$PORT"
+  [[ -f "$DB_PATH" ]] && printf '%s\n' '数据库：已存在' || printf '%s\n' '数据库：尚未创建'
+  exit 0
+fi
+
+exec 9>"$DATA_DIR/.meow-operation.lock"
+if ! flock -n 9; then
+  printf '%s\n' '此数据目录的服务或重置操作正在运行。请先停止原服务。' >&2
+  exit 1
+fi
+
+if [[ "$ACTION" == "reset" ]]; then
+  FILES=()
+  for name in pet.sqlite pet.sqlite-wal pet.sqlite-shm pet.sqlite-journal; do
+    [[ -f "$DATA_DIR/$name" ]] && FILES+=("$DATA_DIR/$name")
+  done
+  if (( ${#FILES[@]} == 0 )); then printf '%s\n' '没有现有数据库，当前已经是空数据状态。'; exit 0; fi
+  BACKUP="$DATA_DIR/backups/$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir -p -- "$BACKUP"
+  mv -- "${FILES[@]}" "$BACKUP/"
+  printf '数据已重置；原数据备份：%s\n' "$BACKUP"
+  exit 0
+fi
+
+export MEOW_HOST="0.0.0.0"
+export MEOW_PORT="$PORT"
+export MEOW_DATA_DIR="$DATA_DIR"
+export MEOW_PUBLIC_IP="$PUBLIC_IP"
+cd -- "$ROOT"
+"$NODE" --input-type=module -e "import {launchOptions} from './pet/lan.mjs'; launchOptions(['--lan']);"
+ARGS=("$ROOT/pet/server.mjs" --lan)
+if (( NO_BROWSER == 0 )) && [[ "$OPEN_BROWSER" == "1" ]] && command -v xdg-open >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+  ARGS+=(--open)
+fi
+printf '数据文件：%s\n网页端口：%s；按 Ctrl+C 停止服务。\n' "$DB_PATH" "$PORT"
+exec "$NODE" "${ARGS[@]}"
