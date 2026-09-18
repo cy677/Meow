@@ -1,0 +1,42 @@
+name: Growth system checks
+on:
+  push:
+    branches: ['feature/points-pet-growth-*']
+  pull_request:
+    paths: ['pet/**', 'README*', '.github/workflows/growth.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  growth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source snapshot
+        run: git archive --format=zip HEAD -o /tmp/meow-growth-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meow-growth-source
+          path: /tmp/meow-growth-source.zip
+          retention-days: 7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:pet
+      - run: npm run pet:build && npm run build
+      - name: Growth browser regression
+        if: hashFiles('pet/tests/browser-growth.mjs') != ''
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node pet/tests/browser-growth.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: meow-growth-evidence
+          path: pet/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
