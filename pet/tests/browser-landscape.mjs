@@ -50,7 +50,7 @@ try {
   await page.locator('#reward-prev').focus();app.store.points({delta:2,reason:'翻页时新增的积分',idempotencyKey:randomUUID()});
   await page.waitForFunction(()=>document.querySelector('#balance').textContent==='323');
   assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),lastPage);assert.equal(await page.evaluate(()=>document.activeElement.id),'reward-prev');
-  await page.locator('[data-action=category][data-category=trick]').tap();assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),'1');assert.equal(await page.locator('.reward-card').count(),2);
+  await page.locator('[data-action=category][data-category=trick]').tap();assert.equal(await page.locator('#reward-grid').getAttribute('data-page'),'1');assert.equal(await page.locator('.reward-card').count(),Math.min(6,app.store.catalog().rewards.filter(reward=>reward.category==='trick').length));
   await page.locator('[data-view=owned]').tap();assert.equal(await page.locator('.reward-card').count(),6);assert.equal(await page.locator('#reward-next').isDisabled(),app.store.snapshot().owned.length<=6);
   // Two native dialogs: Escape dismisses only confirmation; cancel never spends points.
   await revealReward(page,'coat-grey');const oldBalance=app.store.snapshot().balance;

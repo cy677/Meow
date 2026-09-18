@@ -6,4 +6,5 @@ body #app{padding-top:var(--studio-toolbar-height,70px);box-sizing:border-box}
 body.studio-limited #panel,body.studio-limited #weather-control,body.studio-limited .light-tool{display:none!important}
 .studio-loading #app,.studio-loading .initial-loader,.studio-loading .studio-pad{visibility:hidden}.studio-loading{background:#f2eade}
 .studio-pad{position:fixed;z-index:60;left:14px;bottom:55px;display:flex;gap:7px;flex-wrap:wrap;max-width:calc(100vw - 28px)}.studio-pad button{touch-action:none;user-select:none;min-width:52px;background:#fffaf0dd}
+body:has(#viewport[data-share-card-open="true"]) .studio-pad,body.codex-pet-modal-open .studio-pad{display:none}
 @media(max-width:850px){body #app{padding-top:var(--studio-toolbar-height,116px)}.studio-bar{font-size:12px;gap:5px;padding:6px 10px}.studio-bar [role=status]{flex-basis:100%;order:4}.studio-bar button,.studio-bar a,.studio-bar select{padding:5px 8px;min-height:34px}.studio-pad{bottom:52px}.studio-pad button{padding:6px 8px;min-width:45px}}

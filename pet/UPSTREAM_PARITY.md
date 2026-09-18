@@ -24,6 +24,8 @@
 
 家长保存方案包括模型参数、种子、地板、垫子、光源、天气、触摸手感、排线和镜头；孩子的临时编辑不覆盖家长方案。2026-09-18 补齐了加载排线样式时选中按钮的同步，避免界面与实际渲染不一致。
 
+导出对话框打开期间隐藏新增的触摸方向键，避免它们遮挡原版收藏卡的换皮肤、拍照等操作；关闭后恢复行动按键。
+
 原版实验性骨骼、容器软体及 Codex 导出继续保持实验性质。原版中没有的能力不计入本对照。GitHub Pages 的原版静态编辑器与需要本地 Node 服务的积分小屋仍使用各自构建入口。
 
-验证入口：`npm run test:pet`、`npm run pet:build`、`npm run build`，以及 `pet/tests/` 中的浏览器回归。GitHub `Points pet checks` 已覆盖 main 分支提交。
+验证入口：`npm run test:pet`、`npm run pet:build`、`npm run build`，以及 `pet/tests/` 中的浏览器回归。`browser-studio.mjs` 专门覆盖原版创作室、参数重载和导出。GitHub `Points pet checks` 已覆盖 main 分支提交。

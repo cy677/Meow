@@ -36,6 +36,8 @@ jobs:
         run: npm run pet:build && npm run build
       - name: Install browser test runner
         run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Original studio, saved parameters and exports
+        run: node pet/tests/browser-studio.mjs 2>&1 | tee pet/test-results/browser-studio.txt
       - name: Full local scene reward regression
         run: node pet/tests/browser-environment.mjs 2>&1 | tee pet/test-results/browser-environment.txt
       - name: Real skeletal motion and script regression
