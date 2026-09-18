@@ -122,7 +122,8 @@ try {
   await child.goto(origin + '/');
   await child.locator('#code').fill('2468');
   await child.locator('#login-form button').click();
-  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
+  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
   let home = child.frame({ url: /studio\.html\?embedded=1/ });
   await home.locator('#initial-loader').waitFor({ state: 'hidden' });
   assert.equal(app.store.snapshot().creation, null);
@@ -186,7 +187,8 @@ try {
   app.store.points({ delta: 10000, reason: '浏览器临时验证积分', idempotencyKey: key() });
   app.store.purchase({ rewardId: hiddenCatalogReward.id, expectedCost: hiddenCatalogReward.cost, idempotencyKey: key() });
   await child.reload();
-  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
+  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
   await openRewards();
   await child.locator('[data-view=owned]').click();
   const ownedCard = await revealReward(hiddenReward.id);
@@ -201,7 +203,8 @@ try {
     app.store.purchase({ rewardId: reward.id, expectedCost: reward.cost, idempotencyKey: key() });
   }
   await child.reload();
-  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
+  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
   home = child.frame({ url: /studio\.html\?embedded=1/ });
   await home.locator('#initial-loader').waitFor({ state: 'hidden' });
   await openRewards();
