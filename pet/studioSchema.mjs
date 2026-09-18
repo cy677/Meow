@@ -13,7 +13,7 @@ export const STUDIO_FIELDS={
     bool('motionDebug'),bool('motionStateMachine'),select('motionAction',CLIPS.map(c=>c.id)),number('motionSpeed',.25,2),number('motionIntensity',0,1.6)],
   floor:SCENE_FIELDS.floor.filter(f=>f.key!=='kind'),
   rug:[bool('enabled'),number('seed',0,4294967295,1)],
-  light:[number('azimuth',-180,360),number('elevation',0,90)],
+  light:[number('azimuth',-180,360),number('elevation',0,90),bool('shadows')],
   weather:[select('mode',['sunny','cloudy','fishRain']),bool('thunder'),number('rain',0,4),number('cloud',0,2),number('fish',0,4)],
   poke:[number('radius',.15,.78),number('freq',1.8,9),number('damping',.05,.5)],
   hatch:[...['Hatch','Body'].flatMap(prefix=>[number(`u${prefix}Style`,0,1,1),number(`u${prefix}Width`,.75,.93),number(`u${prefix}Freq`,60,260),number(`u${prefix}Jitter`,0,.5),number(`u${prefix}Angle`,0,Math.PI),number(`u${prefix}DashStretch`,.35,4)]),...['uGroundHatchColor','uGroundShadowColor','uShadeColor'].map(color),...['uShadeAlpha','uBodyHatch','uHatchScreen'].map(key=>number(key,0,1))],

@@ -7,6 +7,7 @@ export function createHomeScene(host) {
   let settled = false;
   let pollTimer;
   let timeoutTimer;
+  let photoObserver;
   let resolveReady;
   let rejectReady;
 
@@ -46,6 +47,11 @@ export function createHomeScene(host) {
     if (!runtime()) return;
     settled = true;
     host.dataset.ready = 'true';
+    const viewport=frame.contentDocument.getElementById('viewport');
+    const syncPhoto=()=>document.body.classList.toggle('child-photo-open',viewport?.dataset.shareCardOpen==='true');
+    photoObserver=new MutationObserver(syncPhoto);
+    if(viewport)photoObserver.observe(viewport,{attributes:true,attributeFilter:['data-share-card-open']});
+    syncPhoto();
     stopWatching();
     resolveReady(controller);
   }
@@ -65,6 +71,8 @@ export function createHomeScene(host) {
       if (disposed) return;
       disposed = true;
       stopWatching();
+      photoObserver?.disconnect();
+      document.body.classList.remove('child-photo-open');
       window.removeEventListener('message', message);
       host.removeEventListener('meow:overlay-change', overlay);
       try { runtime()?.dispose(); } catch { /* Removing the frame must still succeed. */ }

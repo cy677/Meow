@@ -18,7 +18,10 @@ function harness() {
   const bridge = Object.fromEntries(['applyState', 'play', 'feature', 'overlay', 'dispose']
     .map(name => [name, (...args) => calls.push([name, ...args])]));
   const frame = new Target();
+  const viewport = new Target(), classes = new Set(), observers=[];
+  const body = {classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name);},remove(name){classes.delete(name);}}};
   const child = { location: { origin }, document: { body: { dataset: {} } } };
+  frame.contentDocument={getElementById:id=>id==='viewport'?viewport:null};
   frame.contentWindow = child;
   frame.remove = () => { frame.removed = true; };
   const win = new Target();
@@ -28,7 +31,8 @@ function harness() {
   let counter = 0;
   const replacements = {
     window: win,
-    document: { createElement: tag => { assert.equal(tag, 'iframe'); return frame; } },
+    document: { body, createElement: tag => { assert.equal(tag, 'iframe'); return frame; } },
+    MutationObserver: class {constructor(callback){this.callback=callback;observers.push(this);}observe(){this.active=true;}disconnect(){this.active=false;}},
     location: { origin },
     setInterval: fn => { intervals.set(++counter, fn); return counter; },
     clearInterval: id => intervals.delete(id),
@@ -41,7 +45,7 @@ function harness() {
   // Tests attach a rejection handler before exercising close/error paths.
   scene.ready.catch(() => {});
   return {
-    scene, host, frame, child, bridge, calls, intervals, timeouts, win, origin,
+    scene, host, frame, child, bridge, calls, intervals, timeouts, win, origin, viewport, classes, observers,
     ready() { child.document.body.dataset.studioReady = 'true'; child.meowHome = bridge; },
     notify({ origin: senderOrigin = origin, source = child, data = {type: 'meow:ready'} } = {}) { win.emit('message', {origin: senderOrigin, source, data}); },
     tick() { for (const fn of [...intervals.values()]) fn(); },
@@ -142,4 +146,13 @@ test('home scene: runtime error is detected even when its error notification is 
     assert.equal(h.frame.removed, true);
     assert.equal(h.host.dataset.ready, undefined);
   } finally { h.restore(); }
+});
+
+test('home scene: photo overlay hides family controls and restores them on close or disposal', async()=>{
+  const h=harness();try{h.ready();h.tick();await h.scene.ready;
+    assert.equal(h.classes.has('child-photo-open'),false);
+    h.viewport.dataset.shareCardOpen='true';h.observers[0].callback();assert.equal(h.classes.has('child-photo-open'),true);
+    h.viewport.dataset.shareCardOpen='false';h.observers[0].callback();assert.equal(h.classes.has('child-photo-open'),false);
+    h.viewport.dataset.shareCardOpen='true';h.observers[0].callback();h.scene.dispose();assert.equal(h.classes.has('child-photo-open'),false);assert.equal(h.observers[0].active,false);
+  }finally{h.restore();}
 });

@@ -10,6 +10,7 @@ import * as THREE from 'three';
  */
 
 export const hatchUniforms = {
+  uShadowsEnabled: { value: 1 },
   // —— 影子排线 ——
   uHatchFreq: { value: 130.0 },
   uHatchWidth: { value: 0.88 },   // 阈值越高线越细（UI 用 0.95-粗细 映射）
@@ -189,6 +190,7 @@ export function injectBodyHatch(material) {
          uniform float uBodyDashStretch;
          uniform float uBodyHatch;
          uniform float uShadeAlpha;
+         uniform float uShadowsEnabled;
          uniform vec3 uShadeColor;
          uniform vec3 uKeyDir;
          ${HATCH_GLSL}`
@@ -199,7 +201,7 @@ export function injectBodyHatch(material) {
          {
             float dnl = dot(normalize(vHatchN), uKeyDir);
             // 二次元硬切：不再用 smoothstep 在明暗交界制造灰色过渡带。
-            float darkM = 1.0 - step(0.02, dnl);
+            float darkM = (1.0 - step(0.02, dnl)) * uShadowsEnabled;
            // 暗面色块：底色乘 uShadeColor，浓度 uShadeAlpha 可调
            gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * uShadeColor, darkM * uShadeAlpha);
            // 排线坐标：世界空间用身体表面 x/y 混合坐标；屏幕空间直接用像素坐标（跟随镜头）

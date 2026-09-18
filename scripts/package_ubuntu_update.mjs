@@ -1,0 +1,23 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const name='Meow-V6-Ubuntu-update-20260918';
+const out=path.join(root,'Exports',name),payload=path.join(out,'payload');
+if(path.dirname(out)!==path.join(root,'Exports'))throw new Error('输出路径不合法');
+fs.rmSync(payload,{recursive:true,force:true});
+fs.mkdirSync(path.join(payload,'pet'),{recursive:true});
+fs.mkdirSync(path.join(payload,'src'),{recursive:true});
+for(const file of fs.readdirSync(path.join(root,'pet')).filter(f=>f.endsWith('.mjs')&&!['vite.config.mjs','studioBuild.mjs'].includes(f)))fs.copyFileSync(path.join(root,'pet',file),path.join(payload,'pet',file));
+fs.cpSync(path.join(root,'pet/dist'),path.join(payload,'pet/dist'),{recursive:true});
+fs.copyFileSync(path.join(root,'src/coats.js'),path.join(payload,'src/coats.js'));
+const previous=JSON.parse(fs.readFileSync(path.join(root,'Exports/Meow-V6-Ubuntu24/BUILD.json'),'utf8').replace(/^\uFEFF/,''));
+fs.writeFileSync(path.join(payload,'BUILD.json'),JSON.stringify({...previous,release:name,updatedAt:new Date().toISOString(),dataIncluded:false},null,2));
+fs.copyFileSync(path.join(root,'scripts/apply_ubuntu_update.sh'),path.join(out,'update.sh'));
+fs.copyFileSync(path.join(root,'scripts/apply_ubuntu_update.mjs'),path.join(out,'apply-update.mjs'));
+const files={};
+for(const file of fs.readdirSync(payload,{recursive:true})){const full=path.join(payload,file);if(fs.statSync(full).isFile())files[file.replaceAll('\\','/')]=createHash('sha256').update(fs.readFileSync(full)).digest('hex');}
+fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify({release:name,files},null,2));
+fs.writeFileSync(path.join(out,'使用说明.txt'),'Meow V6 Ubuntu 更新补丁\n\n1. 停止旧版 Meow 服务。\n2. 把补丁解压到旧版安装目录之外。\n3. 在补丁目录执行：bash update.sh /完整路径/Meow安装目录\n4. 返回安装目录执行：./Meow\n\n使用自定义 MEOW_DATA_DIR 时，更新命令需设置相同环境变量。\n补丁校验 SHA-256，并备份被替换的程序到 update-backups；失败会恢复程序。\n不覆盖 pet/data、pet-settings.json、证书、运行环境或现有账户记录。\n包含：精简加分表单、误录分值更正、孩子还原视角、去掉阴影开关、原版拍照页面。\n');
+console.log(out);

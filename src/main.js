@@ -2265,7 +2265,22 @@ sceneSec.append(rugSec, floorSec, lineSec, pokeSec, shadowSec, shadeSec);
 
 // —— 光照球：用画布右上角的二维拖拽同时控制方位角和仰角 ——
 // 同步更新平行光位置（含阴影相机）和猫身暗面判定用的 uKeyDir。
-const lightAngles = { azimuth: 53, elevation: 46 }; // 默认等于原 (3.2, 5.5, 4.2)
+const lightAngles = { azimuth: 53, elevation: 46, shadows: true }; // 默认等于原 (3.2, 5.5, 4.2)
+const shadowToggle = document.getElementById('disable-shadows');
+function syncShadows() {
+  const enabled = lightAngles.shadows !== false;
+  renderer.shadowMap.enabled = enabled;
+  key.castShadow = enabled;
+  blockShadowPlane.visible = hatchShadowPlane.visible = enabled;
+  hatchUniforms.uShadowsEnabled.value = enabled ? 1 : 0;
+  const grounding = scene.getObjectByName('procedural-rug-grounding-shadow');
+  if (grounding) grounding.visible = enabled;
+  shadowToggle.checked = !enabled;
+}
+shadowToggle.addEventListener('change', () => {
+  lightAngles.shadows = !shadowToggle.checked;
+  syncShadows();
+});
 const lightOrb = document.getElementById('light-orb');
 const lightOrbHandle = document.getElementById('light-orb-handle');
 function updateKeyLight() {
@@ -2278,6 +2293,7 @@ function updateKeyLight() {
     Math.cos(el) * Math.sin(az) * r
   );
   hatchUniforms.uKeyDir.value.copy(key.position).normalize();
+  syncShadows();
 }
 
 function syncLightOrb() {

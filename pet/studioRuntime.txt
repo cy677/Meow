@@ -1,4 +1,4 @@
-// Appended only by the pet build. The upstream source stays byte-for-byte intact.
+// Appended only by the pet build to extend the shared renderer.
 import { STUDIO_FIELDS as petStudioFields } from '../pet/studioSchema.mjs';
 import { containerBuild as petContainerBuild } from '../pet/environment/containerAdapter.js';
 import { scaleToy as petScaleToy } from '../pet/environment/upstreamAdapters.js';
@@ -44,6 +44,13 @@ let petRoomBed=null,petRoomBedBody=null;
 const petOriginalRoom={keyColor:key.color.clone(),keyIntensity:key.intensity,ambientColor:ambient.color.clone(),ambientIntensity:ambient.intensity,fov:camera.fov,fog:scene.fog.clone()};
 const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
 export const petStudio = {
+  resetView(view) {
+    const damping=controls.enableDamping;
+    controls.enableDamping=false;controls.update();
+    camera.position.set(view.x+motionCameraOffset.x,view.y,view.z+motionCameraOffset.y);
+    controls.target.set(view.targetX+motionCameraOffset.x,view.targetY,view.targetZ+motionCameraOffset.y);
+    controls.update();controls.enableDamping=damping;
+  },
   setAccess(access) {
     petChildMotion=true;
     // Called only for a child session. Editing and random generation belong to parents.

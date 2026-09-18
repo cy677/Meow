@@ -48,7 +48,7 @@ export function createGrowthUI({api,parent,apply,notify,onError,onHistoryRefresh
     const next=await api(path,method,payload);intents.delete(signature);if(next.rewards)apply(next);version=-1;await refresh(true);onHistoryRefresh?.();return next;
   }
   const endpoint=parent?'/api/parent/growth':'/api/growth';
-  let awardForm,status,taskSelect,delta,reason,assistance,basis,scoreReason,when,manualTitle,steps,categoryBar,profileBox,pendingBox,summaryBox,modeBadge;
+  let awardForm,status,taskSelect,delta,reason,basis,scoreReason,when,manualTitle,steps,categoryBar,profileBox,pendingBox,summaryBox,modeBadge;
   if(parent){
     const panel=document.querySelector('#panel-award > article');panel.replaceChildren();panel.classList.add('growth-award-panel');
     const top=node('div','panel-title');top.append(node('h2','','记录具体行动'));modeBadge=node('span','growth-mode');top.append(modeBadge);panel.append(top);
@@ -65,21 +65,18 @@ export function createGrowthUI({api,parent,apply,notify,onError,onHistoryRefresh
     delta=scoreSelect('delta');delta.id='delta';delta.value='2';delta.addEventListener('change',showScore);
     scoreReason=field('scoreReason','',120);scoreReason.id='growth-score-reason';
     reason=field('reason');reason.id='reason';reason.required=true;
-    assistance=field('assistance','按约定提供帮助',200);assistance.id='growth-assistance';
     when=field('occurredAt',localTime());when.type='datetime-local';when.required=true;when.id='growth-occurred';
-    const grid=node('div','form-grid');grid.append(label('本次分值',delta),label('行动发生时间（与录入时间分开）',when));awardForm.append(grid,label('调整默认分值的依据（非临时加码）',scoreReason),label('具体理由（必填）',reason),label('完成时的帮助（不自动减分）',assistance));
-    const confirmed=node('input');confirmed.type='checkbox';confirmed.name='basisConfirmed';confirmed.required=true;confirmed.id='growth-confirmed';
-    awardForm.append(label('完成条件已事先说明；记录具体行动，不以成绩、压抑情绪或透露隐私换分。',confirmed));
+    const grid=node('div','form-grid');grid.append(label('本次分值',delta),label('行动发生时间（与录入时间分开）',when));awardForm.append(grid,label('调整默认分值的依据（非临时加码）',scoreReason),label('具体理由（必填）',reason));
     status=node('p','growth-message');status.setAttribute('role','status');awardForm.append(status);
     const submit=node('button','button primary','确认成长记录');submit.id='award-submit';submit.type='submit';awardForm.append(submit);
     awardForm.addEventListener('submit',event=>{event.preventDefault();action(submit,async()=>{
       if(!data?.profile)throw new Error('请先由家长补充年龄并确认模式');
       if(!selectedTask&&!manualTitle.value.trim())throw new Error('请填写本次行动名称，不能只输入空格');
       if(selectedTask&&!reason.value.trim())throw new Error('请填写加分理由，不能只输入空格');
-      const payload={delta:Number(delta.value),reason:selectedTask?reason.value.trim():'',assistance:assistance.value.trim(),occurredAt:pending?.occurredAt||new Date(when.value).toISOString(),basisConfirmed:confirmed.checked,scoreReason:selectedTask?scoreReason.value.trim():'',
+      const payload={delta:Number(delta.value),reason:selectedTask?reason.value.trim():'',occurredAt:pending?.occurredAt||new Date(when.value).toISOString(),scoreReason:selectedTask?scoreReason.value.trim():'',
         ...(selectedTask?{taskId:selectedTask.id,expectedRevision:selectedTask.revision,...(selectedTask.steps.length?{stepId:steps.value}:{})}:{category:selectedCategory,title:manualTitle.value.trim()}),
         ...(pending?{submissionId:pending.id}:{})};
-      await write('/api/parent/growth/award',payload);reason.value='';confirmed.checked=false;scoreReason.value='';when.value=localTime();pending=null;chooseTask();feedback(payload.delta?`已保存：＋${payload.delta}喵币与成长经验。`:'成长回忆已保存，没有改变喵币与经验。');
+      await write('/api/parent/growth/award',payload);reason.value='';scoreReason.value='';when.value=localTime();pending=null;chooseTask();feedback(payload.delta?`已保存：＋${payload.delta}喵币与成长经验。`:'成长回忆已保存，没有改变喵币与经验。');
     });});panel.append(awardForm);
     const tools=node('div','toolbar');tools.append(btn('目标与项目库',e=>openLibrary(e.currentTarget)),btn('修改年龄 / 模式',e=>openProfile(e.currentTarget)));panel.append(tools);
     pendingBox=node('section','growth-pending');panel.append(pendingBox);
@@ -102,7 +99,7 @@ export function createGrowthUI({api,parent,apply,notify,onError,onHistoryRefresh
     steps.replaceChildren(new Option('请选择本次完成的步骤',''));for(const s of selectedTask?.steps||[])steps.add(new Option(`${s.title}（＋${s.points}）`,s.id));steps.parentElement.hidden=!selectedTask?.steps.length;steps.required=!!selectedTask?.steps.length;
     if(pending){steps.value=pending.stepId;const d=new Date(pending.occurredAt);when.value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);when.disabled=true;}else when.disabled=false;
     const agreed=pending?.stepId?selectedTask.steps.find(s=>s.id===pending.stepId)?.points:selectedTask?.points;
-    delta.value=String(selectedTask?.steps.length&&!pending?.stepId?0:agreed??2);assistance.value=selectedTask?.assistance||'按约定提供帮助';
+    delta.value=String(selectedTask?.steps.length&&!pending?.stepId?0:agreed??2);
     reason.placeholder='';
     basis.replaceChildren();basis.hidden=!selectedTask;
     if(selectedTask)basis.append(node('p','',`完成条件：${selectedTask.condition}`));
@@ -185,8 +182,9 @@ export function createGrowthUI({api,parent,apply,notify,onError,onHistoryRefresh
   async function recordAction(record,kind,launcher){
     show(kind==='classify'?'给旧成长记录归类':'更正误录',launcher);const form=node('form');form.append(node('p','',record.reason));const category=select(C.map(c=>[c.id,c.name]),'category');if(kind==='classify')form.append(label('只选择一个主类别',category));
     const reason=field('reason');reason.required=true;form.append(label(kind==='classify'?'归类依据（不再发放积分）':'误录原因（不能用作表现惩罚）',reason));
-    if(kind==='correct')form.append(node('p','note','仅撤销这笔误录的可用余额，保留原流水、累计经验和已拥有物品；余额不足时拒绝处理，不透支。更正后该条不再计入成长分布。'));
-    const submit=node('button','button primary','确认保存');submit.type='submit';form.append(submit);body.append(form);form.addEventListener('submit',e=>{e.preventDefault();action(submit,async()=>{await write(`/api/parent/growth/${kind}`,{recordId:record.id,reason:reason.value,...(kind==='classify'?{category:category.value}:{})});dialog.close();feedback(kind==='classify'?'旧记录已归类，余额未改变。':'误录已更正，原记录与更正依据已保留。');});});
+    const points=field('points',String(record.delta));points.type='number';points.min='0';points.max='10000';points.step='1';points.required=true;
+    if(kind==='correct')form.append(label('更正后的分值（0 表示撤销）',points),node('p','note','余额按新旧分值的差额调整，保留原流水、更正原因和已拥有物品。降低分值不扣累计经验，增加分值只补尚未计入的经验；余额不足时拒绝处理。'));
+    const submit=node('button','button primary','确认保存');submit.type='submit';form.append(submit);body.append(form);form.addEventListener('submit',e=>{e.preventDefault();action(submit,async()=>{await write(`/api/parent/growth/${kind}`,{recordId:record.id,reason:reason.value,...(kind==='classify'?{category:category.value}:{points:Number(points.value)})});dialog.close();feedback(kind==='classify'?'旧记录已归类，余额未改变。':'误录已更正，原记录与更正依据已保留。');});});
   }
   async function refresh(force=false){if(busyLoad&&!force)return;const ticket=++sequence;busyLoad=true;try{const next=await api(`${endpoint}?days=${data?.days||7}`);if(ticket!==sequence)return;const initial=!data;data=next;version=next.version;
       document.body.dataset.growthMode=data.profile?.mode||'preschool';if(parent)renderParent(initial);else if(dialog.open&&title.textContent==='我的成长花园')renderGarden();

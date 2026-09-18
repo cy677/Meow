@@ -29,3 +29,7 @@ body:has(#viewport[data-share-card-open="true"]) .studio-pad,body.codex-pet-moda
 .studio-child .child-photo{position:absolute;bottom:40px;left:18px;z-index:5;min-height:44px;padding:9px 18px;background:#fff9df;border:2px solid #b9a887;border-radius:14px;color:#5d493a;box-shadow:0 3px 0 #5d493a25}
 .studio-child #viewport[data-share-card-open="true"] .child-photo{display:none}
 .studio-child #scene-tools{max-width:calc(100% - 24px);right:12px;gap:7px}
+
+.studio-child .child-reset-view{position:absolute;bottom:40px;left:175px;z-index:5;min-height:44px;padding:9px 16px;background:#fff9df;border:2px solid #b9a887;border-radius:14px;color:#5d493a;cursor:pointer}.studio-child #viewport[data-share-card-open="true"] .child-reset-view{display:none}
+
+body:has(#viewport[data-share-card-open="true"]) .studio-bar{display:none}body:has(#viewport[data-share-card-open="true"]) #app{padding-top:0}

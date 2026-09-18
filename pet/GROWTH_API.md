@@ -35,7 +35,7 @@
 `POST /api/parent/growth/award`：
 
 ```json
-{"taskId":"school_basic-health-1","expectedRevision":1,"delta":2,"reason":"今天和家长一起完成了约定的卫生准备","occurredAt":"2026-09-18T09:00:00+08:00","assistance":"家长共同完成","basisConfirmed":true,"idempotencyKey":"example-growth-award-0001"}
+{"taskId":"school_basic-health-1","expectedRevision":1,"delta":2,"reason":"今天和家长一起完成了约定的卫生准备","occurredAt":"2026-09-18T09:00:00+08:00","idempotencyKey":"example-growth-award-0001"}
 ```
 
 `occurredAt` 必须为带时区的有效ISO时间，不接受未来行动（仅允许5分钟时钟误差）。0表示仅记录。改默认分值（非0）需 `scoreReason`。按步骤计分需 `stepId`，不能领取总分或临时改步骤积分。没有taskId时必须传六类之一的 `category` 与具体 `title`，默认依据为＋2；其他分值需要事先约定的调整依据。
@@ -52,7 +52,7 @@
 
 `POST /api/parent/growth/classify` 接收 `recordId,category,reason,idempotencyKey`。只处理未分类的旧earn/observation，不重新加分或修改原始时间。
 
-`POST /api/parent/growth/correct` 接收 `recordId,reason,idempotencyKey`。整笔撤销误录的可用余额，保留原流水、累计经验及已解锁权益；重复更正、余额不足均拒绝。不用来惩罚后续表现。被更正记录不计入成长花园和日计分限额。
+`POST /api/parent/growth/correct` 接收 `recordId,reason,points,idempotencyKey`。`points` 为更正后的整数分值（0—10000），0 或省略表示撤销。余额只调整新旧分值差额；原流水保留，非零更正创建关联的新记录，继续计入原类别、原日期和项目频次。累计经验不减少，只增加超过此条记录历次已计入经验的部分；已有权益保留。重复请求幂等，同一原记录不能再次更正，可更正替代记录；余额不足时整个事务拒绝。
 
 ## 兼容与约束
 
@@ -61,3 +61,5 @@
 幂等请求、余额、经验、记录、目标完成状态和待确认处理共用SQLite事务。项目/档案PUT使用乐观版本校验。HTTP400表示字段/条件不完整，401/403表示会话或权限问题，409表示版本、频次或已处理冲突。不要通过不断更换ID绕过冲突，应让家长核对记录。
 
 自定义单次行动（不传 taskId）必须提供非空 title，reason 可省略或为空；此时流水 reason 使用 title。自定义分值不要求 scoreReason。使用 taskId 的项目仍要求具体 reason，调整其默认分值时仍要求 scoreReason。
+
+日常加分已移除完成时的帮助和条件确认复选框，award 不再要求或保存这两项。旧客户端传入 assistance/basisConfirmed 时仅作兼容忽略，历史快照保留。

@@ -3286,3 +3286,5 @@ body.codex-pet-modal-open {
     content: none;
   }
 }
+
+.shadow-toggle{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:11px;color:#5d493a;cursor:pointer}.shadow-toggle input{width:16px;height:16px;margin:0;accent-color:#4f8c57}

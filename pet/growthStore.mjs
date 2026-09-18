@@ -109,8 +109,7 @@ export function createGrowthStore({db,tx,mutate,bump,log,getSetting,setSetting,s
   function award(input) {
     object(input,['taskId','category','title','expectedRevision','delta','reason','occurredAt','assistance','scoreReason','basisConfirmed','stepId','submissionId','idempotencyKey']);
     const delta=score(input.delta),reason=text(input.reason??'','具体理由',120,input.taskId?1:0),at=occurred(input.occurredAt);
-    if(input.basisConfirmed!==true)fail(400,'请先确认完成条件已说明，且记录的是具体行动');
-    const assistance=text(input.assistance??'按约定提供帮助','完成时的帮助',200),scoreReason=text(input.scoreReason??'','分值调整依据',120,0);
+    const scoreReason=text(input.scoreReason??'','分值调整依据',120,0);
     mutate(input.idempotencyKey,{operation:'growth-award',...input},()=>{
       const p=requireProfile(),date=day(at,p);let t=null,submission=null;
       if(input.submissionId){submission=db.prepare('SELECT * FROM growth_submissions WHERE id=?').get(input.submissionId);if(!submission||submission.status!=='pending')fail(409,'这条提交已处理或不存在');t=JSON.parse(submission.snapshot);
@@ -130,7 +129,7 @@ export function createGrowthStore({db,tx,mutate,bump,log,getSetting,setSetting,s
       const account=db.prepare('SELECT balance,lifetime FROM profile WHERE id=1').get();
       if(account.balance+delta>10000000||account.lifetime+delta>10000000)fail(409,'积分已达上限');
       db.prepare('UPDATE profile SET balance=balance+?,lifetime=lifetime+? WHERE id=1').run(delta,delta);
-      const evidence={schemaVersion:1,title,category,mode:p.mode,age:p.age,task:t,stepId:input.stepId??'',assistance,scoreReason,agreedPoints:agreed,awardedPoints:delta,actor:'parent',basisConfirmed:true};
+      const evidence={schemaVersion:1,title,category,mode:p.mode,age:p.age,task:t,stepId:input.stepId??'',scoreReason,agreedPoints:agreed,awardedPoints:delta,actor:'parent'};
       const id=log(delta?'earn':'observation',delta,reason||title,null,{growthCategory:category,growthSnapshot:evidence,taskId:t?.id??null,occurredAt:at,awardDay:date});
       if(submission)db.prepare('UPDATE growth_submissions SET status=?,ledgerId=? WHERE id=?').run(delta?'approved':'recorded',id,submission.id);
     });return snapshot(true);
@@ -161,14 +160,21 @@ export function createGrowthStore({db,tx,mutate,bump,log,getSetting,setSetting,s
     });return snapshot(true);
   }
   function correct(input) {
-    object(input,['recordId','reason','idempotencyKey']);const why=text(input.reason,'误录更正原因',120);
+    object(input,['recordId','reason','points','idempotencyKey']);const why=text(input.reason,'误录更正原因',120);
+    const points=integer(input.points??0,'更正后的分值',0,10000);
     mutate(input.idempotencyKey,{operation:'growth-correct',...input},()=>{
       const r=db.prepare("SELECT * FROM ledger WHERE id=? AND kind IN ('earn','observation')").get(input.recordId);
       if(!r||db.prepare('SELECT 1 FROM growth_corrections WHERE ledgerId=?').get(r.id))fail(409,'记录不存在或已经更正');
-      const {balance}=db.prepare('SELECT balance FROM profile WHERE id=1').get();if(balance<r.delta)fail(409,'该误录积分已被使用，请先核对；不会透支或自动回收已拥有物品');
-      db.prepare('UPDATE profile SET balance=balance-? WHERE id=1').run(r.delta);
-      const correctionId=log('adjustment',-r.delta,why,null,{growthSnapshot:{correctionOf:r.id,originalReason:r.reason,actor:'parent'}});
-      db.prepare('INSERT INTO growth_corrections VALUES (?,?)').run(r.id,correctionId);audit('correction',{recordId:r.id,correctionId,reason:why});
+      const previous=JSON.parse(r.growthSnapshot||'{}')||{};
+      const credited=Math.max(previous.creditedPoints??r.delta,r.delta),extra=Math.max(0,points-credited);
+      const {balance,lifetime}=db.prepare('SELECT balance,lifetime FROM profile WHERE id=1').get();
+      if(balance+points-r.delta<0)fail(409,'更正所需的积分已被使用，请先核对；不会透支或自动回收已拥有物品');
+      if(balance+points-r.delta>10000000||lifetime+extra>10000000)fail(409,'积分已达上限');
+      db.prepare('UPDATE profile SET balance=balance+?,lifetime=lifetime+? WHERE id=1').run(points-r.delta,extra);
+      const correctionId=log('adjustment',-r.delta,why,null,{growthSnapshot:{correctionOf:r.id,originalReason:r.reason,originalPoints:r.delta,correctedPoints:points,actor:'parent'}});
+      db.prepare('INSERT INTO growth_corrections VALUES (?,?)').run(r.id,correctionId);
+      const replacementId=points?log('earn',points,r.reason,null,{growthCategory:r.growthCategory,taskId:r.taskId,occurredAt:r.occurredAt,awardDay:r.awardDay,growthSnapshot:{...previous,correctionOf:r.id,originalReason:r.reason,correctionReason:why,awardedPoints:points,creditedPoints:Math.max(credited,points),actor:'parent'}}):null;
+      audit('correction',{recordId:r.id,correctionId,replacementId,originalPoints:r.delta,points,reason:why});
     });return snapshot(true);
   }
   return {profile,initialize,configure,read,saveTask,award,submit,cancelSubmission,classify,correct,

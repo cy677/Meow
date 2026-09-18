@@ -31,3 +31,5 @@ dialog.child-dialog{position:absolute;inset:0 0 0 auto;box-sizing:border-box;wid
 .house-open .child-dock{display:flex;right:14px;bottom:10px;z-index:4}.house-open .child-dock>[data-action]{display:none}.house-open .child-dock .button{min-height:36px;padding:6px 14px;font-size:12px}.house-open .child-dialog{padding-bottom:58px}
 /* A collapsed house must leave the upstream weather controls unobstructed. */
 body.child-active:not(.house-open) .child-hud{top:auto;bottom:96px}
+
+body.child-photo-open .child-hud,body.child-photo-open .child-dock{display:none}

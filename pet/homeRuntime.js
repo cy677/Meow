@@ -7,12 +7,14 @@ import { RUG_CHOICES } from './environmentSchema.mjs';
 export function mountHomeRuntime(runtime,data,defaults){
   let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+2500,activePlan=null,lastAction='';
   const initial=defaults||runtime.capture();
+  let homeView=runtime.capture().camera;
   const stop=()=>{activePlan=null;runtime.clearKeys();runtime.stop();nextAt=performance.now()+5000+Math.random()*4000;};
   function applyState(next,first=false){
     if(disposed)return;
     if(next.creation){
       if(first||JSON.stringify(next.creation)!==JSON.stringify(state.creation)){
         stop();runtime.resetRoom();runtime.restore(initial);runtime.restore(next.creation.preset);
+        homeView=runtime.capture().camera;
       }
       state=next;runtime.setAccess(next.access);return;
     }
@@ -36,6 +38,7 @@ export function mountHomeRuntime(runtime,data,defaults){
     if(Object.keys(patch).length)runtime.restore(patch);
     const roomSlots=['lighting','camera','effect','rug','toy','bed'].filter(changed);
     if(roomSlots.length)runtime.applyRoom(s,roomSlots);
+    if(first||roomSlots.includes('camera'))homeView=runtime.capture().camera;
     state=next;runtime.setAccess(next.access);
   }
   applyState(state,true);
@@ -64,6 +67,9 @@ export function mountHomeRuntime(runtime,data,defaults){
   const photo=document.getElementById('btn-export-png');
   photo.classList.add('child-photo');photo.textContent='📷 拍照 · 留影';
   document.getElementById('viewport').append(photo);
+  const resetView=document.createElement('button');resetView.type='button';resetView.id='child-reset-view';resetView.className='child-reset-view';resetView.textContent='还原视角';
+  resetView.addEventListener('click',()=>runtime.resetView(homeView));
+  document.getElementById('viewport').append(resetView);
   for(const id of ['btn-export-glb','btn-codex-pet'])document.getElementById(id)?.remove();
   photo.addEventListener('click',stop,true);
   const canvas=document.getElementById('scene');canvas.tabIndex=0;

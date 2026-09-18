@@ -33,7 +33,7 @@ try {
     const edit=()=>{dirty=true;status.textContent='原版参数有未保存修改';};
     document.getElementById('panel').addEventListener('input',edit);
     document.getElementById('panel').addEventListener('click',e=>{if(e.target.closest('.chip,.section-action,#btn-random'))edit();});
-    for(const el of document.querySelectorAll('#weather-control,#light-orb')){el.addEventListener('input',edit);el.addEventListener('pointerup',edit);}
+    for(const el of document.querySelectorAll('#weather-control,#light-orb,#disable-shadows')){el.addEventListener('input',edit);el.addEventListener('pointerup',edit);}
     const {createCreationEditor}=await import('./creationEditor.js');
     const editor=createCreationEditor({runtime:petStudio,request,onSaved:reward=>{dirty=false;status.textContent=`已保存奖励「${reward.title}」：${reward.unlockAt} 成长分解锁，兑换 ${reward.cost} 积分`;},onError:e=>{if(e.status===401)expire();}});
     const query=new URLSearchParams(location.search);
