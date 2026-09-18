@@ -131,6 +131,11 @@ try {
   assert.equal(app.store.studio(false).preset && Object.keys(app.store.studio(false).preset).length, 0, 'draft is not sent to child');
   await screenshot(parent, 'luna-creation-parent');
   mark('Parent creation saved; separate draft does not change child state');
+  // Finish the parent workflow through its visible navigation before opening the
+  // child's renderer. Two software-rendered studios otherwise contend for the CI GPU.
+  await parent.getByRole('link', {name:'返回家长页', exact:true}).click();
+  await parent.locator('#workspace').waitFor({state:'visible'});
+  assert.equal(app.store.snapshot().creation, null, 'returning does not equip the parent draft');
 
   await child.goto(origin + '/');
   await child.locator('#code').fill('2468');
