@@ -1,0 +1,14 @@
+{
+  "source_commit": "f06c8def41f5958ffd8281aced4ec48722a99fb1",
+  "source_run": 35312056885,
+  "source_artifact": 10533756177,
+  "description": "Actual Chromium regression screenshots using temporary demonstration accounts, not family records. Cropped images retain original pixels; no generated interface or edited values.",
+  "images": [
+    {"path":"docs/readme/home.png","source":"luna-creation-child.png","crop":null,"source_sha256":"aefe2f2525bd02c222442d17c5e769ae5cea132a4db47763d5b3d2df68bd6e2d","size":[1024,768],"blob_sha":"3bc7940ba2b002051354e26c2e1dff1ed0cfd4e5"},
+    {"path":"docs/readme/growth-garden.png","source":"growth-child-garden.png","crop":null,"source_sha256":"8f4eef9fe30348d7c8e214696a096faab81e529308507e7b5fe572dd1028605f","size":[1180,820],"blob_sha":"7daf2cd3616ce17602269067c8e4d40a40b19640"},
+    {"path":"docs/readme/parent-scoring.png","source":"growth-parent.png","crop":[20,520,550,1590],"source_sha256":"96a399dfbc52f48303ac19183defd71638480d772df76e7960e6a4db2121ca99","size":[530,1070],"blob_sha":"a067d65d9bfd10997531757f3bb2b52b6d66c6de"},
+    {"path":"docs/readme/task-library.png","source":"growth-targets.png","crop":[55,852,1125,1667],"source_sha256":"3eaba6315a3f860225463cc7f17866e3e0993c9a4d2116c0eea9d3ec51fa31ac","size":[1070,815],"blob_sha":"d799056fa45c462ba0fd9f70a7e26ca273da9675"},
+    {"path":"docs/readme/parent-studio.png","source":"luna-creation-parent.png","crop":null,"source_sha256":"288d6d0dcb2b4cf4571aa456720c0ed94ddd8ecc5cb25ec588d91c6e503589db","size":[1280,900],"blob_sha":"cd16ba95f0f5097e3c4fffbed8a2757ad0432760"},
+    {"path":"docs/readme/family-records.png","source":"growth-family-distribution.png","crop":[18,520,1165,955],"source_sha256":"f46da0dc64487af794b7db4352aaa18260dc57a954d5887e37011be76c2b4933","size":[1147,435],"blob_sha":"215d2869b40f11944176b0463edb699e9e495c3b"}
+  ]
+}
