@@ -91,13 +91,46 @@ try {
   await parent.locator('#setup-form button[type=submit]').click();
   await parent.locator('#workspace').waitFor({ state: 'visible' });
 
-  const full = app.store.catalog().rewards.find(reward => reward.id === 'original-complete');
-  assert.ok(full, 'full studio capability is present after migration');
-  app.store.points({ delta: 500, reason: '原版 studio 浏览器回归', idempotencyKey: randomUUID() });
-  app.store.purchase({ rewardId: full.id, expectedCost: full.cost, idempotencyKey: randomUUID() });
-  assert.ok(app.store.snapshot().owned.includes(full.id));
-
+  assert.equal(app.store.snapshot().balance,0);
+  await child.goto(origin + '/');
+  await child.locator('#code').fill('2468');
+  await child.locator('#login-form button').click();
+  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  const home=child.frame({url:/studio.html\?embedded=1/});
+  await home.locator('#initial-loader').waitFor({state:'hidden'});
+  assert.equal(await child.getByText('原版互动',{exact:true}).count(),0);
+  assert.equal(await home.getByLabel('原版互动动作').locator('option').count(),15);
+  assert.equal(await home.locator('#btn-random').isDisabled(),true);
+  const disabledParameter = home.locator('#controls input, #controls select, #controls button').first();
+  assert.equal(await disabledParameter.count(), 1);
+  assert.equal(await disabledParameter.isDisabled(),true);
+  assert.equal(await child.locator('[data-feature=parameters]').count(),0);
+  assert.equal(await child.locator('[data-feature=random]').count(),0);
+  assert.equal(await home.locator('body.studio-child #panel').isVisible(),false);
+  assert.equal(app.store.studio().access.actions.length,14);
+  await child.locator('.child-functions summary').click();
+  await child.locator('[data-feature=capture]').click();
+  await home.locator('.share-card-overlay').waitFor({state:'visible'});
+  await home.locator('.share-card-close-button').click();
+  assert.equal(app.store.snapshot().balance,0);
+  await screenshot(child,'home-zero-points');
+  // Parent-only studio can randomize and save a fixed creation reward.
   await waitStudio(parent, '/studio.html?mode=parent');
+  await parent.getByRole('button', { name:'随机生成', exact:true }).click();
+  await parent.waitForFunction(() => Number(document.querySelector('#viewport')?.dataset.lastRandomizeMs) >= 0);
+  const creationPose=parent.locator('.chip[data-id="slouchSit"]');
+  assert.equal(await creationPose.count(),1);
+  await creationPose.click();
+  await parent.locator('#viewport[data-cat-pose="slouchSit"]').waitFor();
+  await parent.getByRole('button', { name:'保存为解锁奖励', exact:true }).click();
+  await parent.locator('#creation-form').waitFor({state:'visible'});
+  await parent.locator('#creation-form [name=title]').fill('浏览器固定作品');
+  await parent.locator('#creation-form [name=description]').fill('家长保存的固定参数');
+  await parent.locator('#creation-form [name=unlockAt]').fill('20');
+  await parent.locator('#creation-form [name=cost]').fill('10');
+  await parent.getByRole('button', { name:'保存奖励', exact:true }).click();
+  await parent.locator('#creation-form').waitFor({state:'hidden'});
+  assert.equal(app.store.catalog().rewards.filter(r=>r.category==='creation').length,1);
   await openSceneSection(parent);
   const shadow = await openHatchGroup(parent, '地面影子');
   const body = await openHatchGroup(parent, '身上阴影');
@@ -108,10 +141,10 @@ try {
   await shadowStyle.click();
   await bodyStyle.click();
   assert.deepEqual(await hatchState(parent), { shadowUniform: 1, bodyUniform: 1, shadowActive: '1', bodyActive: '1' });
-  const save = parent.getByRole('button', { name: '保存完整方案', exact: true });
+  const save = parent.getByRole('button', { name: '保存草稿', exact: true });
   assert.equal(await save.count(), 1);
   await save.click();
-  await parent.locator('.studio-bar [role=status]').filter({ hasText: '已保存到本地' }).waitFor();
+  await parent.locator('.studio-bar [role=status]').filter({ hasText: '草稿已保存' }).waitFor();
   const saved = app.store.studio(true);
   assert.equal(saved.preset.hatch.uHatchStyle, 1);
   assert.equal(saved.preset.hatch.uBodyStyle, 1);
@@ -124,30 +157,15 @@ try {
   await screenshot(parent, 'studio-parent-hatch-reload');
 
   await child.goto(origin + '/');
-  await child.locator('#code').fill('2468');
-  await child.locator('#login-form button').click();
   await child.locator('#pet-scene[data-ready=true]').waitFor();
   await waitStudio(child, '/studio.html');
   assert.equal(await child.locator('body[data-studio-full="true"]').count(), 1);
+  assert.equal(await child.locator('body.studio-child #panel').isVisible(), false);
+  assert.equal(await child.locator('#btn-random').isDisabled(), true);
   assert.ok(await child.locator('#scene').isVisible());
-  for (const id of ['btn-export-png', 'btn-export-glb', 'btn-codex-pet']) {
-    assert.ok(await child.locator(`#${id}`).isVisible(), `${id} visible in full studio`);
-  }
-  assert.equal(await child.locator('.studio-pad button').count(), 6);
+  for (const id of ['btn-export-png', 'btn-export-glb', 'btn-codex-pet']) assert.equal(await child.locator(`#${id}`).count(),1);
+  assert.equal(await child.locator('.studio-pad button').count(), 7);
   await screenshot(child, 'studio-full-featured');
-
-  const localeEn = child.locator('.locale-switcher [data-locale="en"]');
-  const localeJa = child.locator('.locale-switcher [data-locale="ja-JP"]');
-  assert.equal(await localeEn.count(), 1);
-  await localeEn.click();
-  await child.waitForFunction(() => document.querySelector('#btn-random')?.textContent === '🐾 Random kitten');
-  await localeJa.click();
-  await child.waitForFunction(() => document.querySelector('#btn-random')?.textContent === '🐾 ランダムねこ');
-  await child.locator('.locale-switcher [data-locale="zh-CN"]').click();
-  await child.waitForFunction(() => document.querySelector('#btn-random')?.textContent === '🐾 随机遇见小猫');
-
-  await child.locator('#btn-random').click();
-  await child.waitForFunction(() => Number(document.querySelector('#viewport')?.dataset.lastRandomizeMs) >= 0);
 
   for (const clip of CLIPS) {
     const animation = await child.evaluate(action => {
@@ -170,44 +188,56 @@ try {
   }
   assert.ok(touchHits > 0, 'touch tap reaches the live cat poke path');
 
-  await child.locator('#btn-export-png').click();
-  await child.locator('.share-card-overlay').waitFor({ state: 'visible' });
-  assert.equal(await child.locator('.studio-pad').isVisible(), false, 'share card hides touch controls');
-  const skinBefore = await child.locator('#viewport').getAttribute('data-share-card-skin');
-  await child.locator('.share-card-skin-button').click();
-  const skinAfter = await child.locator('#viewport').getAttribute('data-share-card-skin');
+  await child.goto(origin + '/');
+  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  let childHome = child.frame({ url: /studio\.html\?embedded=1/ });
+  await childHome.locator('#initial-loader').waitFor({ state: 'hidden' });
+  const openChildFeature = async (feature) => {
+    const menu = child.locator('.child-functions');
+    if ((await menu.getAttribute('open')) === null) await menu.locator('summary').click();
+    const button = child.locator(`[data-feature="${feature}"]`);
+    assert.equal(await button.count(), 1, `${feature} remains in the free child menu`);
+    await button.click();
+  };
+
+  await openChildFeature('capture');
+  await childHome.locator('.share-card-overlay').waitFor({ state: 'visible' });
+  assert.equal(await childHome.locator('.studio-pad').isVisible(), false, 'share card hides touch controls');
+  const skinBefore = await childHome.locator('#viewport').getAttribute('data-share-card-skin');
+  await childHome.locator('.share-card-skin-button').click();
+  const skinAfter = await childHome.locator('#viewport').getAttribute('data-share-card-skin');
   assert.ok(skinAfter && skinAfter !== skinBefore, 'share card skin randomizer changes the card');
   const [cardDownload] = await Promise.all([
     child.waitForEvent('download'),
-    child.locator('.share-card-capture-button').click(),
+    childHome.locator('.share-card-capture-button').click(),
   ]);
   assert.match(cardDownload.suggestedFilename(), /\.png$/);
   assertPng(await downloadedBytes(cardDownload, 'share card'), 'share card');
-  await child.locator('#viewport[data-share-card-captured="true"]').waitFor();
-  await child.locator('.share-card-close-button').click();
-  await child.locator('.share-card-overlay').waitFor({ state: 'hidden' });
-  assert.equal(await child.locator('.studio-pad').isVisible(), true, 'closing share card restores touch controls');
+  await childHome.locator('#viewport[data-share-card-captured="true"]').waitFor();
+  await childHome.locator('.share-card-close-button').click();
+  await childHome.locator('.share-card-overlay').waitFor({ state: 'hidden' });
+  assert.equal(await childHome.locator('.studio-pad').isVisible(), true, 'closing share card restores touch controls');
 
   const [glbDownload] = await Promise.all([
     child.waitForEvent('download'),
-    child.locator('#btn-export-glb').click(),
+    openChildFeature('glb'),
   ]);
   assert.match(glbDownload.suggestedFilename(), /\.glb$/);
   const glbBytes = await downloadedBytes(glbDownload, 'GLB');
   assert.equal(glbBytes.subarray(0, 4).toString('ascii'), 'glTF', 'GLB has the glTF binary header');
 
-  await child.locator('#btn-codex-pet').click();
-  await child.locator('.codex-pet-overlay').waitFor({ state: 'visible' });
-  assert.equal(await child.locator('.studio-pad').isVisible(), false, 'Codex dialog hides touch controls');
-  const sampleImage = child.locator('.codex-pet-preview-image');
+  await openChildFeature('codex');
+  await childHome.locator('.codex-pet-overlay').waitFor({ state: 'visible' });
+  assert.equal(await childHome.locator('.studio-pad').isVisible(), false, 'Codex dialog hides touch controls');
+  const sampleImage = childHome.locator('.codex-pet-preview-image');
   await sampleImage.waitFor();
   assert.ok(await sampleImage.evaluate(image => image.complete && image.naturalWidth > 0), 'Codex current preview image is rendered');
-  await child.locator('.codex-pet-sample-button').click();
-  await child.locator('.codex-pet-preview.is-contact-sheet').waitFor();
+  await childHome.locator('.codex-pet-sample-button').click();
+  await childHome.locator('.codex-pet-preview.is-contact-sheet').waitFor();
   assert.ok(await sampleImage.evaluate(image => image.complete && image.naturalWidth > 0), 'Codex contact-sheet resource is rendered');
   const [jsonDownload] = await Promise.all([
     child.waitForEvent('download'),
-    child.locator('.codex-pet-json-button').click(),
+    childHome.locator('.codex-pet-json-button').click(),
   ]);
   assert.match(jsonDownload.suggestedFilename(), /\.json$/);
   const jsonBytes = await downloadedBytes(jsonDownload, 'Codex JSON');
@@ -216,15 +246,15 @@ try {
   assert.match(jsonPayload.handoff?.referenceImage ?? '', /-reference\.png$/);
   const [handoffPngDownload] = await Promise.all([
     child.waitForEvent('download'),
-    child.locator('.codex-pet-image-button').click(),
+    childHome.locator('.codex-pet-image-button').click(),
   ]);
   assert.match(handoffPngDownload.suggestedFilename(), /\.png$/);
   assertPng(await downloadedBytes(handoffPngDownload, 'Codex handoff image'), 'Codex handoff image');
-  assert.match(await child.locator('.codex-pet-prompt p').innerText(), /Codex/);
+  assert.match(await childHome.locator('.codex-pet-prompt p').innerText(), /Codex/);
   await screenshot(child, 'studio-codex-handoff');
-  await child.locator('.codex-pet-close').click();
-  await child.locator('.codex-pet-overlay').waitFor({ state: 'hidden' });
-  assert.equal(await child.locator('.studio-pad').isVisible(), true, 'closing Codex dialog restores touch controls');
+  await childHome.locator('.codex-pet-close').click();
+  await childHome.locator('.codex-pet-overlay').waitFor({ state: 'hidden' });
+  assert.equal(await childHome.locator('.studio-pad').isVisible(), true, 'closing Codex dialog restores touch controls');
 
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);

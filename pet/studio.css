@@ -1,4 +1,21 @@
 body [hidden]{display:none!important}
+body.studio-child #panel,body.studio-child .panel-actions,body.studio-child .mobile-panel-toggle,body.studio-child .mobile-section-nav{display:none!important}
+.creation-dialog{box-sizing:border-box;width:min(520px,94vw);max-height:90dvh;overflow:auto;padding:24px;border:1px solid #cbbb9f;border-radius:22px;background:#fffaf0;color:#493a30;font:15px/1.5 system-ui,sans-serif;z-index:300}
+.creation-dialog::backdrop{background:#252f2966}
+.creation-dialog h2{margin:0 0 12px;font-size:23px}.creation-dialog label{display:flex;flex-direction:column;gap:6px;margin:14px 0}
+.creation-dialog input,.creation-dialog textarea,.creation-dialog button{box-sizing:border-box;min-width:0;padding:10px 12px;border:1px solid #cbbb9f;border-radius:10px;background:#fffdf7;color:inherit;font:inherit}
+.creation-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.creation-help{font-size:13px;color:#6b6456}
+.creation-actions{display:flex;gap:10px;justify-content:flex-end}.creation-actions [type=submit]{background:#386550;color:white;cursor:pointer}.creation-dialog [role=alert]{color:#a33628}
+#panel :disabled{opacity:.45;cursor:not-allowed}
+body.studio-embedded #app{padding-top:0!important}
+.studio-embedded .studio-bar,.studio-embedded .panel-actions,.studio-embedded .mobile-panel-toggle,.studio-embedded .music-tool{display:none!important}
+.studio-embedded:not(.studio-lighting-open) .light-tool,.studio-embedded:not(.studio-weather-open) #weather-control{display:none!important}
+.studio-embedded .studio-pad{bottom:30px;left:12px;right:12px;max-width:none;gap:5px;align-items:center}
+.studio-pad select{min-height:40px;padding:7px 10px;border:1px solid #cbbb9f;border-radius:12px;background:#fffdf7;color:#493a30;font:inherit}
+.studio-embedded .mobile-section-nav{display:none!important}
+.studio-embedded #viewport{width:100%;height:100%}
+.studio-embedded #app{display:flex!important;flex-direction:row!important}
+.studio-embedded #viewport-hint{bottom:6px}
 .studio-bar{position:fixed;z-index:250;top:0;left:0;right:0;min-height:50px;padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff9eef5;border-bottom:1px solid #d7cab6;color:#493a30;font:14px/1.4 system-ui,sans-serif}
 .studio-bar a,.studio-bar button,.studio-bar select,.studio-pad button{padding:8px 12px;border:1px solid #cbbb9f;border-radius:12px;background:#fffdf7;color:#493a30;text-decoration:none;font:inherit;cursor:pointer;min-height:40px}
 .studio-bar [role=status]{flex:1;min-width:140px}.studio-bar button:disabled{opacity:.5}.studio-bar a:focus-visible,.studio-bar button:focus-visible{outline:3px solid #a5713d}

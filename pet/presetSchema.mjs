@@ -1,16 +1,17 @@
 import { SCENE_FIELDS, SCENE_LABELS, sceneDefaults, sceneFieldVisible } from './environmentSchema.mjs';
 import { ACTION_CHOICES, PROGRAMS } from './motionPrograms.mjs';
 import { COATS, POSES } from '../src/coats.js';
+import { EDITORS } from './editorRewards.mjs';
 
 // One schema drives both the parent's form and the server's allow-list.
 const select = (key, label, choices) => ({ key, label, type: 'select', choices });
 const number = (key, label, min, max, value, step = 0.01) => ({ key, label, type: 'number', min, max, value, step });
 const check = (key, label, value = false) => ({ key, label, type: 'checkbox', value });
 const color = (key, label, value) => ({ key, label, type: 'color', value });
-export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', capability:'原版功能', ...SCENE_LABELS, theme:'场景套装' };
+export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', creation:'家长作品', capability:'历史功能', ...SCENE_LABELS, theme:'场景套装' };
 export const PARAM_FIELDS = {
   ...SCENE_FIELDS,
-  capability: [select('capability','解锁功能', [['complete','原版完整创作室'],['keyboard','键盘自由行动'],['capture','拍照与分享卡'],['export','GLB 与 Codex 导出'],['music','原版背景音乐']])],
+  capability: [select('capability','解锁功能', [...EDITORS.map(([id,title])=>[`editor-${id}`,title]),['complete','原版完整创作室'],['keyboard','键盘自由行动'],['capture','拍照与分享卡'],['export','GLB 与 Codex 导出'],['music','原版背景音乐']])],
   coat: [
     select('coatId', '基础花色', COATS.map(c => [c.id, c.name])),
     check('dynamicCoat', '启用自定义配色'),
@@ -84,6 +85,7 @@ export function fieldVisible(category, key, params) {
   return true;
 }
 export function parameterDescription(reward) {
+  if(reward.category==='creation')return '家长保存的小猫与场景完整作品，包含固定随机种子、模型和渲染设置。';
   if(reward.category==='theme')return Object.entries(reward.params?.members||{}).map(([slot,id])=>`${SCENE_LABELS[slot]}：${id}`).join('；');
   const fields = reward.category === 'trick' ? [ACTION_FIELD, ...MOTION_FIELDS] : PARAM_FIELDS[reward.category] || [];
   const values = reward.category === 'trick' ? { action: reward.action, ...reward.motion } : reward.params || {};

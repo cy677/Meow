@@ -156,5 +156,5 @@ if (process.argv[1]?.replaceAll('\\\\','/').endsWith('/pet/server.mjs')) {
   const reset=launcher('reset',directory);assert.equal(reset.status,0,reset.stdout||reset.stderr);
   const backup=join(directory,'backups',readdirSync(join(directory,'backups'))[0],'pet.sqlite');
   const restored=createStore(backup,base);
-  try{assert.equal(restored.snapshot().balance,0);assert.equal(restored.catalog().rewards.length,101);}finally{restored.close();}
+  try{assert.equal(restored.snapshot().balance,0);assert.ok(!restored.catalog().rewards.some(r=>r.id==='editor-body'));assert.ok(restored.catalog().rewards.some(r=>r.id==='original-motion-idle'));}finally{restored.close();}
 });

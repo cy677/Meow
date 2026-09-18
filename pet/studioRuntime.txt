@@ -1,7 +1,17 @@
 // Appended only by the pet build. The upstream source stays byte-for-byte intact.
 import { STUDIO_FIELDS as petStudioFields } from '../pet/studioSchema.mjs';
+import { containerBuild as petContainerBuild } from '../pet/environment/containerAdapter.js';
+import { scaleToy as petScaleToy } from '../pet/environment/upstreamAdapters.js';
+import { disposeObjects as petDisposeObjects } from '../pet/environment/dispose.js';
+import * as petCannon from 'cannon-es';
+let petRoomBed=null,petRoomBedBody=null;
+const petOriginalRoom={keyColor:key.color.clone(),keyIntensity:key.intensity,ambientColor:ambient.color.clone(),ambientIntensity:ambient.intensity,fov:camera.fov,fog:scene.fog.clone()};
 const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
 export const petStudio = {
+  setAccess(access) {
+    // Called only for a child session. Editing and random generation belong to parents.
+    for(const el of document.querySelectorAll('#controls input,#controls select,#controls button,#btn-random'))el.disabled=true;
+  },
   capture() {
     return {
       params:petPick(petStudioFields.params,params),floor:{...floorParams},rug:{...rugState},light:{...lightAngles},
@@ -27,6 +37,8 @@ export const petStudio = {
   },
   restrict({floor=true,toy='mixed',count=99,cushion=false}) {
     ground.visible=floor;
+    toyWorld.releaseGrab();
+    toyWorld.scatterAroundRug(rugLayer.getBounds(),rugState.seed);
     let shown=0;
     let hidden=0;
     const all=toyWorld.toys.filter(t=>t.kind!=='bed');
@@ -36,6 +48,32 @@ export const petStudio = {
     toyWorld.group.visible=shown>0;
   },
   stop(){window.__setAnimation({enabled:false});},
+  clearKeys(){motionMachine.clearKeys();},
+  resetRoom(){
+    if(petRoomBed){petDisposeObjects([petRoomBed]);petRoomBed=null;}
+    if(petRoomBedBody){toyWorld.world.removeBody(petRoomBedBody);petRoomBedBody=null;}
+    scene.fog=petOriginalRoom.fog.clone();key.color.copy(petOriginalRoom.keyColor);key.intensity=petOriginalRoom.keyIntensity;
+    ambient.color.copy(petOriginalRoom.ambientColor);ambient.intensity=petOriginalRoom.ambientIntensity;
+    camera.fov=petOriginalRoom.fov;camera.updateProjectionMatrix();
+    const g=scene.getObjectByName('procedural-rug-layer');if(g){g.rotation.y=0;for(const mesh of g.children)mesh.scale.set(1,1,1);}
+    for(const t of toyWorld.toys)petScaleToy(t,1);
+    this.restrict({cushion:true});
+  },
+  applyRoom(value,slots) {
+    if(slots.includes('lighting')){const p=value.lighting;key.color.set(p.keyColor);key.intensity=p.keyIntensity;ambient.color.set(p.ambientColor);ambient.intensity=p.ambientIntensity;Object.assign(lightAngles,{azimuth:p.azimuth,elevation:p.elevation});updateKeyLight();syncLightOrb();}
+    if(slots.includes('camera')){const p=value.camera;resetMotionWorld();camera.position.copy(controls.target).add(new THREE.Vector3().setFromSphericalCoords(5.7*p.distance,THREE.MathUtils.degToRad(90-p.elevation),THREE.MathUtils.degToRad(p.azimuth)));camera.fov=p.fov;camera.updateProjectionMatrix();controls.update();}
+    if(slots.includes('effect')){const p=value.effect;scene.fog=p.kind==='fog'?new THREE.Fog(p.color,p.near,p.far):petOriginalRoom.fog.clone();}
+    if(slots.includes('rug')){const p=value.rug,g=scene.getObjectByName('procedural-rug-layer');if(g){g.rotation.y=THREE.MathUtils.degToRad(p.rotation);const factor=p.size/rugLayer.mesh.scale.x;for(const mesh of g.children){mesh.scale.x*=factor;mesh.scale.y*=factor;}}}
+    if(slots.includes('toy')){this.restrict({toy:value.toy.kind,count:value.toy.count,cushion:value.bed.kind==='cushion'});for(const t of toyWorld.toys.filter(t=>t.kind!=='bed'&&t.mesh.visible))petScaleToy(t,value.toy.scale);}
+    if(slots.includes('bed')){
+      if(petRoomBed){petDisposeObjects([petRoomBed]);petRoomBed=null;}
+      if(petRoomBedBody){toyWorld.world.removeBody(petRoomBedBody);petRoomBedBody=null;}
+      const p=value.bed,cushion=toyWorld.toys.find(t=>t.kind==='bed');
+      cushion.mesh.visible=cushion.shadowProxy.visible=p.kind==='cushion';cushion.body.collisionFilterMask=p.kind==='cushion'?-1:0;
+      if(p.kind==='cushion'){petScaleToy(cushion,p.size);cushion.body.position.set(p.x,.15,p.z);cushion.body.velocity.setZero();cushion.body.angularVelocity.setZero();cushion.body.wakeUp();toyWorld.group.visible=true;}
+      else {cushion.body.position.set(0,-120,0);if(p.kind!=='none'&&p.placement==='beside'){petRoomBed=petContainerBuild(p,params).mesh;petRoomBed.position.set(p.x,.035,p.z);scene.add(petRoomBed);petRoomBedBody=new petCannon.Body({type:petCannon.Body.STATIC,shape:new petCannon.Box(new petCannon.Vec3(.6*p.size,.28,.6*p.size)),position:new petCannon.Vec3(p.x,.28,p.z)});toyWorld.world.addBody(petRoomBedBody);}}
+    }
+  },
   pauseAudio(){bgm.pause();},
   motionKey(code,down){motionMachine.setKey(code,down);if(down&&motionMachine.triggerCode(code))motionElapsed=0;},
   lock(){bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},

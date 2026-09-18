@@ -4,7 +4,16 @@ export function childMarkup() {
     <div id="pet-scene"><p id="scene-loading" role="status">正在把你的小猫接过来…</p></div>
     <header class="child-hud">
       <div class="child-identity"><span class="child-mark" aria-hidden="true">m.</span><div><h1 id="pet-name"></h1><p id="greeting"></p></div></div>
-      <div class="child-account"><div class="child-balance"><span aria-hidden="true">✦</span><strong id="balance">0</strong><span>积分</span></div><a href="./studio.html" class="child-studio">原版互动</a><a href="./parent.html" class="child-parent">家长</a><button type="button" class="button quiet" data-action="logout">退出</button></div>
+      <div class="child-account"><div class="child-balance"><span aria-hidden="true">✦</span><strong id="balance">0</strong><span>积分</span></div><details class="child-functions"><summary>功能菜单</summary><div class="child-function-list">
+        <button type="button" data-feature="capture">拍照与分享卡</button>
+        <button type="button" data-feature="glb">导出 GLB</button>
+        <button type="button" data-feature="codex">导出给 Codex</button>
+        <button type="button" data-feature="music">音乐（播放 / 暂停）</button>
+        <button type="button" data-feature="lighting">光照</button>
+        <button type="button" data-feature="weather">天气</button>
+        <button type="button" data-feature="speech">随机对白</button>
+        <button type="button" data-feature="reset">还原小猫与场景</button>
+      </div></details><a href="./parent.html" class="child-parent">家长</a><button type="button" class="button quiet" data-action="logout">退出</button></div>
     </header>
     <p id="network" class="network" role="status" hidden>连接暂时中断，正在重连。积分和收藏仍保存在电脑上。</p>
     <nav class="child-dock" aria-label="小猫的宝藏屋">

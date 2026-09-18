@@ -4,6 +4,15 @@ body[data-role=child].child-active > #app > .topbar,
 body[data-role=child].child-active > #app > .site-footer { display:none; }
 body[data-role=child] #workspace { position:fixed; inset:0; width:100%; height:100vh; height:100dvh; max-width:none; margin:0; padding:0; }
 .child-stage { position:absolute; inset:0; overflow:hidden; background:radial-gradient(ellipse at 52% 40%,#fffdf3 0%,#efe6d3 74%,#e1d5bd 100%); }
+.child-stage .home-scene { position:absolute; inset:86px 0 90px; width:100%; height:calc(100% - 176px); border:0; }
+.child-hud { z-index:5; }
+.child-functions { position:relative; font-size:14px; }
+.child-functions summary { min-height:44px; display:flex; align-items:center; cursor:pointer; padding:8px 14px; background:#fffdf4; border:1px solid #d9dfcf; border-radius:14px; }
+.child-function-list { position:absolute; top:calc(100% + 8px); right:0; width:210px; max-height:calc(100dvh - 130px); overflow:auto; padding:8px; background:#fffdf4; border:1px solid #d9dfcf; border-radius:16px; box-shadow:0 12px 35px #273b3430; }
+.child-function-list button { display:block; width:100%; text-align:left; min-height:44px; border:0; background:transparent; padding:10px 14px; color:#2c493d; cursor:pointer; border-radius:8px; }
+.child-function-list button:hover,.child-function-list button:focus-visible { background:#e8efdf; }
+.child-function-list button:disabled { color:#93998d;cursor:not-allowed; }
+.child-stage #scene-loading { position:absolute; top:45%; left:35%; z-index:1; }
 body[data-role=child] #pet-scene { position:absolute; inset:0; width:100%; height:100%; }
 body[data-role=child] #pet-scene canvas { width:100%; height:100%; }
 .child-hud { position:absolute; inset:max(20px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) auto max(24px,env(safe-area-inset-left)); display:flex; align-items:center; justify-content:space-between; gap:20px; pointer-events:none; }
@@ -90,3 +99,4 @@ body[data-role=child] #toast { bottom:92px; }
   .reward-pagination { min-height:56px; }
 }
 /* Deliberately no separate portrait child layout; the task targets landscape iPad. */
+.is-mystery .reward-art{font-size:34px;font-weight:700;letter-spacing:8px;color:#8b9588;background:#efefe5}.is-mystery .reward-content{min-height:130px}

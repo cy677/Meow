@@ -5,8 +5,10 @@ import { createLocalLedger } from './localLedger.mjs';
 import { SCENE_SLOTS, composeScene } from './environmentSchema.mjs';
 import { SCENE_CATALOG_ADDITIONS } from './environmentRewards.mjs';
 import { resolve } from 'node:path';
-import { missingUpstreamRewards, upstreamAccess } from './upstreamRewards.mjs';
+import { missingUpstreamRewards, upstreamAccess, unlockOriginals } from './upstreamRewards.mjs';
 import { validateStudio } from './studioSchema.mjs';
+import { isMenuOnly } from './editorRewards.mjs';
+import { mysteryRewardIds } from './rewardPages.mjs';
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
 export function createStore(filename, initialCatalog) {
@@ -32,9 +34,8 @@ export function createStore(filename, initialCatalog) {
   const log = ledger.log;
   const catalogRevision = () => createHash('sha256').update(JSON.stringify(catalog())).digest('hex');
   const grantMembers = reward => {
-    const complete=reward.category==='capability'&&reward.params.capability==='complete';
-    if(reward.category!=='theme'&&!complete)return;
-    const members=complete?catalog().rewards.map(r=>r.id):Object.values(reward.params.members);
+    if(reward.category!=='theme')return;
+    const members=Object.values(reward.params.members);
     for(const id of members){
       const result=db.prepare('INSERT OR IGNORE INTO owned VALUES (?,?)').run(id,new Date().toISOString());
       if(result.changes)log('gift',0,`套装物品：${reward.title}`,id);
@@ -55,12 +56,15 @@ export function createStore(filename, initialCatalog) {
     const owned=db.prepare('SELECT id FROM owned').all().map(r=>r.id);
     const equipped=Object.fromEntries(db.prepare('SELECT slot,id FROM equipped').all().map(r=>[r.slot,r.id]));
     const config=catalog();
-    return { ...profile, owned, equipped, params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
+    const active=config.rewards.find(r=>r.category==='creation'&&r.id===equipped.creation&&owned.includes(r.id));
+    const hidden=mysteryRewardIds(config.rewards.map(r=>({...r,menuOnly:isMenuOnly(r)})),owned);
+    return { ...profile, owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
       rewards:config.rewards.map(r => {
-        const {params,action,motion,...publicData}=r;
-        return {...publicData, owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
-          affordable:profile.balance>=r.cost, equipped:equipped[r.category]===r.id,
-          ...(parent ? {params,action,...(motion ? {motion} : {})} : {})};
+        const {params,action,motion,preset,...publicData}=r;
+        if(!parent&&hidden.has(r.id))return {id:r.id,category:r.category,title:'???',description:'解锁前面的奖励后揭晓',mystery:true,menuOnly:false,owned:false,equipped:false};
+        return {...publicData, menuOnly:isMenuOnly(r), owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
+          affordable:profile.balance>=r.cost, equipped:equipped[r.category]===r.id&&(!active||r.category==='creation'),
+          ...(parent ? {params,action,...(motion ? {motion} : {}),...(preset?{preset}:{})} : {})};
       }),
       ...(parent ? {catalogRevision:catalogRevision()} : {}),
       ledger:ledger.latest() };
@@ -77,7 +81,8 @@ export function createStore(filename, initialCatalog) {
     });
   }
   function saveCatalog(input, expectedRevision) {
-    const next = validateCatalog(input);
+    const validated = validateCatalog(input);
+    const next = getSetting('upstreamRewardsVersion')==='2'?unlockOriginals(validated):validated;
     tx(() => {
       if (expectedRevision !== undefined && expectedRevision !== catalogRevision()) fail(409,'奖励目录已在其他页面修改。请保留当前草稿，重新读取目录后再保存。');
       for (const old of catalog().rewards) {
@@ -96,7 +101,8 @@ export function createStore(filename, initialCatalog) {
     studio(parent=false) {
       const state=snapshot(parent),access=upstreamAccess(catalog(),state.owned);
       const saved=JSON.parse(getSetting('studioPreset')||'{}');
-      return {state,access:parent?{...access,full:true}:access,preset:parent||access.full?saved:{},revision:getSetting('studioRevision')||'0'};
+      const preset=parent?saved:state.creation?.preset||{};
+      return {state,access:parent?{...access,full:true}:access,preset,revision:parent?getSetting('studioRevision')||'0':createHash('sha256').update(JSON.stringify(state.creation)).digest('hex')};
     },
     saveStudio(preset,expectedRevision) {
       const next=validateStudio(preset);
@@ -108,11 +114,11 @@ export function createStore(filename, initialCatalog) {
       return this.studio(true);
     },
     installUpstreamRewards() {
-      if(getSetting('upstreamRewardsVersion')==='1')return;
+      if(getSetting('upstreamRewardsVersion')==='2')return;
       tx(()=>{
         const next=catalog();next.rewards.push(...missingUpstreamRewards(next));
-        setSetting('catalog',JSON.stringify(validateCatalog(next)));grantMilestones();
-        setSetting('upstreamRewardsVersion','1');bump();log('catalog',0,'本地升级：补齐原版花色、姿态、眼睛、动作与完整创作室');
+        setSetting('catalog',JSON.stringify(validateCatalog(unlockOriginals(next))));grantMilestones();
+        setSetting('upstreamRewardsVersion','2');bump();log('catalog',0,'本地升级：原版互动免费，参数与随机生成由家长管理，作品按积分解锁');
       });
     },
     history: ledger.history,
@@ -137,7 +143,7 @@ export function createStore(filename, initialCatalog) {
         const starter=catalog().rewards.find(r=>r.category===slot&&r.starter);
         if(!starter)fail(409,'此槽位尚未初始化');
         db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(slot,starter.id);
-        db.prepare("DELETE FROM equipped WHERE slot='theme'").run();bump();
+        db.prepare("DELETE FROM equipped WHERE slot IN ('theme','creation')").run();bump();
       });return snapshot();
     },
     storageInfo() { return { engine:'SQLite', localOnly:true, persistent:filename!==':memory:', path:filename===':memory:'?null:resolve(filename), ledgerCount:db.prepare('SELECT count(*) AS n FROM ledger').get().n, rewardCount:catalog().rewards.length }; },
@@ -161,6 +167,7 @@ export function createStore(filename, initialCatalog) {
         if (!reward) fail(404,'没有这个奖励');
         if (reward.cost!==expectedCost) fail(409,'奖励价格已变动，请重新查看并确认');
         if (db.prepare('SELECT id FROM owned WHERE id=?').get(rewardId)) return;
+        if(reward.category==='capability')fail(400,'参数和随机生成由家长管理，无需兑换功能权限');
         const p=snapshot();
         if (p.lifetime<reward.unlockAt) fail(409,'成长积分尚未达到门槛');
         if (p.balance<reward.cost) fail(409,'可兑换积分不足');
@@ -176,7 +183,8 @@ export function createStore(filename, initialCatalog) {
         const reward=catalog().rewards.find(r=>r.id===rewardId);
         if (!reward || !db.prepare('SELECT id FROM owned WHERE id=?').get(rewardId)) fail(403,'尚未拥有这个奖励');
         if (reward.category==='trick') fail(400,'互动动作请使用播放接口');
-        if (reward.category==='capability') fail(400,'原版功能请进入原版互动页面使用');
+        if (reward.category==='capability') fail(400,'原版功能已默认开放，请使用功能菜单');
+        if(reward.category!=='creation')db.prepare("DELETE FROM equipped WHERE slot='creation'").run();
         if(reward.category==='theme'){
           for(const [slot,id]of Object.entries(reward.params.members)){
             if(!db.prepare('SELECT id FROM owned WHERE id=?').get(id))fail(409,'套装成员拥有权不完整');

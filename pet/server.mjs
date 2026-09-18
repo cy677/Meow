@@ -95,7 +95,10 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
       if(req.headers.origin&&req.headers.origin!==expectedOrigin)fail(403,'不允许跨站请求');
       const path=new URL(req.url,expectedOrigin).pathname;
       // Upstream controls use element style attributes; exports preview local Blob images.
-      if(!dev&&path==='/studio.html')res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+      if(path==='/studio.html'){
+        res.setHeader('X-Frame-Options','SAMEORIGIN');
+        if(!dev)res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+      }
       const method=req.method;
       if(path.startsWith('/api/')) {
         if(method==='OPTIONS')fail(403,'不允许跨站调用');
@@ -135,7 +138,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         if(method==='GET') {
           if(path==='/api/studio'||path==='/api/parent/studio')return json(res,200,store.studio(parent));
           if(path==='/api/state'||path==='/api/parent/state')return json(res,200,store.snapshot(parent));
-          if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,sceneParams:s.sceneParams,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
+          if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,sceneParams:s.sceneParams,creation:s.creation,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
           if(path==='/api/parent/catalog')return json(res,200,store.catalog());
           if(path==='/api/parent/presets')return json(res,200,{catalog:store.catalog(),revision:store.catalogRevision()});
           if(path==='/api/parent/storage')return json(res,200,store.storageInfo());

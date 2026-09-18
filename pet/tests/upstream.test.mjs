@@ -8,7 +8,7 @@ import { createStore } from '../store.mjs';
 import { createPetServer } from '../server.mjs';
 import { COATS, EYE_COLORS, POSES } from '../../src/coats.js';
 import { CLIPS } from '../motionPrograms.mjs';
-import { missingUpstreamRewards } from '../upstreamRewards.mjs';
+import { missingUpstreamRewards, isFreeOriginal } from '../upstreamRewards.mjs';
 import { STUDIO_FIELDS, validateStudio } from '../studioSchema.mjs';
 
 const base = JSON.parse(readFileSync(new URL('../rewards.json', import.meta.url), 'utf8'));
@@ -62,7 +62,7 @@ test('原版奖励迁移幂等，保留旧自定义奖励、进度和已装备�
   assert.ok(twice.owned.includes(custom.id));
   assert.deepEqual(store.catalog().rewards.find(reward => reward.id === custom.id), custom);
   assert.deepEqual(store.exportData().ledger.slice(0, beforeLedger.length), beforeLedger);
-  assert.equal(store.getSetting('upstreamRewardsVersion'), '1');
+  assert.equal(store.getSetting('upstreamRewardsVersion'), '2');
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'coat').length, COATS.length);
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'pose').length, POSES.length - 1);
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'eyes').length, EYE_COLORS.length);
@@ -147,11 +147,19 @@ async function fixture(t) {
   return { app, request, roles };
 }
 
-test('原版互动接口按角色和完整创作室拥有权隔离方案', async t => {
+test('零积分原版互动免费，家长草稿隔离，保存作品后孩子须解锁并使用', async t => {
   const { request, roles } = await fixture(t);
   const limited = await request('/api/studio', { role: 'child' });
   assert.equal(limited.status, 200);
-  assert.equal(limited.data.access.full, false);
+  assert.equal(limited.data.access.full, true);
+  assert.deepEqual(limited.data.access.editors, []);
+  assert.equal(limited.data.state.balance,0);
+  for(const clip of CLIPS){
+    const action=limited.data.access.actions.find(a=>a.action===clip.id);
+    assert.ok(action,clip.id);
+    assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:action.id}})).status,200);
+  }
+  for(const cap of ['capture','export','keyboard','music','lighting','weather','speech'])assert.ok(limited.data.access.capabilities.includes(cap));
   assert.deepEqual(limited.data.preset, {});
   assert.ok(limited.data.access.actions.some(action => action.action === 'idle'));
   assert.equal((await request('/api/parent/studio', { role: 'child' })).status, 401);
@@ -170,22 +178,61 @@ test('原版互动接口按角色和完整创作室拥有权隔离方案', async
   assert.equal(saved.status, 200);
   assert.deepEqual(saved.data.preset, preset);
 
-  await request('/api/parent/points', { role: 'parent', method: 'POST', data: grant(300) });
-  const complete = parentView.data.state.rewards.find(reward => reward.id === 'original-complete');
-  assert.ok(complete, 'migration should install complete capability');
-  const purchase = {
-    rewardId: complete.id, expectedCost: complete.cost, idempotencyKey: key(),
-  };
-  assert.equal((await request('/api/purchase', {
-    role: 'child', method: 'POST',
-    data: purchase,
-  })).status, 200);
-  const fullState = (await request('/api/state', { role: 'child' })).data;
-  assert.ok(fullState.rewards.every(reward => fullState.owned.includes(reward.id)), 'complete purchase grants every current reward');
-  const balanceAfter = fullState.balance;
-  assert.equal((await request('/api/purchase', { role: 'child', method: 'POST', data: purchase })).status, 200);
-  assert.equal((await request('/api/state', { role: 'child' })).data.balance, balanceAfter);
-  const fullView = await request('/api/studio', { role: 'child' });
-  assert.equal(fullView.data.access.full, true);
-  assert.deepEqual(fullView.data.preset, preset);
+  const childAfterDraft=await request('/api/studio',{role:'child'});
+  assert.deepEqual(childAfterDraft.data.preset,{});
+  assert.equal(childAfterDraft.data.revision,limited.data.revision);
+  const reward={id:'creation-test',category:'creation',title:'小猫作品',description:'固定随机结果',cost:15,unlockAt:50,preset};
+  const catalog=await request('/api/parent/presets',{role:'parent'});
+  assert.equal((await request('/api/parent/presets',{role:'child',method:'PUT',data:{reward,expectedRevision:catalog.data.revision}})).status,401);
+  assert.equal((await request('/api/parent/presets',{role:'parent',method:'PUT',data:{reward,expectedRevision:catalog.data.revision}})).status,200);
+  assert.equal((await request('/api/equip',{role:'child',method:'POST',data:{rewardId:reward.id}})).status,403);
+  assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:{rewardId:reward.id,expectedCost:15,idempotencyKey:key()}})).status,409);
+  const hidden=(await request('/api/state',{role:'child'})).data.rewards.find(r=>r.id===reward.id);
+  assert.equal(hidden.title,'???');assert.equal(hidden.preset,undefined);assert.equal(hidden.cost,undefined);
+  await request('/api/parent/points',{role:'parent',method:'POST',data:grant(60)});
+  const purchase={rewardId:reward.id,expectedCost:15,idempotencyKey:key()};
+  assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:purchase})).status,200);
+  assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:purchase})).status,200);
+  assert.deepEqual((await request('/api/studio',{role:'child'})).data.preset,{});
+  await request('/api/equip',{role:'child',method:'POST',data:{rewardId:reward.id}});
+  const applied=(await request('/api/studio',{role:'child'})).data;
+  assert.deepEqual(applied.preset,preset);assert.deepEqual(applied.state.creation,{id:reward.id,preset});
+  assert.equal(applied.state.balance,45);assert.deepEqual(applied.access.editors,[]);
+  assert.ok(!applied.state.rewards.find(r=>r.id===reward.id).mystery);
+  await request('/api/equip',{role:'child',method:'POST',data:{rewardId:'coat-orange'}});
+  assert.deepEqual((await request('/api/studio',{role:'child'})).data.preset,{});
+});
+
+test('旧库升级只开放免费能力，保留模型价格、旧流水与余额，导入不能重新锁动作',t=>{
+  const store=fresh(t);store.points(grant(50));
+  store.purchase({rewardId:'trick-jump',expectedCost:15,idempotencyKey:key()});
+  store.setSetting('upstreamRewardsVersion','1');
+  const before=store.exportData(),coat=store.catalog().rewards.find(r=>r.id==='coat-calico');
+  store.installUpstreamRewards();
+  assert.equal(store.snapshot().balance,before.profile.balance);
+  assert.deepEqual(store.catalog().rewards.find(r=>r.id===coat.id),coat);
+  assert.deepEqual(store.exportData().ledger.slice(0,before.ledger.length),before.ledger);
+  assert.ok(!store.snapshot().owned.includes('editor-body'));
+  const changed=store.catalog();
+  for(const reward of changed.rewards.filter(isFreeOriginal)){if(!reward.starter){reward.cost=500;reward.unlockAt=500;}}
+  store.saveCatalog(changed);
+  assert.ok(store.catalog().rewards.filter(isFreeOriginal).every(r=>r.cost===0&&r.unlockAt===0));
+  assert.ok(store.catalog().rewards.filter(isFreeOriginal).every(r=>store.snapshot().owned.includes(r.id)));
+});
+
+test('家长作品校验完整参数，成长礼物自动获得，旧参数权限不再开放',t=>{
+  const store=fresh(t),preset=studioPreset();
+  const reward={id:'creation-gift',category:'creation',title:'家长小猫',description:'成长解锁固定作品',cost:0,unlockAt:10,preset};
+  for(const invalid of [{...reward,preset:{}},{...reward,params:{headSize:1}},{...reward,preset:{params:{seed:-1}}}]){
+    assert.throws(()=>store.savePreset(invalid,store.catalogRevision()),failStatus(400));
+  }
+  store.savePreset(reward,store.catalogRevision());
+  assert.ok(!store.snapshot().owned.includes(reward.id));store.points(grant(10));
+  assert.ok(store.snapshot().owned.includes(reward.id));store.equip(reward.id);
+  assert.deepEqual(store.studio().preset,preset);
+  assert.deepEqual(store.exportData().ledger.find(r=>r.rewardId===reward.id).rewardSnapshot.preset,preset);
+  const legacy={id:'legacy-editor',category:'capability',title:'旧编辑权限',description:'旧数据仍保留',cost:0,unlockAt:0,params:{capability:'editor-body'}};
+  store.savePreset(legacy,store.catalogRevision());
+  assert.ok(store.snapshot().owned.includes(legacy.id));assert.deepEqual(store.snapshot().access.editors,[]);
+  assert.ok(store.snapshot().rewards.find(r=>r.id===legacy.id).menuOnly);
 });

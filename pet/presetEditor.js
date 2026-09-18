@@ -34,7 +34,7 @@ export function createPresetEditor({ api, onSaved }) {
   document.body.append(dialog);
   installMotionSamples({api,onSaved});
   const find = selector => dialog.querySelector(selector), form = find('#preset-form'), controls = new Map(), wrappers = new Map();
-  for (const [id, label] of Object.entries(CATEGORY_LABELS)) { const option = node('option', '', label); option.value = id; form.elements.category.append(option); }
+  for (const [id, label] of Object.entries(CATEGORY_LABELS).filter(([id])=>!['creation','capability'].includes(id))) { const option = node('option', '', label); option.value = id; form.elements.category.append(option); }
   let loaded, original, dirty = false, saving = false, scene, previewTimer, previewSequence = 0, generation = 0;
   const status = (message, error = false) => { find('#preset-status').textContent = message; find('#preset-status').classList.toggle('error-text', error); };
   const markDirty = () => { dirty = true; status('尚未保存：当前是预览草稿'); };

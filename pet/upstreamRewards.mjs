@@ -1,6 +1,7 @@
 import { COATS, POSES, EYE_COLORS } from '../src/coats.js';
 import { CLIPS, MOTION_REWARDS, defaultDuration } from './motionPrograms.mjs';
 
+
 const slug = value => value.replace(/[A-Z]/g, c => '-'+c.toLowerCase());
 const item = (id,title,category,params,cost=25,unlockAt=40) => ({id,title,category,params,cost,unlockAt,description:`原版${title}，解锁后永久使用。`});
 // Stable additions only. Existing family presets (including their prices) are retained.
@@ -12,16 +13,30 @@ export function missingUpstreamRewards(catalog) {
   for(const [i,e] of EYE_COLORS.filter(e=>e.color!=='odd').entries())add(item(`original-eyes-${e.id}`,`${e.name}眼睛`,'eyes',{eyeColor:e.color,oddEyes:false},20+i*3,30+i*10),r=>r.category==='eyes'&&r.params.eyeColor===e.color&&!r.params.oddEyes);
   for(const c of CLIPS) add({id:`original-motion-${c.id}`,title:c.name,category:'trick',description:'原版关键帧骨骼动作，可在小屋表演，也可在原版互动中播放。',cost:c.id==='idle'?0:25,unlockAt:c.id==='idle'?0:40,action:c.id,motion:{duration:defaultDuration(c.id),speed:1,intensity:1,transition:.25}},r=>r.category==='trick'&&r.action===c.id);
   for(const reward of MOTION_REWARDS)add(reward,r=>r.category==='trick'&&r.action===reward.action);
-  for(const [id,title,cost,at] of [['keyboard','键盘自由行动',60,100],['capture','拍照与分享卡',25,40],['export','GLB 与 Codex 导出',80,160],['music','原版背景音乐',20,30],['complete','原版完整创作室',200,300]]) {
+  for(const [id,title,cost,at] of [['keyboard','键盘自由行动',0,0],['capture','拍照与分享卡',0,0],['export','GLB 与 Codex 导出',0,0],['music','原版背景音乐',0,0]]) {
     const reward=item(`original-${id}`,title,'capability',{capability:id},cost,at);
     if(id==='complete')reward.description='一次获得当前目录全部奖励，并开放原版全部造型、动作、场景、随机创作、渲染参数及导出。';
     if(id==='keyboard')reward.description='原版键盘和触摸方向键，可自由移动、奔跑、跳跃以及使用状态机里的全部动作。';
     add(reward,r=>r.id===reward.id);
   }
+
   return additions;
 }
 export function upstreamAccess(catalog, owned) {
-  const rewards=catalog.rewards.filter(r=>owned.includes(r.id));
-  const capabilities=rewards.filter(r=>r.category==='capability').map(r=>r.params.capability);
-  return {full:capabilities.includes('complete'), capabilities, actions:rewards.filter(r=>r.category==='trick').map(r=>({id:r.id,title:r.title,action:r.action,motion:r.motion}))};
+  const rewards=catalog.rewards.filter(r=>isFreeOriginal(r)||owned.includes(r.id));
+
+  return {full:true, capabilities:['keyboard','capture','export','music','weather','lighting','speech'],
+    editors:[],
+    coats:rewards.filter(r=>r.category==='coat').map(r=>r.params.coatId),poses:rewards.filter(r=>r.category==='pose').map(r=>r.params.pose),
+    actions:rewards.filter(r=>r.category==='trick').map(r=>({id:r.id,title:r.title,action:r.action,motion:r.motion}))};
+}
+
+// Interactions and scene tools are free; appearance/render settings remain point rewards.
+export function isFreeOriginal(reward) {
+  return (reward.category==='capability'&&['keyboard','capture','export','music'].includes(reward.params.capability))
+    || ['weather','lighting'].includes(reward.category)
+    || (reward.category==='trick' && CLIPS.some(c=>c.id===reward.action));
+}
+export function unlockOriginals(catalog) {
+  return {...catalog,rewards:catalog.rewards.map(r=>isFreeOriginal(r)?{...r,cost:0,unlockAt:0,description:`${r.title}，默认开放，可直接使用。`}:r)};
 }

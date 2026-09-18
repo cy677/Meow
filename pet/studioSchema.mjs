@@ -2,7 +2,7 @@ import { PARAM_FIELDS } from './presetSchema.mjs';
 import { SCENE_FIELDS } from './environmentSchema.mjs';
 import { POSES } from '../src/coats.js';
 import { CLIPS } from './motionPrograms.mjs';
-import { object, validateFields } from './catalog.mjs';
+import { object, validateFields } from './validation.mjs';
 const number=(key,min,max,step=.01)=>({key,label:key,type:'number',min,max,step});
 const bool=key=>({key,label:key,type:'checkbox'});
 const select=(key,values)=>({key,label:key,type:'select',choices:values.map(v=>[v,v])});
