@@ -148,6 +148,16 @@ try {
   assert.equal(await home.locator('#btn-random').isDisabled(), true, 'child random control is disabled in source runtime');
 
   mark('Child native iframe ready; saved draft remains private');
+  // Reopen the actual app repeatedly; readiness must not depend on late chunk loading.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await child.reload();
+    await child.locator('#pet-scene[data-ready=true]').waitFor({state:'attached'});
+    await child.locator('#pet-scene iframe').waitFor({state:'visible'});
+    home = child.frame({url:/studio\.html\?embedded=1/});
+    assert.equal(await home.evaluate(() => document.body.dataset.studioReady), 'true');
+    assert.equal(await home.evaluate(() => typeof window.meowHome?.applyState), 'function');
+  }
+  mark('Three consecutive native homepage reloads complete');
 
   // Free original menu features remain reachable with zero points.
   const balanceBefore = app.store.snapshot().balance;

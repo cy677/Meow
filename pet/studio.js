@@ -1,4 +1,5 @@
 import './studio.css';
+import { mountHomeRuntime } from './homeRuntime.js';
 
 const parent=new URLSearchParams(location.search).get('mode')==='parent';
 const embedded=!parent&&new URLSearchParams(location.search).get('embedded')==='1';
@@ -55,7 +56,7 @@ try {
     window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
   }
   document.body.dataset.studioStage='home-runtime';
-  if(embedded){const {mountHomeRuntime}=await import('./homeRuntime.js');window.meowHome=mountHomeRuntime(petStudio,data,initial);}
+  if(embedded)window.meowHome=mountHomeRuntime(petStudio,data,initial);
   document.body.classList.remove('studio-loading');document.body.dataset.studioReady='true';document.body.dataset.studioStage='ready';document.body.dataset.studioFull='true';
   if(embedded)window.parent.postMessage({type:'meow:ready'},location.origin);
   // Keep authentication enforced in a page that can stay open longer than a parent session.
