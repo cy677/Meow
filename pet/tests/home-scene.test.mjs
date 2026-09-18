@@ -131,3 +131,15 @@ test('home scene: timeout and authenticated runtime error are failures, not fake
     assert.equal(errored.frame.removed, true);
   } finally { errored.restore(); }
 });
+
+test('home scene: runtime error is detected even when its error notification is lost', async () => {
+  const h = harness();
+  try {
+    h.child.document.body.dataset.studioStage = 'failed';
+    h.child.document.body.dataset.studioError = '场景参数无法载入';
+    h.tick();
+    await assert.rejects(h.scene.ready, /场景参数无法载入/);
+    assert.equal(h.frame.removed, true);
+    assert.equal(h.host.dataset.ready, undefined);
+  } finally { h.restore(); }
+});

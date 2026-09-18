@@ -30,8 +30,20 @@ export function createHomeScene(host) {
     clearTimeout(timeoutTimer);
     frame.removeEventListener('load', checkReady);
   }
+  function frameStatus() {
+    try {
+      const child = frame.contentWindow;
+      if (!child || child.location.origin !== location.origin) return {};
+      const body = child.document.body;
+      return { stage: body?.dataset.studioStage || child.document.readyState,
+        error: body?.dataset.studioError };
+    } catch { return {}; }
+  }
   function checkReady() {
-    if (disposed || settled || !runtime()) return;
+    if (disposed || settled) return;
+    const status = frameStatus();
+    if (status.error) { controller.dispose(new Error(status.error)); return; }
+    if (!runtime()) return;
     settled = true;
     host.dataset.ready = 'true';
     stopWatching();
@@ -67,7 +79,7 @@ export function createHomeScene(host) {
   frame.addEventListener('load', checkReady);
   pollTimer = setInterval(checkReady, 250);
   timeoutTimer = setTimeout(() => {
-    controller.dispose(new Error('小猫场景载入超时，请刷新页面重试；积分与收藏仍然保留。'));
+    controller.dispose(new Error(`小猫场景载入超时（阶段：${frameStatus().stage || 'unknown'}），请刷新页面重试；积分与收藏仍然保留。`));
   }, 60000);
   frame.src = './studio.html?embedded=1';
   host.append(frame);
