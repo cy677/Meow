@@ -137,7 +137,7 @@ async function fixture(t) {
   }
   const setup = await request('/api/parent/setup', {
     method: 'POST',
-    data: { setupToken: app.setupToken, pin: '864209', childCode: '2468', childName: '测试孩子', petName: '测试猫' },
+    data: { setupToken: app.setupToken,age:6,mode:'school_basic',timeZone:'Asia/Shanghai', pin: '864209', childCode: '2468', childName: '测试孩子', petName: '测试猫' },
   });
   assert.equal(setup.status, 200);
   roles.parent = { cookie: setup.headers.get('set-cookie').split(';')[0], csrf: setup.data.csrf };

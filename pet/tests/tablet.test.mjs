@@ -98,7 +98,7 @@ test('原生 HTTPS 正确验证证书并设置 Secure Cookie；缺失证书启�
   await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(()=>app.close());const url=`https://127.0.0.1:${app.server.address().port}`;
   assert.equal((await get(url+'/api/status',{ca})).status,200);
   assert.equal((await get(url+'/api/status',{ca,headers:{Origin:url.replace('https:','http:')}})).status,403);
-  const body=JSON.stringify({setupToken:app.setupToken,pin:'864209',childCode:'2468',childName:'Pad test',petName:'Meow'});
+  const body=JSON.stringify({setupToken:app.setupToken,age:6,mode:'school_basic',timeZone:'Asia/Shanghai',pin:'864209',childCode:'2468',childName:'Pad test',petName:'Meow'});
   const result=await new Promise((resolve,reject)=>{const req=https.request(url+'/api/parent/setup',{method:'POST',ca,headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','Origin':url}},res=>{res.resume();res.on('end',()=>resolve(res));});req.on('error',reject);req.end(body);});
   assert.equal(result.statusCode,200);assert.match(result.headers['set-cookie'][0],/; Secure/);
   for(const p of ['/certs/key.pem','/data/pet.sqlite'])assert.equal((await get(url+p,{ca})).status,404);

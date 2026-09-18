@@ -47,7 +47,7 @@ async function fixture(t) {
     return {status:response.status,data:await response.json(),headers:response.headers};
   }
   const roles={};
-  const result=await request('/api/parent/setup',{method:'POST',data:{setupToken:app.setupToken,pin:'864209',childCode:'2468',childName:'测试小朋友',petName:'小橘'}});
+  const result=await request('/api/parent/setup',{method:'POST',data:{setupToken:app.setupToken,age:6,mode:'school_basic',timeZone:'Asia/Shanghai',pin:'864209',childCode:'2468',childName:'测试小朋友',petName:'小橘'}});
   assert.equal(result.status,200);
   roles.parent={cookie:result.headers.get('set-cookie').split(';')[0],csrf:result.data.csrf};
   const login=await request('/api/child/login',{method:'POST',data:{code:'2468'}});

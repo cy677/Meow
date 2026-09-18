@@ -1,3 +1,4 @@
+import { validateGrowthProfile } from './growthStore.mjs';
 import http from 'node:http';
 import https from 'node:https';
 import { createSecureContext } from 'node:tls';
@@ -28,6 +29,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   const store=createStore(dbPath,JSON.parse(readFileSync(catalogPath,'utf8')));
   store.installSceneRewards();
   store.installUpstreamRewards();
+  store.installGrowthReward();
   const db=store.db;
   const configured=()=>!!db.prepare("SELECT role FROM credentials WHERE role='parent'").get();
   let setupToken=configured()?null:random();
@@ -104,15 +106,16 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         if(method==='OPTIONS')fail(403,'不允许跨站调用');
         if(path==='/api/status'&&method==='GET')return json(res,200,{configured:configured()});
         if(path==='/api/parent/setup'&&method==='POST'){
-          const data=object(await body(req),['setupToken','pin','childCode','childName','petName']);
+          const data=object(await body(req),['setupToken','pin','childCode','childName','petName','age','mode','enrolled','timeZone']);
           const reset=throttle(req,'setup');
           if(configured()||!setupToken||!equal(data.setupToken||'',setupToken))fail(403,'初始化口令无效');
           pin(data.pin);childCode(data.childCode);if(data.pin===data.childCode)fail(400,'家长密码与孩子进入码必须不同');
           const name=text(data.childName,'孩子昵称',20),petName=text(data.petName,'小猫名字',20);
+          const growthProfile=validateGrowthProfile({age:data.age,mode:data.mode,enrolled:data.enrolled,timeZone:data.timeZone});
           const parentHash=await hashCredential(data.pin),childHash=await hashCredential(data.childCode);
           store.tx(()=>{
             if(configured())fail(409,'系统已经初始化');
-            saveCredential('parent',parentHash);saveCredential('child',childHash);
+            saveCredential('parent',parentHash);saveCredential('child',childHash);store.growth.initialize(growthProfile);
             db.prepare('UPDATE profile SET childName=?,petName=?,version=version+1 WHERE id=1').run(name,petName);
           });
           setupToken=null;reset();return json(res,200,{...issueSession(req,res,'parent'),state:store.snapshot(true)});
@@ -136,6 +139,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         const parent=path.startsWith('/api/parent/');
         authorize(req,parent?'parent':'child',method!=='GET');
         if(method==='GET') {
+          if(path==='/api/growth'||path==='/api/parent/growth'){const q=new URL(req.url,expectedOrigin).searchParams;return json(res,200,store.growth.read(parent,{days:q.has('days')?Number(q.get('days')):7}));}
           if(path==='/api/studio'||path==='/api/parent/studio')return json(res,200,store.studio(parent));
           if(path==='/api/state'||path==='/api/parent/state')return json(res,200,store.snapshot(parent));
           if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,sceneParams:s.sceneParams,creation:s.creation,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
@@ -144,13 +148,20 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
           if(path==='/api/parent/storage')return json(res,200,store.storageInfo());
           if(path==='/api/history'||path==='/api/parent/history') {
             const q=new URL(req.url,expectedOrigin).searchParams;
-            return json(res,200,store.history({before:q.has('before')?Number(q.get('before')):null,limit:q.has('limit')?Number(q.get('limit')):40,kind:q.get('kind')??'all',q:q.get('q')??''}));
+            return json(res,200,store.history({before:q.has('before')?Number(q.get('before')):null,limit:q.has('limit')?Number(q.get('limit')):40,kind:q.get('kind')??'all',q:q.get('q')??'',category:q.get('category')??'all'}));
           }
           if(path==='/api/parent/export'){res.setHeader('Content-Disposition','attachment; filename="meow-progress.json"');return json(res,200,store.exportData());}
         }
         if(method==='POST'||method==='PUT'){
           const data=await body(req);
           authorize(req,parent?'parent':'child',true);
+          if(path==='/api/parent/growth/profile'&&method==='PUT')return json(res,200,store.growth.configure(data));
+          if(path==='/api/parent/growth/tasks'&&method==='PUT')return json(res,200,store.growth.saveTask(data));
+          if(path==='/api/parent/growth/award'&&method==='POST')return json(res,200,store.growth.award(data));
+          if(path==='/api/growth/submit'&&method==='POST')return json(res,200,store.growth.submit(data));
+          if(path==='/api/parent/growth/cancel'&&method==='POST')return json(res,200,store.growth.cancelSubmission(data));
+          if(path==='/api/parent/growth/classify'&&method==='POST')return json(res,200,store.growth.classify(data));
+          if(path==='/api/parent/growth/correct'&&method==='POST')return json(res,200,store.growth.correct(data));
           if(path==='/api/parent/studio'&&method==='PUT'){object(data,['preset','expectedRevision']);return json(res,200,store.saveStudio(data.preset,data.expectedRevision));}
           if(path==='/api/purchase'&&method==='POST'){object(data,['rewardId','idempotencyKey','expectedCost']);return json(res,200,store.purchase(data));}
           if(path==='/api/unequip'&&method==='POST'){object(data,['slot']);return json(res,200,store.unequip(data.slot));}

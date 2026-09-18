@@ -76,6 +76,8 @@ try {
     childName: '测试小朋友',
     petName: '小橘',
   })) await parent.locator(`#setup-form [name="${name}"]`).fill(value);
+  await parent.locator('#setup-form [name=age]').selectOption('6');
+  await parent.locator('#setup-form [name=mode]').selectOption('school_basic');
   await parent.locator('#setup-form button[type=submit]').click();
   await parent.locator('#workspace').waitFor({ state: 'visible' });
 

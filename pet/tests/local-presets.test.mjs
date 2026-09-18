@@ -129,7 +129,7 @@ test('HTTP：磁盘重启与新浏览器登录后仍能查看理由、预设和�
       const result = await response.json(); return { status:response.status, data:result, cookie:response.headers.get('set-cookie')?.split(';')[0], csrf:result.csrf };
     };
     await start();
-    parent = await req('/api/parent/setup', { setupToken:app.setupToken, pin:'864209', childCode:'2468', childName:'本地测试', petName:'小橘' });
+    parent = await req('/api/parent/setup', { setupToken:app.setupToken,age:6,mode:'school_basic',timeZone:'Asia/Shanghai', pin:'864209', childCode:'2468', childName:'本地测试', petName:'小橘' });
     child = await req('/api/child/login', { code:'2468' });
     assert.equal((await req('/api/parent/points', { delta:10, idempotencyKey:randomUUID() })).status, 400);
     assert.equal((await req('/api/parent/points', grant('自己收好了玩具', 60))).status, 200);

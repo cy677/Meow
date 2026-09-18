@@ -1,3 +1,4 @@
+import { createGrowthStore } from './growthStore.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { fail, text, integer, validateCatalog, composeParams } from './catalog.mjs';
@@ -51,6 +52,7 @@ export function createStore(filename, initialCatalog) {
     }
   };
   tx(grantMilestones);
+  const growth = createGrowthStore({db,tx,mutate,bump,log,getSetting,setSetting,snapshot});
   function snapshot(parent=false) {
     const profile=db.prepare('SELECT childName,petName,balance,lifetime,version FROM profile WHERE id=1').get();
     const owned=db.prepare('SELECT id FROM owned').all().map(r=>r.id);
@@ -58,7 +60,7 @@ export function createStore(filename, initialCatalog) {
     const config=catalog();
     const active=config.rewards.find(r=>r.category==='creation'&&r.id===equipped.creation&&owned.includes(r.id));
     const hidden=mysteryRewardIds(config.rewards.map(r=>({...r,menuOnly:isMenuOnly(r)})),owned);
-    return { ...profile, owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
+    return { ...profile, growthProfile:growth.profile(), owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
       rewards:config.rewards.map(r => {
         const {params,action,motion,preset,...publicData}=r;
         if(!parent&&hidden.has(r.id))return {id:r.id,category:r.category,title:'???',description:'解锁前面的奖励后揭晓',mystery:true,menuOnly:false,owned:false,equipped:false};
@@ -97,7 +99,7 @@ export function createStore(filename, initialCatalog) {
     return snapshot(true);
   }
   return {
-    db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting,
+    db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting, growth,
     studio(parent=false) {
       const state=snapshot(parent),access=upstreamAccess(catalog(),state.owned);
       const saved=JSON.parse(getSetting('studioPreset')||'{}');
@@ -112,6 +114,17 @@ export function createStore(filename, initialCatalog) {
         log('catalog',0,'家长保存了原版完整参数方案');
       });
       return this.studio(true);
+    },
+    installGrowthReward() {
+      if(getSetting('growthRewardVersion')==='1')return;
+      tx(()=>{
+        const next=catalog();
+        if(!next.rewards.some(r=>r.id==='growth-eyes-mint')){
+          next.rewards.unshift({id:'growth-eyes-mint',title:'薄荷小眼睛',description:'2枚喵币的小礼物，换一双柔和的薄荷色眼睛。',category:'eyes',cost:2,unlockAt:0,params:{eyeColor:'#8cb7a1'}});
+          setSetting('catalog',JSON.stringify(validateCatalog(next)));
+        }
+        setSetting('growthRewardVersion','1');bump();
+      });
     },
     installUpstreamRewards() {
       if(getSetting('upstreamRewardsVersion')==='2')return;
@@ -213,7 +226,7 @@ export function createStore(filename, initialCatalog) {
       if (index < 0) next.rewards.push(reward); else next.rewards[index] = reward;
       return saveCatalog(next, expectedRevision);
     },
-    exportData() { return {schemaVersion:1,exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),studioPreset:JSON.parse(getSetting('studioPreset')||'{}'),ledger:ledger.all()}; },
+    exportData() { return {schemaVersion:2,growth:growth.exportData(),exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),studioPreset:JSON.parse(getSetting('studioPreset')||'{}'),ledger:ledger.all()}; },
     close() { db.close(); }
   };
 }
