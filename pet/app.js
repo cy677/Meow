@@ -1,3 +1,4 @@
+import {createGrowthUI,attachAgeModeFields} from './growthUI.js';
 import './style.css';
 import {CATEGORY_LABELS} from './presetSchema.mjs';
 import {SCENE_SLOTS} from './environmentSchema.mjs';
@@ -15,6 +16,7 @@ const el=(tag,cls,content)=>{const e=document.createElement(tag);if(cls)e.classN
 const labels=CATEGORY_LABELS;
 const icons={coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',creation:'✿',capability:'✧',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
 const uid=()=>Array.from(crypto.getRandomValues(new Uint8Array(20)),n=>n.toString(16).padStart(2,'0')).join('');
+let growthUI=null,setupAge=null;
 let state=null,csrf='',scene=null,sceneLoading=null,category='all',view='shop',catalog=null,online=true,selectedReward=null,toastTimer,catalogRevision='',presetEditor=null,historyView=null,childOverlay=null,rewardPageIndex=0,rewardRenderKey='';
 const operationKeys=new Map();
 function keyFor(intent){if(!operationKeys.has(intent))operationKeys.set(intent,uid());return operationKeys.get(intent);}
@@ -34,10 +36,10 @@ async function run(button,work){
   try{await work();}catch(error){toast(error.message,true);if(error.status===401&&csrf)lock();}
   finally{if(button){delete button.dataset.busy;button.disabled=false;}}
 }
-function lock(){csrf='';state=null;childOverlay?.close();scene?.dispose();scene=null;sceneLoading=null;document.body.classList.remove('child-active');rewardRenderKey='';presetEditor?.close();historyView?.reset();$('#purchase-dialog')?.close();$('#auth').hidden=false;$('#workspace').hidden=true;$('#login-form').reset();$('#code').focus();}
+function lock(){csrf='';state=null;growthUI?.reset();childOverlay?.close();scene?.dispose();scene=null;sceneLoading=null;document.body.classList.remove('child-active');rewardRenderKey='';presetEditor?.close();historyView?.reset();$('#purchase-dialog')?.close();$('#auth').hidden=false;$('#workspace').hidden=true;$('#login-form').reset();$('#code').focus();}
 function download(name,data){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function button(text,action,cls='button'){const b=el('button',cls,text);b.type='button';b.dataset.action=action;return b;}
-function statMarkup(){return `<div class="stat"><span>可兑换积分</span><strong id="balance">0</strong><small>兑换只使用这里的积分</small></div><div class="stat growth"><span>累计成长积分</span><strong id="lifetime">0</strong><small>不会因为兑换而减少</small></div><div class="stat"><span>已收集奖励</span><strong id="owned-count">0</strong><small>解锁后可以一直使用</small></div>`;}
+function statMarkup(){return `<div class="stat"><span>喵币余额</span><strong id="balance">0</strong><small>兑换只使用喵币余额</small></div><div class="stat growth"><span>累计成长经验</span><strong id="lifetime">0</strong><small>不会因为兑换而减少</small></div><div class="stat"><span>已收集奖励</span><strong id="owned-count">0</strong><small>解锁后可以一直使用</small></div>`;}
 $('#app').innerHTML=`
 <header class="topbar"><a class="brand" href="./"><span class="brand-mark" aria-hidden="true">m.</span><span>Meow<small>每一点努力，都被看见</small></span></a><div class="top-actions"><span class="role-label">${parent?'家长管理':'我的积分小猫'}</span><a href="${parent?'./':'./parent.html'}">${parent?'孩子页面 ↗':'家长入口'}</a></div></header>
 <section id="auth" class="auth-card"><span class="eyebrow">${parent?'PARENT SPACE':'MY LITTLE COMPANION'}</span><h1>${parent?'记录孩子的小小进步':'你好，小伙伴'}</h1><p id="auth-description">${parent?'家长密码只交给大人保管。离开前请锁定页面。':'输入家长给你的进入码，看看小猫的新本领吧。'}</p>
@@ -46,14 +48,16 @@ $('#app').innerHTML=`
 <main id="workspace" hidden>${parent?`<div class="page-heading"><div><span class="eyebrow">${parent?'GROW TOGETHER':'A LITTLE BETTER, EVERY DAY'}</span><h1 id="greeting"></h1><p>${parent?'把值得鼓励的事情记下来，让努力变成看得见的成长。':'慢慢积累，慢慢长大。你的每一份努力，小猫都记得。'}</p></div><button type="button" class="button quiet" data-action="logout">${parent?'锁定家长页面':'退出'}</button></div><p id="network" class="network" role="status" hidden>暂时没有连接到服务，正在重连。积分以服务端记录为准。</p><div class="stats">${statMarkup()}</div>
 `:""}
 ${parent?`<nav class="section-tabs" aria-label="家长功能"><button type="button" data-parent-tab="award" aria-selected="true">日常加分</button><button type="button" data-parent-tab="catalog">奖励预设</button><button type="button" data-parent-tab="settings">记录与设置</button></nav>
-<section id="panel-award" class="parent-grid"><article class="panel"><span class="eyebrow">NOTICE THE GOOD</span><h2>今天，有什么值得鼓励？</h2><form id="points-form"><label>加分理由（必填）<input name="reason" id="reason" maxlength="120" required placeholder="例如：自己整理好了书包"></label><div class="quick-reasons"><button type="button" data-reason="认真阅读">认真阅读</button><button type="button" data-reason="自主整理">自主整理</button><button type="button" data-reason="坚持运动">坚持运动</button><button type="button" data-reason="友善合作">友善合作</button></div><label>增加积分<input name="delta" id="delta" type="number" min="-10000" max="10000" step="1" value="5" required></label><div class="point-options"><button type="button" data-points="5">+5</button><button type="button" data-points="10">+10</button><button type="button" data-points="20">+20</button></div><p class="note">只奖励已完成的事情。误记时可填负数更正余额；成长积分和已有奖励不会被收回。</p><button id="award-submit" type="submit" class="button primary">确认记录积分</button></form></article><article class="panel"><div class="panel-title"><h2>积分理由与兑换记录</h2><span class="subtle">本地完整记录</span></div><div id="ledger"></div></article></section>
+<section id="panel-award" class="parent-grid"><article class="panel"><span class="eyebrow">NOTICE THE GOOD</span><h2>今天，有什么值得鼓励？</h2><div id="growth-award-mount"></div></article><article class="panel"><div class="panel-title"><h2>积分理由与兑换记录</h2><span class="subtle">本地完整记录</span></div><div id="ledger"></div></article></section>
 <section id="panel-catalog" class="panel" hidden><div class="panel-title"><div><h2>设计属于你们的小猫奖励</h2><p>直接调节花色、体型、眼睛、姿态与互动参数，预览后保存到本地。兑换消耗为 0 时，达到解锁积分后自动获得。</p></div></div><div class="toolbar"><button class="button primary" type="button" data-action="new-preset">新增奖励预设</button><button class="button" type="button" data-action="save-catalog">保存价格与门槛</button><button class="button" type="button" data-action="export-catalog">导出预设 JSON</button><label class="button file-button">导入预设 JSON<input id="catalog-file" type="file" accept="application/json,.json"></label></div><div id="catalog-stale" class="catalog-stale" hidden><p>目录已有新版本，当前未保存的表格修改仍保留。</p><button type="button" class="button small" data-action="reload-catalog">重新读取目录</button></div><p id="catalog-dirty" class="note" hidden>有尚未保存的奖励设置。</p><div class="table-scroll"><table class="catalog-table"><thead><tr><th>奖励</th><th>类别</th><th>兑换价格</th><th>解锁积分</th><th>参数预设</th></tr></thead><tbody id="catalog-body"></tbody></table></div><p class="note">点击“调参数”修改预设，也可以复制成新奖励；所有保存写入本地数据库。已有奖励的 ID、类别和初始标记不能改变。JSON 导入导出作为可选的批量配置工具。</p></section>
 <section id="panel-settings" hidden><div class="local-storage"><strong>本地数据保存位置</strong><p><code id="local-data-path">正在读取…</code></p><p id="local-data-info"></p><p>积分、加分理由、兑换内容和参数预设都保存在运行服务的电脑，不上传 GitHub 或云端。关闭页面、清理浏览器数据不会删除此文件。备份前请停止服务并复制整个数据目录。</p></div><div class="parent-grid"><article class="panel"><h2>我们的小档案</h2><form id="profile-form"><label>孩子昵称<input name="childName" maxlength="20" required></label><label>小猫名字<input name="petName" maxlength="20" required></label><button class="button primary" type="submit">保存名字</button></form><hr><h3>导出成长记录</h3><p class="note">导出包含全部积分流水、当前装扮和奖励设置，不包含密码。这是可查阅的记录，不是自动恢复文件。</p><button class="button" type="button" data-action="export-progress">下载成长记录 JSON</button></article><article class="panel"><h2>密码与进入码</h2><form id="password-form"><label>当前家长密码<input name="currentPin" type="password" inputmode="numeric" required autocomplete="current-password"></label><label>新家长密码（留空不改）<input name="newPin" type="password" inputmode="numeric" pattern="[0-9]{6,12}" autocomplete="new-password"></label><label>新孩子进入码（留空不改）<input name="childCode" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="off"></label><p class="note">修改密码会使对应角色的其他设备退出。家长登录在 15 分钟后自动锁定。</p><button type="submit" class="button primary">更新密码</button></form></article></div></section>`:
 childMarkup()}
 </main><footer class="site-footer">Meow · 一点点努力，一点点长大 <span>数据只保存在运行服务的电脑</span></footer>`;
 
 if(!parent)childOverlay=createChildOverlay({onOpen(nextView){if(nextView!==view){view=nextView;category='all';rewardPageIndex=0;}renderRewards();if(view==='history')historyView?.refresh();}});
-historyView=createHistoryView($('#ledger'),{api,parent,paginated:!parent,pageSize:parent?40:5,isActive:()=>parent||!!(childOverlay?.isOpen&&view==='history'),onError:error=>{toast(error.message,true);if(error.status===401&&csrf)lock();}});
+historyView=createHistoryView($('#ledger'),{api,parent,paginated:!parent,pageSize:parent?40:5,isActive:()=>parent||!!(childOverlay?.isOpen&&view==='history'),onError:error=>{toast(error.message,true);if(error.status===401&&csrf)lock();},onRecordAction:(record,kind,launcher)=>growthUI?.recordAction(record,kind,launcher)});
+setupAge=attachAgeModeFields($('#setup-form'));
+growthUI=createGrowthUI({api,parent,apply,notify:toast,onError:error=>{if(error.status===401&&csrf)lock();},onHistoryRefresh:()=>historyView?.reload()});
 if(parent){const link=el('a','button','生成奖励 / 参数面板');link.href='./studio.html?mode=parent';$('#panel-catalog .toolbar').prepend(link);}
 if(parent)presetEditor=createPresetEditor({api,onSaved:(next,nextCatalog)=>{
   catalog=nextCatalog;catalogRevision=next.catalogRevision;apply(next);renderCatalog();
@@ -132,7 +136,7 @@ function apply(next){
   const previous=state;state=next;online=true;$('#network').hidden=true;
   $('#balance').textContent=state.balance;$('#lifetime').textContent=state.lifetime;$('#owned-count').textContent=state.rewards.filter(r=>r.owned&&!r.menuOnly).length;
   $('#greeting').textContent=parent?`${state.childName}的成长小花园`:`${state.childName}，今天也很棒`;
-  renderLedger();
+  renderLedger();growthUI?.update(state);
   if(parent&&catalog&&next.catalogRevision!==catalogRevision)$('#catalog-stale').hidden=false;
   if(!parent){
     $('#pet-name').textContent=state.petName;
@@ -160,9 +164,8 @@ function renderCatalog(){
 }
 async function enter(result){csrf=result.csrf;if(!parent)document.body.classList.add('child-active');$('#auth').hidden=true;$('#workspace').hidden=false;$('#setup-form').hidden=true;$('#login-form').hidden=false;apply(result.state);if(parent){$('#profile-form').elements.childName.value=state.childName;$('#profile-form').elements.petName.value=state.petName;await reloadCatalog();await showStorage();}}
 $('#login-form').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{await enter(await api(`/api/${role}/login`,'POST',{code:$('#code').value}));$('#login-form').reset();});});
-$('#setup-form').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{await enter(await api('/api/parent/setup','POST',Object.fromEntries(new FormData(event.currentTarget))));$('#setup-form').reset();toast('已经准备好啦。把孩子进入码告诉孩子，家长密码请自己保管。');});});
+$('#setup-form').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{await enter(await api('/api/parent/setup','POST',{...Object.fromEntries(new FormData(event.currentTarget)),...setupAge.read()}));$('#setup-form').reset();setupAge.reset();toast('已经准备好啦。把孩子进入码告诉孩子，家长密码请自己保管。');});});
 if(parent){
-  $('#points-form').addEventListener('submit',event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));data.delta=Number(data.delta);data.reason=data.reason.trim();if(!data.reason){toast('请填写加分理由，不能只输入空格',true);$('#reason').focus();return;}const intent=JSON.stringify(data);data.idempotencyKey=keyFor(intent);run(event.submitter,async()=>{apply(await api('/api/parent/points','POST',data));operationKeys.delete(intent);toast(data.delta>0?`已记录 ${data.delta} 积分，孩子页面会自动更新`:'余额更正已记录');$('#reason').value='';});});
   $('#profile-form').addEventListener('submit',event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));run(event.submitter,async()=>{apply(await api('/api/parent/profile','PUT',data));toast('名字已保存');});});
   $('#password-form').addEventListener('submit',event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));run(event.submitter,async()=>{const result=await api('/api/parent/credentials','PUT',data);csrf=result.csrf;$('#password-form').reset();toast('密码已更新，对应角色的其他设备需要重新登录');});});
   $('#catalog-body').addEventListener('input',()=>$('#catalog-dirty').hidden=false);

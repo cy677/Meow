@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { fail, integer, text } from './catalog.mjs';
+import { categoryOf } from './growthCatalog.mjs';
 
 /** Append-only local history. Migrate v1 without dropping tables or inventing old snapshots. */
 export function createLocalLedger(db, getCatalog) {
@@ -8,26 +9,36 @@ export function createLocalLedger(db, getCatalog) {
     if (!db.prepare('PRAGMA table_info(ledger)').all().some(c => c.name === 'rewardSnapshot')) {
       db.exec('ALTER TABLE ledger ADD COLUMN rewardSnapshot TEXT');
     }
+    for (const name of ['growthCategory','growthSnapshot','taskId','occurredAt','awardDay']) {
+      if (!db.prepare('PRAGMA table_info(ledger)').all().some(c => c.name === name)) db.exec(`ALTER TABLE ledger ADD COLUMN ${name} TEXT`);
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS ledger_growth_idx ON ledger(taskId,awardDay); CREATE INDEX IF NOT EXISTS ledger_category_idx ON ledger(growthCategory,awardDay)');
     db.exec('CREATE INDEX IF NOT EXISTS ledger_kind_idx ON ledger(kind)');
     db.exec('COMMIT');
   } catch (error) { db.exec('ROLLBACK'); throw error; }
-  const decode = row => ({ ...row, rewardSnapshot: row.rewardSnapshot ? JSON.parse(row.rewardSnapshot) : null });
-  const write = db.prepare('INSERT INTO ledger (id,kind,delta,reason,rewardId,createdAt,rewardSnapshot) VALUES (?,?,?,?,?,?,?)');
+  const decode = row => ({ ...row, rewardSnapshot: row.rewardSnapshot ? JSON.parse(row.rewardSnapshot) : null, growthSnapshot: row.growthSnapshot ? JSON.parse(row.growthSnapshot) : null });
+  const write = db.prepare('INSERT INTO ledger (id,kind,delta,reason,rewardId,createdAt,rewardSnapshot,growthCategory,growthSnapshot,taskId,occurredAt,awardDay) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
   return {
-    log(kind, delta, reason, rewardId = null) {
+    log(kind, delta, reason, rewardId = null, growth = {}) {
       const reward = rewardId ? getCatalog().rewards.find(r => r.id === rewardId) : null;
       const snapshot=reward?structuredClone(reward):null;
       if(snapshot?.category==='theme')snapshot.memberSnapshots=Object.values(snapshot.params.members).map(id=>structuredClone(getCatalog().rewards.find(r=>r.id===id)));
-      write.run(randomUUID(), kind, delta, reason, rewardId, new Date().toISOString(), snapshot ? JSON.stringify(snapshot) : null);
+      const id = randomUUID();
+      write.run(id, kind, delta, reason, rewardId, new Date().toISOString(), snapshot ? JSON.stringify(snapshot) : null, growth.growthCategory??null, growth.growthSnapshot?JSON.stringify(growth.growthSnapshot):null, growth.taskId??null, growth.occurredAt??null, growth.awardDay??null);
+      return id;
     },
     latest() { return db.prepare('SELECT * FROM ledger ORDER BY rowid DESC LIMIT 100').all().map(decode); },
     all() { return db.prepare('SELECT * FROM ledger ORDER BY rowid').all().map(decode); },
-    history({ before = null, limit = 40, kind = 'all', q = '' } = {}) {
+    history({ before = null, limit = 40, kind = 'all', q = '', category = 'all' } = {}) {
       integer(limit, '每页条数', 1, 100);
       if (before !== null) integer(before, '记录游标', 1, Number.MAX_SAFE_INTEGER);
-      if (!['all', 'earn', 'adjustment', 'purchase', 'gift', 'catalog'].includes(kind)) fail(400, '记录类型无效');
+      if (!['all', 'earn', 'adjustment', 'purchase', 'gift', 'catalog', 'observation'].includes(kind)) fail(400, '记录类型无效');
       q = text(q, '查询文字', 120, 0);
       const clauses = [], values = [];
+      if (category !== 'all') {
+        if (category === 'unclassified') clauses.push("growthCategory IS NULL AND kind IN ('earn','observation')");
+        else { if (!categoryOf(category)) fail(400,'成长分类无效'); clauses.push('growthCategory=?'); values.push(category); }
+      }
       if (kind !== 'all') { clauses.push('kind=?'); values.push(kind); }
       // Literal substring search: quotes, % and _ are not treated as SQL or wildcard operators.
       if (q) { clauses.push('instr(lower(reason),lower(?))>0'); values.push(q); }

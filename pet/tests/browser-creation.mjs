@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createPetServer } from '../server.mjs';
 
@@ -22,12 +22,24 @@ const parent = await parentContext.newPage();
 const child = await childContext.newPage();
 const errors = [];
 const external = [];
+const failedRequests = [];
+const checks = [];
+const mark = message => { checks.push(message); console.log('PASS', message); };
+await child.addInitScript(() => {
+  window.__homeMessages = [];
+  window.addEventListener('message', event => {
+    if (typeof event.data?.type === 'string' && event.data.type.startsWith('meow:')) {
+      window.__homeMessages.push({type:event.data.type, origin:event.origin, sourceMatched:event.source === document.querySelector('#pet-scene iframe')?.contentWindow});
+    }
+  });
+});
 for (const page of [parent, child]) {
   page.setDefaultTimeout(60000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
     if (message.type() === 'error' && !/\/api\/(?:child|parent)\/session$/.test(message.location().url)) errors.push(message.text());
   });
+  page.on('requestfailed', request => failedRequests.push({url:request.url(),error:request.failure()?.errorText}));
   page.on('request', request => {
     if (/^https?:/.test(request.url()) && !request.url().startsWith(origin + '/')) external.push(request.url());
   });
@@ -76,6 +88,8 @@ try {
     childName: '测试小朋友',
     petName: '小橘',
   })) await parent.locator(`#setup-form [name="${name}"]`).fill(value);
+  await parent.locator('#setup-form [name=age]').selectOption('6');
+  await parent.locator('#setup-form [name=mode]').selectOption('school_basic');
   await parent.locator('#setup-form button[type=submit]').click();
   await parent.locator('#workspace').waitFor({ state: 'visible' });
 
@@ -116,11 +130,19 @@ try {
   await parent.locator('.studio-bar [role=status]').filter({ hasText: '草稿已保存' }).waitFor();
   assert.equal(app.store.studio(false).preset && Object.keys(app.store.studio(false).preset).length, 0, 'draft is not sent to child');
   await screenshot(parent, 'luna-creation-parent');
+  mark('Parent creation saved; separate draft does not change child state');
+  // Finish the parent workflow through its visible navigation before opening the
+  // child's renderer. Two software-rendered studios otherwise contend for the CI GPU.
+  await parent.getByRole('link', {name:'返回家长页', exact:true}).click();
+  await parent.locator('#workspace').waitFor({state:'visible'});
+  assert.equal(app.store.snapshot().creation, null, 'returning does not equip the parent draft');
 
   await child.goto(origin + '/');
   await child.locator('#code').fill('2468');
   await child.locator('#login-form button').click();
-  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.bringToFront();
+  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
+  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
   let home = child.frame({ url: /studio\.html\?embedded=1/ });
   await home.locator('#initial-loader').waitFor({ state: 'hidden' });
   assert.equal(app.store.snapshot().creation, null);
@@ -129,6 +151,18 @@ try {
   assert.equal(await child.locator('[data-feature=random]').count(), 0, 'child menu has no random entry');
   assert.equal(await home.locator('body.studio-child #panel').isVisible(), false, 'child studio hides the parameter panel');
   assert.equal(await home.locator('#btn-random').isDisabled(), true, 'child random control is disabled in source runtime');
+
+  mark('Child native iframe ready; saved draft remains private');
+  // Reopen the actual app repeatedly; readiness must not depend on late chunk loading.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await child.reload();
+    await child.locator('#pet-scene[data-ready=true]').waitFor({state:'attached'});
+    await child.locator('#pet-scene iframe').waitFor({state:'visible'});
+    home = child.frame({url:/studio\.html\?embedded=1/});
+    assert.equal(await home.evaluate(() => document.body.dataset.studioReady), 'true');
+    assert.equal(await home.evaluate(() => typeof window.meowHome?.applyState), 'function');
+  }
+  mark('Three consecutive native homepage reloads complete');
 
   // Free original menu features remain reachable with zero points.
   const balanceBefore = app.store.snapshot().balance;
@@ -150,6 +184,8 @@ try {
   await home.locator('body.studio-weather-open').waitFor();
   assert.equal(app.store.snapshot().balance, balanceBefore, 'free original features do not spend points');
 
+  mark('Free original capture, GLB, Codex, music, lighting and weather');
+
   // The first page exposes the first two unowned rewards; later unowned rewards are mystery cards.
   const stateResponse = await childContext.request.get(origin + '/api/state');
   assert.equal(stateResponse.status(), 200);
@@ -169,6 +205,8 @@ try {
   await screenshot(child, 'luna-mystery-first-page');
   await closeRewards();
 
+  mark('Shop mystery cards preserve configured reveal order');
+
   // Category filtering and pagination keep the same catalogue-wide mystery decision.
   await openRewards();
   const categoryButton = child.locator(`[data-action=category][data-category="${hiddenReward.category}"]`);
@@ -184,12 +222,15 @@ try {
   app.store.points({ delta: 10000, reason: '浏览器临时验证积分', idempotencyKey: key() });
   app.store.purchase({ rewardId: hiddenCatalogReward.id, expectedCost: hiddenCatalogReward.cost, idempotencyKey: key() });
   await child.reload();
-  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
+  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
   await openRewards();
   await child.locator('[data-view=owned]').click();
   const ownedCard = await revealReward(hiddenReward.id);
   assert.notEqual(await ownedCard.locator('h3').innerText(), '???', 'owned reward stays visible');
   await closeRewards();
+
+  mark('Category/pagination privacy and owned collection');
 
   // Reveal the saved creation by owning the earlier catalogue entries, then equip its fixed preset.
   const creationIndex = app.store.catalog().rewards.findIndex(reward => reward.id === creation.id);
@@ -199,7 +240,8 @@ try {
     app.store.purchase({ rewardId: reward.id, expectedCost: reward.cost, idempotencyKey: key() });
   }
   await child.reload();
-  await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
+  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
   home = child.frame({ url: /studio\.html\?embedded=1/ });
   await home.locator('#initial-loader').waitFor({ state: 'hidden' });
   await openRewards();
@@ -215,6 +257,8 @@ try {
   assert.deepEqual(app.store.snapshot().creation.preset.params.pose, creation.preset.params.pose, 'child receives the saved creation snapshot');
   await screenshot(child, 'luna-creation-child');
 
+  mark('Purchased fixed creation equips without regenerating');
+
   // Direct child studio keeps the original action canvas and touch controls while hiding editing UI.
   await child.goto(origin + '/studio.html');
   await child.locator('body[data-studio-ready="true"]').waitFor();
@@ -224,10 +268,25 @@ try {
   assert.equal(await child.locator('.studio-pad button').count(), 7);
   await screenshot(child, 'luna-child-studio-locked');
 
+  mark('Direct child studio editing lock and touch controls');
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
+  writeFileSync(new URL('creation-browser-report.json', out), JSON.stringify({ok:true,checks,errors,external,failedRequests}, null, 2));
   console.log('PASS: parent-only random/parameters; fixed creation save and draft isolation; child mystery cards across category/pagination; owned reveal; free capture/GLB/Codex/music/light/weather; child creation equip; direct child studio lock; no external requests.');
 } catch (error) {
+  const frames = [];
+  for (const frame of child.frames()) {
+    const detail = await frame.evaluate(() => ({
+      url:location.href, visibility:document.visibilityState, studioReady:document.body?.dataset.studioReady,
+      runtimeReady:!!window.meowHome, loader:document.getElementById('initial-loader')?.outerHTML,
+      host:document.getElementById('pet-scene')?.outerHTML, status:document.querySelector('.studio-bar [role=status]')?.textContent,
+      messages:window.__homeMessages,
+    })).catch(e => ({error:e.message}));
+    frames.push(detail);
+  }
+  const report = {ok:false,checks,errors,external,failedRequests,frames,error:error.stack};
+  writeFileSync(new URL('creation-browser-report.json', out), JSON.stringify(report, null, 2));
+  console.error('CREATION DIAGNOSTICS', JSON.stringify(report));
   await screenshot(parent, 'luna-creation-failure-parent').catch(() => {});
   await screenshot(child, 'luna-creation-failure-child').catch(() => {});
   throw error;
