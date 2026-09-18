@@ -5,6 +5,8 @@ import { createLocalLedger } from './localLedger.mjs';
 import { SCENE_SLOTS, composeScene } from './environmentSchema.mjs';
 import { SCENE_CATALOG_ADDITIONS } from './environmentRewards.mjs';
 import { resolve } from 'node:path';
+import { missingUpstreamRewards, upstreamAccess } from './upstreamRewards.mjs';
+import { validateStudio } from './studioSchema.mjs';
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
 export function createStore(filename, initialCatalog) {
@@ -30,8 +32,10 @@ export function createStore(filename, initialCatalog) {
   const log = ledger.log;
   const catalogRevision = () => createHash('sha256').update(JSON.stringify(catalog())).digest('hex');
   const grantMembers = reward => {
-    if(reward.category!=='theme')return;
-    for(const id of Object.values(reward.params.members)){
+    const complete=reward.category==='capability'&&reward.params.capability==='complete';
+    if(reward.category!=='theme'&&!complete)return;
+    const members=complete?catalog().rewards.map(r=>r.id):Object.values(reward.params.members);
+    for(const id of members){
       const result=db.prepare('INSERT OR IGNORE INTO owned VALUES (?,?)').run(id,new Date().toISOString());
       if(result.changes)log('gift',0,`套装物品：${reward.title}`,id);
     }
@@ -89,6 +93,28 @@ export function createStore(filename, initialCatalog) {
   }
   return {
     db, tx, catalog, catalogRevision, snapshot, getSetting, setSetting,
+    studio(parent=false) {
+      const state=snapshot(parent),access=upstreamAccess(catalog(),state.owned);
+      const saved=JSON.parse(getSetting('studioPreset')||'{}');
+      return {state,access:parent?{...access,full:true}:access,preset:parent||access.full?saved:{},revision:getSetting('studioRevision')||'0'};
+    },
+    saveStudio(preset,expectedRevision) {
+      const next=validateStudio(preset);
+      tx(()=>{
+        if(expectedRevision!==(getSetting('studioRevision')||'0'))fail(409,'原版方案已在其他页面修改，请重新载入后保存');
+        setSetting('studioPreset',JSON.stringify(next));setSetting('studioRevision',randomUUID());bump();
+        log('catalog',0,'家长保存了原版完整参数方案');
+      });
+      return this.studio(true);
+    },
+    installUpstreamRewards() {
+      if(getSetting('upstreamRewardsVersion')==='1')return;
+      tx(()=>{
+        const next=catalog();next.rewards.push(...missingUpstreamRewards(next));
+        setSetting('catalog',JSON.stringify(validateCatalog(next)));grantMilestones();
+        setSetting('upstreamRewardsVersion','1');bump();log('catalog',0,'本地升级：补齐原版花色、姿态、眼睛、动作与完整创作室');
+      });
+    },
     history: ledger.history,
     installSceneRewards() {
       // One-time transaction. Never reset existing prices, ownership, history or appearance.
@@ -150,6 +176,7 @@ export function createStore(filename, initialCatalog) {
         const reward=catalog().rewards.find(r=>r.id===rewardId);
         if (!reward || !db.prepare('SELECT id FROM owned WHERE id=?').get(rewardId)) fail(403,'尚未拥有这个奖励');
         if (reward.category==='trick') fail(400,'互动动作请使用播放接口');
+        if (reward.category==='capability') fail(400,'原版功能请进入原版互动页面使用');
         if(reward.category==='theme'){
           for(const [slot,id]of Object.entries(reward.params.members)){
             if(!db.prepare('SELECT id FROM owned WHERE id=?').get(id))fail(409,'套装成员拥有权不完整');
@@ -178,7 +205,7 @@ export function createStore(filename, initialCatalog) {
       if (index < 0) next.rewards.push(reward); else next.rewards[index] = reward;
       return saveCatalog(next, expectedRevision);
     },
-    exportData() { return {schemaVersion:1,exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),ledger:ledger.all()}; },
+    exportData() { return {schemaVersion:1,exportedAt:new Date().toISOString(),profile:snapshot(true),catalog:catalog(),studioPreset:JSON.parse(getSetting('studioPreset')||'{}'),ledger:ledger.all()}; },
     close() { db.close(); }
   };
 }

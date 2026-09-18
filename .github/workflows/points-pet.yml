@@ -1,7 +1,7 @@
 name: Points pet checks
 on:
   push:
-    branches: ['feature/points-pet-*']
+    branches: ['main', 'feature/points-pet-*']
   pull_request:
     paths: ['pet/**', 'package.json', '.github/workflows/points-pet.yml']
   workflow_dispatch:

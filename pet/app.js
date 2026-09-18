@@ -12,7 +12,7 @@ const role=parent?'parent':'child';
 const $=selector=>document.querySelector(selector);
 const el=(tag,cls,content)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(content!==undefined)e.textContent=content;return e;};
 const labels=CATEGORY_LABELS;
-const icons={coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
+const icons={coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',capability:'✧',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
 const uid=()=>Array.from(crypto.getRandomValues(new Uint8Array(20)),n=>n.toString(16).padStart(2,'0')).join('');
 let state=null,csrf='',scene=null,sceneLoading=null,category='all',view='shop',catalog=null,online=true,selectedReward=null,toastTimer,catalogRevision='',presetEditor=null,historyView=null,childOverlay=null,rewardPageIndex=0,rewardRenderKey='';
 const operationKeys=new Map();
@@ -53,6 +53,7 @@ childMarkup()}
 
 if(!parent)childOverlay=createChildOverlay({onOpen(nextView){if(nextView!==view){view=nextView;category='all';rewardPageIndex=0;}renderRewards();if(view==='history')historyView?.refresh();}});
 historyView=createHistoryView($('#ledger'),{api,parent,paginated:!parent,pageSize:parent?40:5,isActive:()=>parent||!!(childOverlay?.isOpen&&view==='history'),onError:error=>{toast(error.message,true);if(error.status===401&&csrf)lock();}});
+if(parent){const link=el('a','button','原版完整参数');link.href='./studio.html?mode=parent';$('#panel-catalog .toolbar').prepend(link);}
 if(parent)presetEditor=createPresetEditor({api,onSaved:(next,nextCatalog)=>{
   catalog=nextCatalog;catalogRevision=next.catalogRevision;apply(next);renderCatalog();
   $('#catalog-dirty').hidden=true;$('#catalog-stale').hidden=true;toast('预设已保存到本地，孩子页面会自动更新');
@@ -103,6 +104,7 @@ function renderRewards(){
     if(reward.owned){
       const canRemove=SCENE_SLOTS.includes(reward.category)&&reward.equipped&&!reward.starter;
       b=button(canRemove?'卸下':reward.category==='trick'?'玩一下':reward.equipped?'正在使用':reward.category==='theme'?'应用整套':'换上它',canRemove?'unequip':reward.category==='trick'?'play':'equip','button small');
+      if(reward.category==='capability'){b.textContent='进入原版互动';b.dataset.action='studio';}
       b.dataset.slot=reward.category;b.disabled=(!canRemove&&reward.equipped)||!online;
     }
     else if(!reward.eligible){b=button(`还差 ${reward.unlockAt-state.lifetime} 成长分`,'purchase','button small');b.disabled=true;}
@@ -182,6 +184,7 @@ document.addEventListener('click',event=>{
     if(action==='reload-catalog'){if(allowTableDiscard())await reloadCatalog();}
     if(action==='logout'){await api(`/api/${role}/logout`,'POST',{});lock();}
     if(action==='unequip'){apply(await api('/api/unequip','POST',{slot:b.dataset.slot}));childOverlay.close();toast('已卸下场景物品，拥有权仍然保留');}
+    if(action==='studio'){location.href='./studio.html';return;}
     if(action==='equip'){apply(await api('/api/equip','POST',{rewardId:b.dataset.id}));childOverlay.close();toast('已经应用，回到小猫看看吧');}
     if(action==='play'){const result=await api('/api/play','POST',{rewardId:b.dataset.id});await updateScene();if(!scene)throw new Error('三维小猫尚未准备好，请刷新后重试');childOverlay.close();scene.play(result.action,result.motion);toast(matchMedia('(prefers-reduced-motion: reduce)').matches?'小猫完成了互动（已遵循减少动态效果设置）':'小猫来表演啦');}
     if(action==='confirm-purchase'){const reward=selectedReward;if(!reward)return;const intent=`purchase:${reward.id}:${reward.cost}`;apply(await api('/api/purchase','POST',{rewardId:reward.id,expectedCost:reward.cost,idempotencyKey:keyFor(intent)}));operationKeys.delete(intent);$('#purchase-dialog').close();toast(`已经收藏「${reward.title}」，去试试看吧`);}

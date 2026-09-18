@@ -27,6 +27,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true,mode:0o700});
   const store=createStore(dbPath,JSON.parse(readFileSync(catalogPath,'utf8')));
   store.installSceneRewards();
+  store.installUpstreamRewards();
   const db=store.db;
   const configured=()=>!!db.prepare("SELECT role FROM credentials WHERE role='parent'").get();
   let setupToken=configured()?null:random();
@@ -73,7 +74,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
     if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))fail(415,'仅接受 application/json');
     if(req.headers['x-meow-client']!=='points-pet')fail(403,'缺少客户端标识');
     let size=0;const chunks=[];
-    for await(const chunk of req){size+=chunk.length;if(size>131072)fail(413,'请求内容过大');chunks.push(chunk);}
+    for await(const chunk of req){size+=chunk.length;if(size>1048576)fail(413,'请求内容过大');chunks.push(chunk);}
     try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{fail(400,'JSON 格式不正确');}
   }
   const knownHosts=new Set(['localhost','127.0.0.1','[::1]',hostname().toLowerCase()]);
@@ -81,7 +82,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   for(const list of Object.values(networkInterfaces()))for(const item of list||[])knownHosts.add(item.address.includes(':')?`[${item.address}]`:item.address);
   let vite;
   if(dev){const {createServer}=await import('vite');vite=await createServer({configFile:resolve(here,'vite.config.mjs'),server:{middlewareMode:true},appType:'mpa'});}
-  const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'};
+  const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.mp3':'audio/mpeg','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'};
   const handler=async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
     res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=(), accelerometer=(self), gyroscope=(self), magnetometer=()');
@@ -93,6 +94,8 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
       catch{fail(403,'Host 不在允许列表');}
       if(req.headers.origin&&req.headers.origin!==expectedOrigin)fail(403,'不允许跨站请求');
       const path=new URL(req.url,expectedOrigin).pathname;
+      // Upstream controls use element style attributes; exports preview local Blob images.
+      if(!dev&&path==='/studio.html')res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
       const method=req.method;
       if(path.startsWith('/api/')) {
         if(method==='OPTIONS')fail(403,'不允许跨站调用');
@@ -130,6 +133,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         const parent=path.startsWith('/api/parent/');
         authorize(req,parent?'parent':'child',method!=='GET');
         if(method==='GET') {
+          if(path==='/api/studio'||path==='/api/parent/studio')return json(res,200,store.studio(parent));
           if(path==='/api/state'||path==='/api/parent/state')return json(res,200,store.snapshot(parent));
           if(path==='/api/pet/config'){const s=store.snapshot();return json(res,200,{version:s.version,params:s.params,sceneParams:s.sceneParams,equipped:s.equipped,actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))});}
           if(path==='/api/parent/catalog')return json(res,200,store.catalog());
@@ -144,6 +148,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
         if(method==='POST'||method==='PUT'){
           const data=await body(req);
           authorize(req,parent?'parent':'child',true);
+          if(path==='/api/parent/studio'&&method==='PUT'){object(data,['preset','expectedRevision']);return json(res,200,store.saveStudio(data.preset,data.expectedRevision));}
           if(path==='/api/purchase'&&method==='POST'){object(data,['rewardId','idempotencyKey','expectedCost']);return json(res,200,store.purchase(data));}
           if(path==='/api/unequip'&&method==='POST'){object(data,['slot']);return json(res,200,store.unequip(data.slot));}
           if(path==='/api/equip'&&method==='POST'){object(data,['rewardId']);return json(res,200,store.equip(data.rewardId));}

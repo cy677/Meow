@@ -4,10 +4,9 @@ import http from 'node:http';
 import {spawn, spawnSync} from 'node:child_process';
 import {mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, rmSync} from 'node:fs';
 import {createServer} from 'node:net';
-import {once} from 'node:events';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import {normalizePublicIp, launchOptions, accessUrls} from '../lan.mjs';
 import {createPetServer} from '../server.mjs';
@@ -17,7 +16,7 @@ const root=fileURLToPath(new URL('../../',import.meta.url));
 const base=JSON.parse(readFileSync(new URL('../rewards.json',import.meta.url)));
 function launcher(action,dataDir){
   return spawnSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',join(root,'scripts/pet-launcher.ps1'),'-Action',action],{
-    cwd:tmpdir(),encoding:'utf8',env:{...process.env,MEOW_DATA_DIR:dataDir,MEOW_PORT:'8792',MEOW_PUBLIC_IP:''}
+    cwd:tmpdir(),encoding:'utf8',timeout:10000,windowsHide:true,env:{...process.env,MEOW_DATA_DIR:dataDir,MEOW_PORT:'8792',MEOW_PUBLIC_IP:''}
   });
 }
 function request(port,headers={}){
@@ -25,6 +24,29 @@ function request(port,headers={}){
     const req=http.get({host:'127.0.0.1',port,path:'/api/status',headers},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});
     req.on('error',reject);
   });
+}
+async function waitForExit(child, timeout=1500){
+  if(child.exitCode!==null)return true;
+  return new Promise(resolve=>{
+    const finish=exited=>{clearTimeout(timer);child.off('exit',onExit);resolve(exited);};
+    const onExit=()=>finish(true);
+    const timer=setTimeout(()=>finish(false),timeout);
+    child.once('exit',onExit);
+  });
+}
+async function listenWhenFree(port, host='0.0.0.0', timeout=10000){
+  const deadline=Date.now()+timeout;
+  while(true){
+    const server=createServer();
+    try{
+      await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,resolve);});
+      return server;
+    }catch(error){
+      server.close();
+      if(error.code!=='EADDRINUSE'||Date.now()>=deadline)throw error;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+  }
 }
 
 test('external IP is explicit and canonical; startup URLs include it without changing local defaults',()=>{
@@ -84,8 +106,23 @@ test('Windows launcher starts on all interfaces, rejects a second instance and s
   t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const probe=createServer();await new Promise(r=>probe.listen(0,'0.0.0.0',r));
   const port=probe.address().port;await new Promise(r=>probe.close(r));
+  // Test-only preload requests the server's normal shutdown without depending
+  // on Windows process-tree enumeration. It never changes production code.
+  const stopPath=join(directory,'stop-test-server');
+  const preload=join(directory,'shutdown.mjs');
+  writeFileSync(preload,`import {existsSync} from 'node:fs';
+if (process.argv[1]?.replaceAll('\\\\','/').endsWith('/pet/server.mjs')) {
+  const timer=setInterval(()=>{
+    if(existsSync(${JSON.stringify(stopPath)})) {
+      clearInterval(timer);
+      process.emit('SIGTERM');
+    }
+  },100);
+  timer.unref();
+}
+`);
   const args=['-NoProfile','-ExecutionPolicy','Bypass','-File',join(root,'scripts/pet-launcher.ps1'),'-Action','start','-SkipFirewall','-NoBrowser'];
-  const env={...process.env,MEOW_DATA_DIR:directory,MEOW_PORT:String(port),MEOW_PUBLIC_IP:'203.0.113.27',MEOW_ORIGIN:'',MEOW_TLS_CERT:'',MEOW_TLS_KEY:''};
+  const env={...process.env,NODE_OPTIONS:`${process.env.NODE_OPTIONS||''} --import="${pathToFileURL(preload).href}"`,MEOW_DATA_DIR:directory,MEOW_PORT:String(port),MEOW_PUBLIC_IP:'203.0.113.27',MEOW_ORIGIN:'',MEOW_TLS_CERT:'',MEOW_TLS_KEY:''};
   const child=spawn('powershell.exe',args,{cwd:tmpdir(),env,windowsHide:true,stdio:['ignore','pipe','pipe']});
   try{
     await new Promise((resolve,reject)=>{
@@ -101,17 +138,23 @@ test('Windows launcher starts on all interfaces, rejects a second instance and s
     assert.equal(duplicate.status,1,'duplicate launch must fail without opening another service');
     assert.equal(launcher('reset',directory).status,1,'reset must refuse the running launcher');
   }finally{
+    writeFileSync(stopPath,'stop');
+    let exited=await waitForExit(child,6000);
     if(child.exitCode===null){
-      const stopped=once(child,'exit');
-      const stop=spawnSync('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{windowsHide:true,encoding:'utf8'});
-      assert.equal(stop.status,0,'stop only the process tree created by this test');
-      await stopped;
+      spawnSync('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{windowsHide:true,encoding:'utf8',timeout:3000});
+      exited=await waitForExit(child);
+      if(!exited){
+        child.kill('SIGTERM');
+        exited=await waitForExit(child);
+      }
     }
+    child.stdout?.destroy();child.stderr?.destroy();child.unref();
+    assert.ok(exited,'the launcher created by this test must exit');
   }
-  const released=createServer();await new Promise((resolve,reject)=>{released.once('error',reject);released.listen(port,'0.0.0.0',resolve);});
+  const released=await listenWhenFree(port);
   await new Promise(r=>released.close(r));
   const reset=launcher('reset',directory);assert.equal(reset.status,0,reset.stdout||reset.stderr);
   const backup=join(directory,'backups',readdirSync(join(directory,'backups'))[0],'pet.sqlite');
   const restored=createStore(backup,base);
-  try{assert.equal(restored.snapshot().balance,0);assert.equal(restored.catalog().rewards.length,68);}finally{restored.close();}
+  try{assert.equal(restored.snapshot().balance,0);assert.equal(restored.catalog().rewards.length,101);}finally{restored.close();}
 });

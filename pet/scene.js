@@ -6,6 +6,7 @@ import {DEFAULT_SCENE} from './environmentSchema.mjs';
 import './environment.css';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildCat } from '../src/catBuilder.js';
+import { pulsePoke, updatePokes, pokeOffsetAt } from '../src/softPoke.js';
 import { createSceneControls } from './sceneControls.js';
 import { createSkeletalPlayer } from './skeletalPlayer.js';
 import './motion.css';
@@ -90,7 +91,7 @@ export function createPetScene(host) {
   function buildEntry(params,rigged) {
     const inside=!rigged&&savedScene.bed.kind!=='none'&&savedScene.bed.kind!=='cushion'&&savedScene.bed.placement==='inside';
     const nest=inside?containerBuild(savedScene.bed,params):null;
-    const object=buildCat(nest?nest.catParams:{...params,pose:rigged?'standing':params.pose,motionDebug:rigged},'draft');
+    const object=buildCat(nest?nest.catParams:{...params,pose:rigged?'standing':params.pose,motionDebug:rigged},'full');
     if(nest){object.add(nest.mesh);object.userData.container=nest.mesh.userData.container;}
     object.userData.bindingPose=nest?'containerCrouch':rigged?'standing':params.pose;
     const box=new THREE.Box3().setFromObject(object),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
@@ -148,16 +149,30 @@ export function createPetScene(host) {
       const rect=renderer.domElement.getBoundingClientRect();
       pointer.set((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1);
       scene.updateMatrixWorld(true);raycaster.setFromCamera(pointer,viewCamera);
-      if(!raycaster.intersectObject(cat,true).length)return false;
+      const hit=raycaster.intersectObject(cat,true).find(h=>h.object.name==='fur')||raycaster.intersectObject(cat,true)[0];
+      if(!hit)return false;
+      if(!reduced.matches&&!current?.player?.active){
+        const point=cat.worldToLocal(hit.point.clone());
+        const tip=cat.worldToLocal(hit.point.clone().add(raycaster.ray.direction));
+        pulsePoke(point,tip.sub(point).normalize());
+      }
       petPulse=performance.now();host.dataset.petCount=String(Number(host.dataset.petCount||0)+1);return true;
     },
   });
   const basePosition=new THREE.Vector3(),baseQuaternion=new THREE.Quaternion(),orbit=new THREE.Spherical();
+  const touchOffset=new THREE.Vector3(),touchNormal=new THREE.Vector3();
   function tick(now) {
     if(disposed)return;
     frame=requestAnimationFrame(tick);
     if(document.hidden||host.offsetParent===null){lastFrame=now;return;}
     const t=(now-start)/1000,dt=Math.min(0.1,Math.max(0,(now-lastFrame)/1000));lastFrame=now;
+    updatePokes(dt);
+    const face=cat?.getObjectByName('face');
+    if(face&&cat.userData.headC)for(const child of face.children){
+      if(child.userData.skipPokeSync||!child.userData.basePos||!child.userData.refPos)continue;
+      touchNormal.copy(child.userData.refPos).sub(cat.userData.headC).normalize();
+      pokeOffsetAt(child.userData.refPos,touchNormal,touchOffset);child.position.copy(child.userData.basePos).add(touchOffset);
+    }
     for(const entry of entries)if(entry.object.visible){entry.cat.userData.updateEyeAnimation?.(t);if(!entry.player)entry.cat.userData.updateStaticIdle?.(t,!reduced.matches);}
     pivot.position.y=0;pivot.rotation.y=-0.2;
     pivot.scale.setScalar(!reduced.matches&&petPulse&&now-petPulse<600?1+Math.sin((now-petPulse)/600*Math.PI)*0.025:1);

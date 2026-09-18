@@ -1,0 +1,42 @@
+// Appended only by the pet build. The upstream source stays byte-for-byte intact.
+import { STUDIO_FIELDS as petStudioFields } from '../pet/studioSchema.mjs';
+const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
+export const petStudio = {
+  capture() {
+    return {
+      params:petPick(petStudioFields.params,params),floor:{...floorParams},rug:{...rugState},light:{...lightAngles},
+      weather:{mode:weatherMode,thunder:thunderEnabled,...weatherAmounts},
+      poke:{radius:pokeUniforms.uPokeRadius.value,freq:pokeFeel.freq,damping:pokeFeel.damping},
+      hatch:Object.fromEntries(petStudioFields.hatch.map(f=>{const v=hatchUniforms[f.key].value;return [f.key,v?.isColor?'#'+v.getHexString():v];})),
+      camera:{x:camera.position.x-motionCameraOffset.x,y:camera.position.y,z:camera.position.z-motionCameraOffset.y,targetX:controls.target.x-motionCameraOffset.x,targetY:controls.target.y,targetZ:controls.target.z-motionCameraOffset.y},
+    };
+  },
+  restore(value) {
+    resetMotionWorld();
+    if(value.rug)Object.assign(rugState,value.rug);
+    if(value.params){Object.assign(params,value.params);staticPoseBeforeMotion=params.pose;window.__setParams(value.params);}
+    if(value.floor){Object.assign(floorParams,value.floor);drawWoodFloor();}
+    if(value.rug){rugLayer.setSeed(rugState.seed);rugLayer.setVisible(rugState.enabled);syncRugPlacement();}
+    if(value.light){Object.assign(lightAngles,value.light);updateKeyLight();syncLightOrb();}
+    if(value.weather){setThunder(value.weather.thunder??false);setWeather(value.weather.mode||'sunny');for(const type of ['rain','cloud','fish'])if(value.weather[type]!==undefined)setWeatherAmount(type,value.weather[type]);}
+    if(value.poke){if(value.poke.radius!==undefined)pokeUniforms.uPokeRadius.value=value.poke.radius;for(const key of ['freq','damping'])if(value.poke[key]!==undefined)pokeFeel[key]=value.poke[key];}
+    if(value.hatch)for(const [key,v] of Object.entries(value.hatch)){const uniform=hatchUniforms[key];if(uniform.value?.isColor)uniform.value.set(v);else uniform.value=v;}
+    sketchShadowMat.color.copy(hatchUniforms.uGroundHatchColor.value);blockShadowMat.color.copy(hatchUniforms.uGroundShadowColor.value);
+    if(value.camera){const c=value.camera;camera.position.set(c.x??camera.position.x,c.y??camera.position.y,c.z??camera.position.z);controls.target.set(c.targetX??controls.target.x,c.targetY??controls.target.y,c.targetZ??controls.target.z);controls.update();}
+    refreshers.forEach(f=>f());petControlSyncs.forEach(f=>f());
+  },
+  restrict({floor=true,toy='mixed',count=99,cushion=false}) {
+    ground.visible=floor;
+    let shown=0;
+    let hidden=0;
+    const all=toyWorld.toys.filter(t=>t.kind!=='bed');
+    const pool=toy==='mixed'?['yarn','ball','fish','duck','yarn'].map((kind,i)=>all.filter(t=>t.kind===kind)[i===4?1:0]):all.filter(t=>t.kind===toy);
+    const active=new Set(pool.filter(Boolean).slice(0,count));
+    for(const t of toyWorld.toys){const visible=active.has(t)||(t.kind==='bed'&&cushion);if(visible)shown++;t.mesh.visible=visible;t.shadowProxy.visible=visible;t.body.collisionFilterMask=visible?-1:0;if(!visible)t.body.position.set(0,-100-hidden++,0);}
+    toyWorld.group.visible=shown>0;
+  },
+  stop(){window.__setAnimation({enabled:false});},
+  pauseAudio(){bgm.pause();},
+  motionKey(code,down){motionMachine.setKey(code,down);if(down&&motionMachine.triggerCode(code))motionElapsed=0;},
+  lock(){bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},
+};

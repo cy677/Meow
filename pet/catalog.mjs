@@ -41,14 +41,14 @@ export function validateFields(params, fields) {
 }
 export function validateCatalog(input) {
   object(input,['schemaVersion','rewards']);
-  if (input.schemaVersion !== 1 || !Array.isArray(input.rewards) || input.rewards.length > 200) fail(400,'奖励配置版本或数量不正确');
+  if (input.schemaVersion !== 1 || !Array.isArray(input.rewards) || input.rewards.length > 512) fail(400,'奖励配置版本或数量不正确');
   const ids = new Set(); const starters = new Set();
   for (const reward of input.rewards) {
     object(reward,['id','title','description','category','cost','unlockAt','starter','params','action','motion']);
     if (typeof reward.id !== 'string' || !/^[a-z][a-z0-9-]{2,63}$/.test(reward.id) || ids.has(reward.id)) fail(400,'奖励 ID 无效或重复');
     ids.add(reward.id);
     text(reward.title,'奖励名称',30); text(reward.description,'奖励说明',140);
-    if (![...SLOTS,'trick','theme'].includes(reward.category)) fail(400,'奖励类别不正确');
+    if (![...SLOTS,'trick','theme','capability'].includes(reward.category)) fail(400,'奖励类别不正确');
     integer(reward.cost,'价格'); integer(reward.unlockAt,'成长门槛');
     if (reward.starter !== undefined && typeof reward.starter !== 'boolean') fail(400,'starter 必须为布尔值');
     if (reward.starter) {

@@ -7,29 +7,31 @@ const select = (key, label, choices) => ({ key, label, type: 'select', choices }
 const number = (key, label, min, max, value, step = 0.01) => ({ key, label, type: 'number', min, max, value, step });
 const check = (key, label, value = false) => ({ key, label, type: 'checkbox', value });
 const color = (key, label, value) => ({ key, label, type: 'color', value });
-export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', ...SCENE_LABELS, theme:'场景套装' };
+export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', capability:'原版功能', ...SCENE_LABELS, theme:'场景套装' };
 export const PARAM_FIELDS = {
   ...SCENE_FIELDS,
+  capability: [select('capability','解锁功能', [['complete','原版完整创作室'],['keyboard','键盘自由行动'],['capture','拍照与分享卡'],['export','GLB 与 Codex 导出'],['music','原版背景音乐']])],
   coat: [
     select('coatId', '基础花色', COATS.map(c => [c.id, c.name])),
     check('dynamicCoat', '启用自定义配色'),
     color('dynamicCoatBase', '底色', '#f6dfbd'), color('dynamicCoatA', '主色', '#e6913f'), color('dynamicCoatB', '辅助色', '#ad5d22'),
     number('dynamicCoatCount', '色块数量', 1, 12, 7, 1),
-    number('dynamicCoatScale', '色块大小', 0.55, 1.9, 1),
-    number('dynamicCoatSoftness', '边缘柔和度', 0, 1, 0),
+    number('dynamicCoatScale', '色块大小', 0.45, 2, 1),
+    number('dynamicCoatSoftness', '边缘柔和度', 0, 1.4, 0),
     number('dynamicCoatIrregularity', '色块不规则度', 0, 1.5, 0.65),
-    number('dynamicCoatBodyDensity', '身体条纹密度', 1.5, 28, 8.2, 0.1),
-    number('dynamicCoatBodyWidth', '身体条纹宽度', 0.04, 0.95, 0.24),
-    number('dynamicCoatBodyIrregularity', '身体条纹不规则度', 0, 3.4, 0.42),
-    number('dynamicCoatHeadDensity', '头部条纹密度', 3, 58, 18, 1),
-    number('dynamicCoatHeadWidth', '头部条纹宽度', 0.04, 0.95, 0.2),
-    number('dynamicCoatHeadIrregularity', '头部条纹不规则度', 0, 3.4, 0.28),
+    number('dynamicCoatBodyDensity', '身体条纹密度', 0.8, 32, 8.2, 0.1),
+    number('dynamicCoatBodyWidth', '身体条纹宽度', 0.01, 1.1, 0.24),
+    number('dynamicCoatBodyIrregularity', '身体条纹不规则度', 0, 4, 0.42),
+    number('dynamicCoatHeadDensity', '头部条纹密度', 1, 64, 18, 1),
+    number('dynamicCoatHeadWidth', '头部条纹宽度', 0.01, 1.1, 0.2),
+    number('dynamicCoatHeadIrregularity', '头部条纹不规则度', 0, 4, 0.28),
   ],
   shape: [
-    number('headSize', '头部大小', 0.78, 1.42, 1.08), number('chubbiness', '圆润程度', 0.72, 1.95, 1.15),
-    number('legLength', '腿长', 0.48, 1.65, 0.85), number('earSize', '耳朵大小', 0.62, 1.48, 1),
-    number('tailLength', '尾巴长度', 0.58, 1.72, 0.95), number('tailCurl', '尾巴卷曲', -0.12, 1.18, 0.35),
-    check('fluffy', '蓬松毛发'), number('furFluff', '蓬松程度', 0.15, 1.5, 0.9),
+    number('headSize', '头部大小', 0.35, 2.8, 1.08), number('chubbiness', '圆润程度', 0.3, 4.5, 1.15),
+    number('legLength', '腿长', 0.05, 5, 0.85), number('earSize', '耳朵大小', 0.1, 4.5, 1),
+    number('tailLength', '尾巴长度', 0.05, 4.5, 0.95), number('tailCurl', '尾巴卷曲', -0.75, 2.25, 0.35),
+    check('fluffy', '蓬松毛发'), number('furFluff', '蓬松程度', 0.15, 3, 0.9),
+    number('seed', '模型随机种子', 0, 4294967295, 20260916, 1), number('outlineJitter','手绘线条抖动',0,1,.25),
   ],
   eyes: [
     color('eyeColor', '眼睛颜色', '#d99a2b'), check('oddEyes', '双色眼睛'), color('eyeColorRight', '另一只眼睛颜色', '#5b8fd4'),
