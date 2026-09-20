@@ -40,10 +40,30 @@ try {
   const filename=fileURLToPath(new URL('maintenance-photo.png.download',out));await download.saveAs(filename);assert.ok(statSync(filename).size>1000);
   await scene.locator('.share-card-close-button').click();await scene.locator('.share-card-overlay').waitFor({state:'hidden'});
   await scene.locator('#btn-export-png').click();await frame.waitFor({state:'visible'});await scene.locator('.share-card-close-button').click();mark('Native photo frame, PNG and close/reopen');
-  await parent.goto(origin+'/studio.html?mode=parent');await parent.locator('body[data-studio-ready="true"]').waitFor();
+  // These are functional checks, not simultaneous software-rendering load tests.
+  // Dispose the verified child scene before loading the parent editor.
+  await child.close();await parent.bringToFront();
+  await parent.goto(origin+'/studio.html?mode=parent');
+  async function editorReady(){
+    await parent.waitForFunction(()=>['ready','failed','expired'].includes(document.body.dataset.studioStage));
+    const state=await parent.evaluate(()=>({stage:document.body.dataset.studioStage,error:document.body.dataset.studioError,status:document.querySelector('.studio-bar [role=status]')?.textContent}));
+    assert.equal(state.stage,'ready',JSON.stringify(state));
+    await parent.locator('#scene').waitFor({state:'visible'});
+    await parent.getByRole('button',{name:'保存草稿',exact:true}).waitFor({state:'visible'});
+  }
+  await editorReady();
   await parent.getByRole('button',{name:'保存草稿',exact:true}).click();await parent.waitForFunction(()=>document.querySelector('.studio-bar [role=status]')?.textContent.includes('草稿已保存'));
-  await parent.reload();await parent.locator('body[data-studio-ready="true"]').waitFor();mark('Parent draft saved and reloaded');
+  await parent.reload();await editorReady();mark('Parent draft saved and reloaded');
   assert.deepEqual(errors,[]);writeFileSync(new URL('browser-maintenance.json',out),JSON.stringify({ok:true,checks,errors},null,2));
 } catch(error) {
-  writeFileSync(new URL('browser-maintenance.json',out),JSON.stringify({ok:false,checks,errors,error:error.stack},null,2));throw error;
+  const diagnostics=[];
+  for(const context of browser?.contexts()||[]){
+    for(const page of context.pages()){
+      try {
+        diagnostics.push(await page.evaluate(()=>({url:location.href,visibility:document.visibilityState,stage:document.body.dataset.studioStage,error:document.body.dataset.studioError,status:document.querySelector('.studio-bar [role=status]')?.textContent,body:{width:document.body.getBoundingClientRect().width,height:document.body.getBoundingClientRect().height}})));
+        await page.screenshot({path:fileURLToPath(new URL(`maintenance-failure-${diagnostics.length}.png`,out)),timeout:5000});
+      } catch(diagnosticError) {diagnostics.push({error:diagnosticError.message});}
+    }
+  }
+  writeFileSync(new URL('browser-maintenance.json',out),JSON.stringify({ok:false,checks,errors,diagnostics,error:error.stack},null,2));throw error;
 } finally {await browser?.close();await app.close();}
