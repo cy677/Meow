@@ -1,27 +1,33 @@
-﻿param([string]$NodePath = (Get-Command node.exe).Source)
+﻿param([string]$NodePath = (Get-Command node.exe).Source, [string]$NodeLicensePath)
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$name = 'Meow-V6-Windows-x64-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+$name = ('Meow-' + (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version + '-Windows-x64-') + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $out = Join-Path $root ('Exports/' + $name)
 if ((& $NodePath -p '[process.platform,process.arch].join(String.fromCharCode(47))') -ne 'win32/x64') { throw 'Windows x64 Node required.' }
 foreach ($dir in @('runtime','scripts','pet','src','licenses')) { New-Item -ItemType Directory -Path (Join-Path $out $dir) -Force | Out-Null }
 Copy-Item -LiteralPath $NodePath -Destination (Join-Path $out 'runtime/node.exe')
-foreach ($file in @('package.json','pet-settings.json','LICENSE','COMMERCIAL-LICENSE.md','一键启动.cmd','清除数据.cmd')) { Copy-Item -LiteralPath (Join-Path $root $file) -Destination $out }
+foreach ($file in @('package.json','pet-settings.example.json','LICENSE','COMMERCIAL-LICENSE.md','一键启动.cmd','清除数据.cmd')) { Copy-Item -LiteralPath (Join-Path $root $file) -Destination $out }
 Copy-Item -LiteralPath (Join-Path $root 'scripts/pet-launcher.ps1') -Destination (Join-Path $out 'scripts')
-Get-ChildItem (Join-Path $root 'pet') -Filter '*.mjs' -File | Where-Object { $_.Name -notin @('vite.config.mjs','studioBuild.mjs') } | Copy-Item -Destination (Join-Path $out 'pet')
+$inventory = & $NodePath (Join-Path $PSScriptRoot 'runtimeFiles.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Runtime module inventory failed.' }
+foreach ($file in ($inventory | ConvertFrom-Json)) {
+    $destination = Join-Path $out $file
+    New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root $file) -Destination $destination
+}
 foreach ($file in @('rewards.json','PAD.md','GROWTH_GUIDE.md')) { Copy-Item -LiteralPath (Join-Path $root ('pet/' + $file)) -Destination (Join-Path $out 'pet') }
 Copy-Item -LiteralPath (Join-Path $root 'pet/dist') -Destination (Join-Path $out 'pet/dist') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'src/coats.js') -Destination (Join-Path $out 'src')
 foreach ($dep in @('three','cannon-es')) { Copy-Item -LiteralPath (Join-Path $root ('node_modules/' + $dep + '/LICENSE')) -Destination (Join-Path $out ('licenses/' + $dep + '-LICENSE.txt')) }
 Copy-Item -LiteralPath (Join-Path $root 'third_party/mesh2motion/README.md') -Destination (Join-Path $out 'licenses/mesh2motion-README.md')
-$nodeLicense = Join-Path $root 'Exports/node-v24.14.0-LICENSE.txt'
-if (-not (Test-Path -LiteralPath $nodeLicense)) { throw 'Missing Node license.' }
+$nodeLicense = if ($NodeLicensePath) { $NodeLicensePath } else { Join-Path (Split-Path $NodePath) 'LICENSE' }
+if (-not (Test-Path -LiteralPath $nodeLicense)) { throw 'Missing Node license. Supply -NodeLicensePath for the same runtime version.' }
 Copy-Item -LiteralPath $nodeLicense -Destination (Join-Path $out 'runtime/LICENSE.txt')
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 & $compiler /nologo /target:exe /platform:x64 ("/out:" + (Join-Path $out 'Meow.exe')) (Join-Path $PSScriptRoot 'portable-launcher.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 @'
-Meow V6 — Windows 10/11 64位便携版
+Meow — Windows 10/11 64位便携版
 
 1. 将整个压缩包解压到可写目录，不要在压缩包中直接运行。
 2. 双击 Meow.exe（也可双击 一键启动.cmd）。无需安装 Node.js、npm 或下载依赖。

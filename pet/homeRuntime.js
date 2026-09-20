@@ -50,11 +50,14 @@ export function mountHomeRuntime(runtime,data,defaults){
   }
   // One render clock drives the program. A background tab never catches up by
   // firing a queue of expired segment timers. Rest restores the selected pose.
+  let previousTick=performance.now();
   function tick(now){
     if(disposed)return;
+    const delta=Math.max(0,Math.min(.1,(now-previousTick)/1000));previousTick=now;
+    runtime.update(delta);
     const blocked=paused||pointerHeld||document.hidden||document.querySelector('#viewport[data-share-card-open="true"]');
     if(blocked){if(activePlan)stop();nextAt=now+2500;}
-    else if(activePlan){if(window.__getAnimation().elapsed>=activePlan.duration)stop();}
+    else if(activePlan){if(runtime.animationState().elapsed>=activePlan.duration)stop();}
     else if(now>=nextAt){
       const pool=state.access.actions.filter(a=>a.action!==lastAction);
       const choices=pool.length?pool:state.access.actions;
@@ -87,9 +90,9 @@ export function mountHomeRuntime(runtime,data,defaults){
   raf=requestAnimationFrame(tick);
   return {applyState,play,overlay(open){paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
     if(disposed)return;
-    if(name==='capture')photo.click();
+    if(name==='capture'){stop();runtime.camera.start();}
     if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}
-  },dispose(){disposed=true;cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);}};
+  },dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);resetView.remove();runtime.dispose();}};
 }

@@ -34,15 +34,18 @@ function Set-MeowFirewall([int]$RulePort) {
 try {
     # Only this short helper is elevated. The web service runs as the original user.
     if ($Action -eq 'firewall') { Set-MeowFirewall $Port; exit 0 }
-    $config = Get-Content -LiteralPath (Join-Path $projectRoot 'pet-settings.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $portValue = if ($env:MEOW_PORT) { $env:MEOW_PORT } else { $config.port }
-    $serverPort = 0
-    if (-not [int]::TryParse([string]$portValue, [ref]$serverPort) -or $serverPort -lt 1 -or $serverPort -gt 65535) { throw '端口必须是 1 到 65535 的整数。' }
-    $dataSetting = if ($env:MEOW_DATA_DIR) { $env:MEOW_DATA_DIR } else { $config.dataDir }
-    if ([string]::IsNullOrWhiteSpace($dataSetting)) { throw '数据目录不能为空。' }
-    $dataDir = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($dataSetting)) { $dataSetting } else { Join-Path $projectRoot $dataSetting }))
+    $bundledNode = Join-Path $projectRoot 'runtime/node.exe'
+    $node = if (Test-Path -LiteralPath $bundledNode -PathType Leaf) { [pscustomobject]@{ Source = $bundledNode } } else { Get-Command node.exe -ErrorAction SilentlyContinue }
+    if (-not $node) { throw '请先安装 Node.js 22.16 或更高版本，再双击一键启动。' }
+    $nodeVersion = [version]((& $node.Source --version).Trim().TrimStart('v'))
+    if ($LASTEXITCODE -ne 0 -or $nodeVersion.Major -lt 22 -or ($nodeVersion.Major -eq 22 -and $nodeVersion.Minor -lt 16)) { throw 'Node.js 版本过低，需要 22.16 或更高版本。' }
+    $rawConfig = & $node.Source (Join-Path $projectRoot 'pet/config/cli.mjs')
+    if ($LASTEXITCODE -ne 0) { throw '启动配置无效，请检查 pet-settings.json 和 MEOW 环境变量。' }
+    $config = $rawConfig | ConvertFrom-Json
+    $serverPort = [int]$config.port
+    $dataDir = [string]$config.dataDir
     $dbPath = Join-Path $dataDir 'pet.sqlite'
-    $publicIp = if ($env:MEOW_PUBLIC_IP) { $env:MEOW_PUBLIC_IP.Trim() } else { ([string]$config.publicIp).Trim() }
+    $publicIp = [string]$config.publicIp
     if ($Action -eq 'info') {
         [pscustomobject]@{ dataPath=$dbPath; exists=(Test-Path -LiteralPath $dbPath -PathType Leaf); port=$serverPort; publicIp=$publicIp } | ConvertTo-Json -Compress
         exit 0
@@ -86,13 +89,8 @@ try {
         exit 0
     }
 
-    $bundledNode = Join-Path $projectRoot 'runtime/node.exe'
-    $node = if (Test-Path -LiteralPath $bundledNode -PathType Leaf) { [pscustomobject]@{ Source = $bundledNode } } else { Get-Command node.exe -ErrorAction SilentlyContinue }
-    if (-not $node) { throw '请先安装 Node.js 22.16 或更高版本，再双击一键启动。' }
-    $nodeVersion = [version]((& $node.Source --version).Trim().TrimStart('v'))
-    if ($LASTEXITCODE -ne 0 -or $nodeVersion.Major -lt 22 -or ($nodeVersion.Major -eq 22 -and $nodeVersion.Minor -lt 16)) { throw 'Node.js 版本过低，需要 22.16 或更高版本。' }
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'pet/dist/index.html'))) { throw '缺少已构建页面。请先在项目目录执行 npm ci --ignore-scripts 和 npm run pet:build。' }
-    $env:MEOW_HOST = '0.0.0.0'
+    $env:MEOW_HOST = [string]$config.host
     $env:MEOW_PORT = [string]$serverPort
     $env:MEOW_DATA_DIR = $dataDir
     $env:MEOW_PUBLIC_IP = $publicIp
@@ -101,7 +99,7 @@ try {
     try {
         & $node.Source --input-type=module -e "import {launchOptions} from './pet/lan.mjs';launchOptions(['--lan']);"
         if ($LASTEXITCODE -ne 0) { throw '启动配置无效，请检查 pet-settings.json 或 MEOW 环境变量。' }
-        if ($config.configureFirewall -and -not $SkipFirewall -and -not (Test-MeowFirewall $serverPort)) {
+        if ($config.configureFirewall -and $config.host -notin @('127.0.0.1','::1','localhost') -and -not $SkipFirewall -and -not (Test-MeowFirewall $serverPort)) {
             Write-Host "首次配置需要允许管理员提示，仅添加网页使用的 TCP $serverPort 防火墙规则。"
             $helperArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $PSCommandPath), '-Action', 'firewall', '-Port', "$serverPort")
             $helper = Start-Process -FilePath 'powershell.exe' -ArgumentList $helperArgs -Verb RunAs -WindowStyle Hidden -Wait -PassThru

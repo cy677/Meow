@@ -1,0 +1,49 @@
+/** Focused current UI smoke; separate from the older navigation-specific suites.
+ * Run after npm run pet:build. Uses an isolated in-memory family, not pet/data.
+ */
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync,statSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {randomUUID} from 'node:crypto';
+import {createPetServer} from '../server.mjs';
+const {chromium}=await import(process.env.MEOW_PLAYWRIGHT||'playwright');
+const app=await createPetServer({dbPath:':memory:'});
+await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+const origin=`http://127.0.0.1:${app.server.address().port}`;
+const out=new URL('../test-results/',import.meta.url);mkdirSync(out,{recursive:true});
+let browser;const checks=[],errors=[];
+const mark=value=>{checks.push(value);console.log('PASS',value);};
+try {
+  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  const setup=await fetch(origin+'/api/parent/setup',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet'},body:JSON.stringify({setupToken:app.setupToken,age:6,mode:'school_basic',timeZone:'UTC',pin:'864209',childCode:'2468',childName:'测试',petName:'小橘'})});
+  assert.equal(setup.status,200);
+  const parent=await browser.newPage({viewport:{width:1280,height:900}});
+  const child=await browser.newPage({viewport:{width:1024,height:768},hasTouch:true});
+  for(const page of [parent,child]){page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));}
+  await parent.goto(origin+'/parent.html');await parent.locator('#code').fill('864209');await parent.locator('#login-form button').click();await parent.locator('#workspace').waitFor({state:'visible'});
+  await child.goto(origin+'/');await child.locator('#code').fill('2468');await child.locator('#login-form button').click();await child.locator('#workspace').waitFor({state:'visible'});
+  mark('Parent and child login');
+  const result=await parent.evaluate(async({key})=>{
+    const session=await (await fetch('/api/parent/session')).json();
+    const funds=await fetch('/api/parent/points',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':session.csrf},body:JSON.stringify({delta:50,reason:'测试兑换余额',idempotencyKey:key+'-funds'})});if(!funds.ok)throw new Error('准备积分失败');
+    const response=await fetch('/api/parent/growth/award',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':session.csrf},body:JSON.stringify({category:'health',title:'记录一次准备',delta:3,occurredAt:new Date().toISOString(),idempotencyKey:key})});
+    const summary=await(await fetch('/api/parent/growth/summary?days=7')).json();return {status:response.status,summary};
+  },{key:randomUUID()});assert.equal(result.status,200);assert.equal(result.summary.periodPoints,3);mark('Growth award and summary');
+  const bought=await child.evaluate(async key=>{const session=await(await fetch('/api/child/session')).json();const response=await fetch('/api/purchase',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':session.csrf},body:JSON.stringify({rewardId:'coat-grey',expectedCost:25,idempotencyKey:key})});return {status:response.status,state:await response.json()};},randomUUID());
+  assert.equal(bought.status,200);assert.equal(bought.state.balance,28);await child.reload();await child.locator('#workspace').waitFor({state:'visible'});mark('Reward purchase and persisted browser reload');
+  const modal=child.locator('#rewards-dialog');if(await modal.isVisible())await child.locator('[data-action=close-rewards]').click();
+  const scene=child.frameLocator('iframe.home-scene');await scene.locator('body[data-studio-ready="true"]').waitFor();
+  await scene.locator('#btn-export-png').click();const frame=scene.locator('.share-card-live-frame');await frame.waitFor({state:'visible'});
+  const box=await frame.boundingBox();assert.ok(box&&box.width>100&&box.height>100,JSON.stringify(box));
+  await child.screenshot({path:fileURLToPath(new URL('maintenance-photo.png',out))});
+  const downloaded=child.waitForEvent('download');await scene.locator('.share-card-capture-button').click();const download=await downloaded;
+  const filename=fileURLToPath(new URL('maintenance-photo.png.download',out));await download.saveAs(filename);assert.ok(statSync(filename).size>1000);
+  await scene.locator('.share-card-close-button').click();await scene.locator('.share-card-overlay').waitFor({state:'hidden'});
+  await scene.locator('#btn-export-png').click();await frame.waitFor({state:'visible'});await scene.locator('.share-card-close-button').click();mark('Native photo frame, PNG and close/reopen');
+  await parent.goto(origin+'/studio.html?mode=parent');await parent.locator('body[data-studio-ready="true"]').waitFor();
+  await parent.getByRole('button',{name:'保存草稿',exact:true}).click();await parent.waitForFunction(()=>document.querySelector('.studio-bar [role=status]')?.textContent.includes('草稿已保存'));
+  await parent.reload();await parent.locator('body[data-studio-ready="true"]').waitFor();mark('Parent draft saved and reloaded');
+  assert.deepEqual(errors,[]);writeFileSync(new URL('browser-maintenance.json',out),JSON.stringify({ok:true,checks,errors},null,2));
+} catch(error) {
+  writeFileSync(new URL('browser-maintenance.json',out),JSON.stringify({ok:false,checks,errors,error:error.stack},null,2));throw error;
+} finally {await browser?.close();await app.close();}

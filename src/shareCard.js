@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createCameraOverlay } from './camera/cameraOverlay.js';
 import { getRepositoryMarkup } from '#platform';
 
 const CARD_LAYOUT = Object.freeze({
@@ -798,40 +799,33 @@ export function createShareCardCapture({
     statusEl.textContent = '';
   }
 
+  const overlayController = createCameraOverlay({viewport, overlay, shell});
+  let disposed = false;
   function open() {
+    if (disposed) throw new Error('拍照界面已销毁');
     active = true;
     skinVariant = 0;
     applyDescriptor();
     syncCopy();
     statusEl.textContent = '';
-    overlay.hidden = false;
-    overlay.setAttribute('aria-hidden', 'false');
-    viewport.dataset.shareCardOpen = 'true';
-    requestAnimationFrame(() => {
-      overlay.classList.add('is-open');
-      requestAnimationFrame(alignSubjectToCard);
-    });
+    overlayController.open();
+    cancelAnimationFrame(cameraPanFrame);
+    cameraPanFrame = requestAnimationFrame(alignSubjectToCard);
   }
 
   function close() {
-    if (!active) return;
     active = false;
     cancelAnimationFrame(cameraPanFrame);
-    overlay.classList.remove('is-open');
-    viewport.dataset.shareCardOpen = 'false';
-    window.setTimeout(() => {
-      if (!active) {
-        overlay.hidden = true;
-        overlay.setAttribute('aria-hidden', 'true');
-      }
-    }, 180);
+    overlayController.close();
   }
 
-  async function capture() {
-    if (!active) return;
+  async function capture({download=true}={}) {
+    if (!active || disposed || captureButton.disabled) return;
     captureButton.disabled = true;
     statusEl.textContent = '';
     try {
+      const size = windowEl.getBoundingClientRect();
+      if(size.width<=0||size.height<=0)throw new Error('取景框尚未就绪');
       renderer.render(scene, camera);
 
       const viewRect = windowEl.getBoundingClientRect();
@@ -887,10 +881,14 @@ export function createShareCardCapture({
       });
 
       const blob = await new Promise((resolve) => output.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('PNG 编码失败');
+      if (!active || disposed) return null;
+      const filename=getShareCardFilename(getSeed());
       if (blob) {
-        await downloadBlob(blob, getShareCardFilename(getSeed()));
+        if(download)await downloadBlob(blob, filename);
         statusEl.textContent = localeCopy(getLocale()).saved;
         viewport.dataset.shareCardCaptured = 'true';
+        return {blob,filename};
       }
     } catch (error) {
       console.warn('Share card save failed', error);
@@ -907,9 +905,8 @@ export function createShareCardCapture({
   skinButton.addEventListener('click', randomizeSkin);
   captureButton.addEventListener('click', capture);
   closeButton.addEventListener('click', close);
-  window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && active) close();
-  });
+  const onKey = event => { if(event.key==='Escape'&&active)close(); };
+  window.addEventListener('keydown', onKey);
   window.addEventListener('meow:localechange', syncCopy);
 
   return {
@@ -917,5 +914,11 @@ export function createShareCardCapture({
     close,
     capture,
     get active() { return active; },
+    dispose() {
+      if(disposed)return;close();disposed=true;
+      window.removeEventListener('keydown',onKey);
+      window.removeEventListener('meow:localechange',syncCopy);
+      overlayController.dispose();
+    },
   };
 }

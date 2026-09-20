@@ -1,9 +1,9 @@
 name: Meow maintenance checks
 on:
-  push:
-    branches: ['main', 'feature/points-pet-*']
   pull_request:
     paths: ['pet/**', 'src/**', 'scripts/**', 'index.html', 'Meow', 'package*.json', 'pet-settings.example.json', 'vite*.js', '.github/workflows/**']
+  push:
+    branches: ['main']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,13 +24,6 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Preserve locked build dependencies
-        run: tar -czf /tmp/meow-node-tools.tgz node_modules
-      - uses: actions/upload-artifact@v4
-        with:
-          name: meow-node-tools
-          path: /tmp/meow-node-tools.tgz
-          retention-days: 3
       - name: Domain and HTTP regression
         run: |
           mkdir -p pet/test-results
@@ -38,17 +31,15 @@ jobs:
       - name: Both application builds
         run: npm run pet:build && npm run build
       - name: Current application smoke
-        if: hashFiles('pet/tests/browser-maintenance.mjs') != ''
         run: |
           npm install --prefix /tmp/meow-browser-tools --ignore-scripts playwright@1.55.0
           /tmp/meow-browser-tools/node_modules/.bin/playwright install --with-deps chromium
           MEOW_PLAYWRIGHT=/tmp/meow-browser-tools/node_modules/playwright/index.mjs node pet/tests/browser-maintenance.mjs 2>&1 | tee pet/test-results/browser-maintenance.txt
-      - name: Preserve source and build evidence
+      - name: Source snapshot
         if: always()
         run: |
           mkdir -p pet/test-results
           git archive --format=zip HEAD -o pet/test-results/source.zip
-          if [ -d pet/dist ]; then cp -R pet/dist pet/test-results/pet-dist; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
