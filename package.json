@@ -22,7 +22,9 @@
     "pet:start": "node pet/server.mjs",
     "test:pet": "node --test pet/tests/*.test.mjs",
     "pet:lan": "node pet/server.mjs --lan",
-    "pet:lan:https": "node pet/server.mjs --lan --https"
+    "pet:lan:https": "node pet/server.mjs --lan --https",
+    "test:cat-motion": "node --test pet/tests/cat-motion-runtime.test.mjs",
+    "test:cat-motion:browser": "node pet/tests/browser-cat-motion-stage1.mjs"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",

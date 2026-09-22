@@ -1,4 +1,4 @@
-import { planMotion } from './motionPrograms.mjs';
+import { planMotion, canAutoPlay } from './motionPrograms.mjs';
 import { PARAM_FIELDS } from './presetSchema.mjs';
 import { rugSeedForStyle } from './environment/upstreamAdapters.js';
 import { containerSeed } from './environment/containerAdapter.js';
@@ -8,7 +8,7 @@ export function mountHomeRuntime(runtime,data,defaults){
   let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+2500,activePlan=null,lastAction='';
   const initial=defaults||runtime.capture();
   let homeView=runtime.capture().camera;
-  const stop=()=>{activePlan=null;runtime.clearKeys();runtime.stop();nextAt=performance.now()+5000+Math.random()*4000;};
+  const stop=()=>{activePlan=null;runtime.clearKeys();runtime.stop(true);nextAt=performance.now()+5000+Math.random()*4000;};
   function applyState(next,first=false){
     if(disposed)return;
     runtime.applyModels(next.models||[]);
@@ -55,10 +55,11 @@ export function mountHomeRuntime(runtime,data,defaults){
     if(disposed)return;
     const blocked=paused||pointerHeld||document.hidden||document.querySelector('#viewport[data-share-card-open="true"]');
     if(blocked){if(activePlan)stop();nextAt=now+2500;}
-    else if(activePlan){if(window.__getAnimation().elapsed>=activePlan.duration)stop();}
+    else if(activePlan||runtime.motionState().active){if(!runtime.motionState().active)stop();}
     else if(now>=nextAt){
-      const pool=state.access.actions.filter(a=>a.action!==lastAction);
-      const choices=pool.length?pool:state.access.actions;
+      const available=state.access.actions.filter(a=>canAutoPlay(a.action,a.motion||{}));
+      const pool=available.filter(a=>a.action!==lastAction);
+      const choices=pool.length?pool:available;
       const chosen=choices[Math.floor(Math.random()*choices.length)];
       if(chosen)play(chosen.action,chosen.motion||{});else nextAt=now+5000;
     }

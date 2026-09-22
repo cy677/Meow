@@ -12,7 +12,7 @@ const base=JSON.parse(readFileSync(new URL('../rewards.json',import.meta.url),'u
 const sequence={id:'custom-sequence',title:'我的连续动作',description:'先警觉，再走路，最后坐下。',category:'trick',cost:20,unlockAt:20,action:'sequence',motion:{speed:1,intensity:0.85,transition:0.25,script:[{clip:'idle-alert',cycles:1,speed:1},{clip:'walk',cycles:2,speed:1},{clip:'sit',cycles:1,speed:1}]}};
 test('14 native clip IDs match the upstream 19-bone/555-frame dataset',()=>{
  assert.equal(source.boneOrder.length,19);assert.equal(source.clips.reduce((n,c)=>n+c.samples.length,0),555);
- assert.deepEqual(CLIPS.map(c=>c.id).sort(),source.clips.map(c=>c.id).sort());
+ assert.deepEqual(CLIPS.filter(c=>c.source==='mesh2motion').map(c=>c.id).sort(),source.clips.map(c=>c.id).sort());
 });
 test('every action creates finite bounded timelines with complete, normalized layers',()=>{
  for(const id of ACTION_IDS){const p=planMotion(id,{},sequence.motion.script);assert.ok(p.duration>0&&p.duration<=90);
