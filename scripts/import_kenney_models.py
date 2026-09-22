@@ -1,11 +1,15 @@
-"""Import the reviewed Kenney subset. Python standard library only; not used at runtime.
-Pinned archive hashes deliberately fail closed when upstream content changes.
+"""Import the reviewed Kenney subset using pinned archives; standard library only.
+This maintainer tool is never called by the application or a normal build.
 """
 from pathlib import Path
+import base64
 import hashlib
 import io
 import json
+import mimetypes
+import posixpath
 import struct
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -21,16 +25,42 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def embed_resources(archive, member, model):
+    if model[:4] != b'glTF' or struct.unpack_from('<I', model, 8)[0] != len(model):
+        raise ValueError(f'{member}: invalid GLB')
+    length = struct.unpack_from('<I', model, 12)[0]
+    document = json.loads(model[20:20 + length])
+    embedded = []
+    for obj in document.get('buffers', []) + document.get('images', []):
+        uri = obj.get('uri', '')
+        if not uri or uri.startswith('data:'):
+            continue
+        parsed = urllib.parse.urlsplit(uri)
+        if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError(f'{member}: non-local URI rejected')
+        rel = posixpath.normpath(posixpath.join(posixpath.dirname(member), urllib.parse.unquote(parsed.path)))
+        if rel.startswith('../') or rel.startswith('/'):
+            raise ValueError(f'{member}: resource escapes archive')
+        payload = archive.read(rel)
+        mime = mimetypes.guess_type(rel)[0] or 'application/octet-stream'
+        obj['uri'] = f'data:{mime};base64,' + base64.b64encode(payload).decode('ascii')
+        embedded.append({'file': rel, 'sha256': digest(payload)})
+    encoded = json.dumps(document, separators=(',', ':')).encode()
+    encoded += b' ' * ((-len(encoded)) % 4)
+    remainder = model[20 + length:]
+    out = b'glTF' + struct.pack('<II', 2, 20 + len(encoded) + len(remainder)) + struct.pack('<I4s', len(encoded), b'JSON') + encoded + remainder
+    return out, document, embedded
+
+
 def main():
     manifest = {'schemaVersion': 1, 'license': 'CC0-1.0', 'reviewedAt': '2026-09-22', 'packs': [], 'models': []}
-    # Validate everything before replacing any checked-in resource.
     pending = {}
     for pack, (suffix, expected, version, fmt, names) in PACKS.items():
         url = f'https://kenney.nl/media/pages/assets/{pack}/{suffix}'
         with urllib.request.urlopen(url, timeout=90) as response:
             raw = response.read(64 * 1024 * 1024 + 1)
         if digest(raw) != expected:
-            raise ValueError(f'{pack}: archive SHA256 mismatch; review upstream changes before updating')
+            raise ValueError(f'{pack}: archive SHA256 mismatch; review upstream changes')
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             license_bytes = archive.read('License.txt')
             if 'Creative Commons Zero, CC0' not in license_bytes.decode('utf-8-sig'):
@@ -39,24 +69,18 @@ def main():
             manifest['packs'].append({'id': pack, 'version': version, 'source': f'https://kenney.nl/assets/{pack}', 'archiveUrl': url, 'archiveSha256': expected, 'license': 'CC0-1.0'})
             for name in names:
                 member = f'Models/{fmt} format/{name}.glb'
-                model = archive.read(member)
-                if model[:4] != b'glTF' or struct.unpack_from('<I', model, 8)[0] != len(model):
-                    raise ValueError(f'{member}: invalid GLB')
-                json_length = struct.unpack_from('<I', model, 12)[0]
-                document = json.loads(model[20:20 + json_length])
-                for obj in document.get('buffers', []) + document.get('images', []):
-                    if obj.get('uri') and not obj['uri'].startswith('data:'):
-                        raise ValueError(f'{member}: external resource must be embedded before import')
+                source = archive.read(member)
+                model, document, embedded = embed_resources(archive, member, source)
                 target = f'public/models/kenney/{pack}/{name}.glb'
                 pending[target] = model
-                manifest['models'].append({'pack': pack, 'file': target, 'sourceFile': member, 'sha256': digest(model), 'bytes': len(model), 'animations': [a.get('name', '') for a in document.get('animations', [])]})
+                manifest['models'].append({'pack': pack, 'file': target, 'sourceFile': member, 'sourceSha256': digest(source), 'embeddedResources': embedded, 'sha256': digest(model), 'bytes': len(model), 'animations': [a.get('name', '') for a in document.get('animations', [])]})
                 print(f'{pack}/{name}: {len(model)} bytes')
     pending['third_party/kenney/manifest.json'] = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode()
     for rel, data in pending.items():
         path = ROOT / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    print(f"Imported {len(manifest['models'])} models, {sum(m['bytes'] for m in manifest['models'])} bytes; all embedded and CC0")
+    print(f"Imported {len(manifest['models'])} models, {sum(m['bytes'] for m in manifest['models'])} bytes; self-contained, CC0")
 
 
 if __name__ == '__main__':
