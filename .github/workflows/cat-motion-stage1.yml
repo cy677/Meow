@@ -1,0 +1,33 @@
+name: Cat motion stage one
+on:
+  push:
+    branches: [feature/cat-motion-stage1-20260922]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cat-motion-stage1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:pet
+      - run: npm run test:motion
+      - run: npm run pet:build && npm run build
+      - name: Source snapshot
+        if: always()
+        run: git archive --format=tar.gz HEAD -o meow-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cat-motion-stage1-source
+          path: meow-source.tar.gz
+          retention-days: 7
