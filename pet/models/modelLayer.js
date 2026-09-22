@@ -190,7 +190,10 @@ export function createModelRewardsLayer({scene,camera,canvas,controls,toyWorld,g
     }
   }
   function screenPoint(entry){
-    const center=new THREE.Box3().setFromObject(entry.asset.root).getCenter(new THREE.Vector3()).project(camera),rect=canvas.getBoundingClientRect();
+    // Diagnostic interaction target: the lamp shade stays visible above the cat;
+    // its bounding-box midpoint can be behind the cat and correctly fail picking.
+    const target=entry.light?entry.light.getWorldPosition(new THREE.Vector3()):new THREE.Box3().setFromObject(entry.asset.root).getCenter(new THREE.Vector3());
+    const center=target.project(camera),rect=canvas.getBoundingClientRect();
     return [(center.x+1)*rect.width/2,(1-center.y)*rect.height/2];
   }
   return {select,update,fitView,diagnostics(){return {loading,errors:[...errors],cached:assets.size,dragging:!!drag,items:[...entries.values()].flat().map(e=>({id:e.def.id,index:e.index,position:e.asset.root.position.toArray(),screen:screenPoint(e),size:e.asset.dimensions.toArray(),animations:[...e.actions.keys()],animationTime:e.mixer?.time||0,body:!!e.body,shapes:e.body?.shapes.map(s=>s.type)||[],light:e.light?.intensity}))};},dispose(){if(disposed)return;disposed=true;generation++;release();for(const items of entries.values())for(const e of items)remove(e);entries.clear();assets.dispose();group.removeFromParent();notice.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',up,true);window.removeEventListener('blur',up);canvas.removeEventListener('lostpointercapture',up);}};
