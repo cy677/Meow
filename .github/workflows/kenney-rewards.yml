@@ -17,57 +17,47 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - name: Apply checksum-verified implementation patch
+      - name: Correct compact catalog thumbnail layout and asynchronous test wait
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import base64, lzma, hashlib, subprocess, shutil
-          folder = Path('.github/kenney-patch')
-          if folder.exists():
-              encoded = ''.join((folder / f'part-{i}').read_text().strip() for i in range(1, 5))
-              patch = lzma.decompress(base64.b64decode(encoded, validate=True))
-              assert hashlib.sha256(patch).hexdigest() == 'ef6358916b80f95d7bb86c70e17ace41476c684187e497ceb99d677956296f3d'
-              Path('/tmp/models.patch').write_bytes(patch)
-              subprocess.run(['git', 'apply', '--check', '/tmp/models.patch'], check=True)
-              subprocess.run(['git', 'apply', '/tmp/models.patch'], check=True)
-              shutil.rmtree(folder)
+          p=Path('pet/child.css')
+          text=p.read_text()
+          old='.model-reward-thumbnail { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }'
+          new='.child-dialog .reward-art.art-model { height:74px; gap:8px; }\n.model-reward-thumbnail { display:block; flex:0 0 86px; width:86px; height:64px; object-fit:contain; border-radius:8px; }'
+          if old in text: p.write_text(text.replace(old,new).replace('.model-reward-thumbnail ~ span:not(.reward-tag) { visibility:hidden; }','.model-reward-thumbnail ~ span:not(.reward-tag) { display:none; }'))
+          p=Path('pet/app.js');p.write_text(p.read_text().replace("image.loading='lazy'", "image.loading='eager'"))
+          p=Path('pet/tests/browser-models.mjs');text=p.read_text()
+          old="await page.locator('.model-reward-thumbnail').first().waitFor();assert.equal(await page.locator('.model-reward-thumbnail').first().evaluate(img=>img.complete&&img.naturalWidth>0),true);"
+          new="await page.waitForFunction(()=>{const img=document.querySelector('.model-reward-thumbnail');return img?.complete&&img.naturalWidth>0;});"
+          p.write_text(text.replace(old,new))
           PY
-      - name: Import reviewed embedded GLBs
-        run: |
-          python3 scripts/import_kenney_models.py
-          rm -f public/models/kenney/toy-car-kit/track-wide-straight.glb
       - run: npm ci --ignore-scripts
-      - name: Install isolated browser test dependency
+      - name: Install isolated browser test dependency without changing project resolution
         run: |
-          npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
-          npx playwright install --with-deps chromium
-      - name: Render reward thumbnails from actual models
-        run: node scripts/render_model_previews.mjs
+          npm install --prefix "$RUNNER_TEMP/model-browser" --no-package-lock --ignore-scripts playwright@1.55.0
+          ln -s "$RUNNER_TEMP/model-browser/node_modules/playwright" node_modules/playwright
+          "$RUNNER_TEMP/model-browser/node_modules/.bin/playwright" install --with-deps chromium
       - name: Unit tests and both application builds
         run: |
           npm run test:pet
           npm run pet:build
           npm run build
-      - name: Commit implementation and reviewed assets on feature branch
+      - name: Commit reviewed UI corrections on feature branch
         if: github.ref == 'refs/heads/feature/kenney-rewards-20260922'
         run: |
-          git add -A
-          git add -f public/models/kenney
+          git add pet/child.css pet/app.js pet/tests/browser-models.mjs
           if ! git diff --cached --quiet; then
-            git -c user.name='Meow model integration' -c user.email='actions@users.noreply.github.com' commit -m 'feat: integrate 14 local Kenney model rewards with interaction and data migration'
+            git -c user.name='Meow model integration' -c user.email='actions@users.noreply.github.com' commit -m 'fix: display model thumbnails at usable size and await image decoding'
             git push origin HEAD:feature/kenney-rewards-20260922
           fi
       - name: Real Chromium touch, animation, physics and catalog checks
         run: node pet/tests/browser-models.mjs
       - name: Existing growth and creation regression
+        if: always()
         run: |
           node pet/tests/browser-growth.mjs
           node pet/tests/browser-creation.mjs
-      - name: Collect review images
-        if: always()
-        run: |
-          mkdir -p pet/test-results/model-previews
-          cp public/models/kenney/previews/*.png pet/test-results/model-previews/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
