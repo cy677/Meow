@@ -18,7 +18,8 @@ function harness() {
   const bridge = Object.fromEntries(['applyState', 'play', 'feature', 'overlay', 'dispose']
     .map(name => [name, (...args) => calls.push([name, ...args])]));
   const frame = new Target();
-  const viewport = new Target(), classes = new Set(), observers=[];
+  const viewport = new Target(), classes = new Set(), viewportClasses = new Set(), observers=[];
+  viewport.classList = {contains(name){return viewportClasses.has(name);},toggle(name,on){if(on)viewportClasses.add(name);else viewportClasses.delete(name);}};
   const body = {classList:{toggle(name,on){if(on)classes.add(name);else classes.delete(name);},remove(name){classes.delete(name);}}};
   const child = { location: { origin }, document: { body: { dataset: {} } } };
   frame.contentDocument={getElementById:id=>id==='viewport'?viewport:null};
@@ -45,7 +46,7 @@ function harness() {
   // Tests attach a rejection handler before exercising close/error paths.
   scene.ready.catch(() => {});
   return {
-    scene, host, frame, child, bridge, calls, intervals, timeouts, win, origin, viewport, classes, observers,
+    scene, host, frame, child, bridge, calls, intervals, timeouts, win, origin, viewport, classes, viewportClasses, observers,
     ready() { child.document.body.dataset.studioReady = 'true'; child.meowHome = bridge; },
     notify({ origin: senderOrigin = origin, source = child, data = {type: 'meow:ready'} } = {}) { win.emit('message', {origin: senderOrigin, source, data}); },
     tick() { for (const fn of [...intervals.values()]) fn(); },
@@ -152,7 +153,9 @@ test('home scene: photo overlay hides family controls and restores them on close
   const h=harness();try{h.ready();h.tick();await h.scene.ready;
     assert.equal(h.classes.has('child-photo-open'),false);
     h.viewport.dataset.shareCardOpen='true';h.observers[0].callback();assert.equal(h.classes.has('child-photo-open'),true);
-    h.viewport.dataset.shareCardOpen='false';h.observers[0].callback();assert.equal(h.classes.has('child-photo-open'),false);
-    h.viewport.dataset.shareCardOpen='true';h.observers[0].callback();h.scene.dispose();assert.equal(h.classes.has('child-photo-open'),false);assert.equal(h.observers[0].active,false);
+     h.viewport.dataset.shareCardOpen='false';h.observers[0].callback();assert.equal(h.classes.has('child-photo-open'),false);
+     h.viewport.classList.toggle('device-photo-fullscreen',true);h.observers[0].callback();assert.equal(h.classes.has('child-together-open'),true);
+     h.viewport.classList.toggle('device-photo-fullscreen',false);h.observers[0].callback();assert.equal(h.classes.has('child-together-open'),false);
+     h.viewport.dataset.shareCardOpen='true';h.observers[0].callback();h.scene.dispose();assert.equal(h.classes.has('child-photo-open'),false);assert.equal(h.observers[0].active,false);
   }finally{h.restore();}
 });

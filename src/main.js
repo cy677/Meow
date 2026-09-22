@@ -2714,6 +2714,12 @@ document.getElementById('btn-export-png').addEventListener('click', () => {
   else shareCardCapture.open();
 });
 
+const togetherButton = document.createElement('button');
+togetherButton.id = 'btn-photo-together'; togetherButton.type = 'button'; togetherButton.className = 'btn';
+togetherButton.textContent = '与我合影'; togetherButton.setAttribute('data-i18n-ignore', '');
+document.getElementById('btn-export-png').after(togetherButton);
+togetherButton.addEventListener('click', () => void shareCardCapture.openTogether());
+
 createCodexPetPreview({
   trigger: document.getElementById('btn-codex-pet'),
   capturePreview: () => canvas.toDataURL('image/png'),

@@ -3,6 +3,7 @@ export function createHomeScene(host) {
   const frame = document.createElement('iframe');
   frame.className = 'home-scene';
   frame.title = '小猫互动场景';
+  frame.allow = "camera 'self'; web-share 'self'";
   let disposed = false;
   let settled = false;
   let pollTimer;
@@ -48,9 +49,12 @@ export function createHomeScene(host) {
     settled = true;
     host.dataset.ready = 'true';
     const viewport=frame.contentDocument.getElementById('viewport');
-    const syncPhoto=()=>document.body.classList.toggle('child-photo-open',viewport?.dataset.shareCardOpen==='true');
+    const syncPhoto=()=>{
+      document.body.classList.toggle('child-photo-open',viewport?.dataset.shareCardOpen==='true');
+      document.body.classList.toggle('child-together-open',viewport?.classList.contains('device-photo-fullscreen'));
+    };
     photoObserver=new MutationObserver(syncPhoto);
-    if(viewport)photoObserver.observe(viewport,{attributes:true,attributeFilter:['data-share-card-open']});
+    if(viewport)photoObserver.observe(viewport,{attributes:true,attributeFilter:['data-share-card-open','class']});
     syncPhoto();
     stopWatching();
     resolveReady(controller);
@@ -72,7 +76,7 @@ export function createHomeScene(host) {
       disposed = true;
       stopWatching();
       photoObserver?.disconnect();
-      document.body.classList.remove('child-photo-open');
+      document.body.classList.remove('child-photo-open','child-together-open');
       window.removeEventListener('message', message);
       host.removeEventListener('meow:overlay-change', overlay);
       try { runtime()?.dispose(); } catch { /* Removing the frame must still succeed. */ }

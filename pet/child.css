@@ -33,3 +33,4 @@ dialog.child-dialog{position:absolute;inset:0 0 0 auto;box-sizing:border-box;wid
 body.child-active:not(.house-open) .child-hud{top:auto;bottom:96px}
 
 body.child-photo-open .child-hud,body.child-photo-open .child-dock{display:none}
+body.child-together-open #pet-scene{width:100%;height:100%;z-index:10}

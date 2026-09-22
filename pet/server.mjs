@@ -1,3 +1,4 @@
+import {cameraPermissionsPolicy} from './api/cameraPolicy.mjs';
 import { validateGrowthProfile } from './growthStore.mjs';
 import http from 'node:http';
 import https from 'node:https';
@@ -87,7 +88,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.mp3':'audio/mpeg','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'};
   const handler=async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
-    res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=(), accelerometer=(self), gyroscope=(self), magnetometer=()');
+    res.setHeader('Permissions-Policy',cameraPermissionsPolicy(''));
     if(!dev)res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     try {
       if(!req.headers.host)fail(400,'缺少 Host');
@@ -96,6 +97,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
       catch{fail(403,'Host 不在允许列表');}
       if(req.headers.origin&&req.headers.origin!==expectedOrigin)fail(403,'不允许跨站请求');
       const path=new URL(req.url,expectedOrigin).pathname;
+      res.setHeader('Permissions-Policy',cameraPermissionsPolicy(path));
       // Upstream controls use element style attributes; exports preview local Blob images.
       if(path==='/studio.html'){
         res.setHeader('X-Frame-Options','SAMEORIGIN');

@@ -66,12 +66,15 @@ export function mountHomeRuntime(runtime,data,defaults){
   // Keep the upstream tools directly on the stage; export tools belong to parents.
   const photo=document.getElementById('btn-export-png');
   photo.classList.add('child-photo');photo.textContent='📷 拍照 · 留影';
-  document.getElementById('viewport').append(photo);
+  const photoActions=document.createElement('div');photoActions.className='child-photo-actions';
+  const together=document.getElementById('btn-photo-together');together.classList.add('child-photo');
+  photoActions.append(photo,together);document.getElementById('viewport').append(photoActions);
   const resetView=document.createElement('button');resetView.type='button';resetView.id='child-reset-view';resetView.className='child-reset-view';resetView.textContent='还原视角';
   resetView.addEventListener('click',()=>runtime.resetView(homeView));
-  document.getElementById('viewport').append(resetView);
+  photoActions.append(resetView);
   for(const id of ['btn-export-glb','btn-codex-pet'])document.getElementById(id)?.remove();
   photo.addEventListener('click',stop,true);
+  together.addEventListener('click',stop,true);
   const canvas=document.getElementById('scene');canvas.tabIndex=0;
   const pointers=new Set();
   const down=e=>{pointers.add(e.pointerId);pointerHeld=true;if(activePlan)stop();};
@@ -91,5 +94,5 @@ export function mountHomeRuntime(runtime,data,defaults){
     if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}
-  },dispose(){disposed=true;cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);}};
+  },dispose(){disposed=true;cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);together.removeEventListener('click',stop,true);photoActions.remove();}};
 }
