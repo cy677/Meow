@@ -26,10 +26,10 @@ import {
   createWeatherAudio,
 } from './weather.js';
 import {
-  MESH2MOTION_ACTIONS,
   getRigCompatibility,
 } from './mesh2motionRig.js';
 import { createMesh2MotionSkinRig } from './mesh2motionSkinRig.js';
+import { CAT_MOTION_CLIPS as MESH2MOTION_ACTIONS } from './catMotion/clipCatalog.js';
 import {
   MOTION_KEY_BINDINGS,
   createCatMotionStateMachine,

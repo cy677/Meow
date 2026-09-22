@@ -10,24 +10,11 @@ import {
 // Source timing is read from the 14 CC0 fox/cat action .blend files.
 // The procedural cat cannot reuse the source skin weights, so these clips are
 // retargeted as body-region controls that survive every SDF remesh.
-export const MESH2MOTION_ACTIONS = [
-  { id: 'idle', name: '待机', sourceName: 'Idle', fps: 24, frames: [0, 40], duration: 40 / 24, loop: true, family: 'idle' },
-  { id: 'idle-alert', name: '警觉待机', sourceName: 'Idle Alert', fps: 24, frames: [0, 48], duration: 2, loop: true, family: 'idle' },
-  { id: 'walk', name: '行走', sourceName: 'Walk', fps: 30, frames: [0, 30], duration: 1, loop: true, family: 'locomotion' },
-  { id: 'run', name: '奔跑', sourceName: 'Run', fps: 24, frames: [0, 14], duration: 14 / 24, loop: true, family: 'locomotion' },
-  { id: 'sneak', name: '潜行', sourceName: 'Sneak', fps: 24, frames: [0, 39], duration: 39 / 24, loop: true, family: 'locomotion' },
-  { id: 'jump', name: '跳跃', sourceName: 'Jump', fps: 30, frames: [1, 66], duration: 65 / 30, loop: false, family: 'airborne' },
-  { id: 'fall', name: '落下', sourceName: 'Fall', fps: 30, frames: [0, 15], duration: 0.5, loop: false, family: 'airborne' },
-  { id: 'sit', name: '坐下', sourceName: 'Sit', fps: 24, frames: [0, 40], duration: 40 / 24, loop: false, family: 'transition' },
-  { id: 'rest-pose', name: '休息姿势', sourceName: 'Rest Pose', fps: 30, frames: [1, 10], duration: 0.3, loop: true, family: 'idle' },
-  { id: 'bark', name: '叫唤', sourceName: 'Bark', fps: 30, frames: [0, 84], duration: 2.8, loop: true, family: 'expression' },
-  { id: 'bite', name: '咬咬', sourceName: 'Bite', fps: 30, frames: [1, 26], duration: 25 / 30, loop: true, family: 'expression' },
-  { id: 'fetch', name: '扑接', sourceName: 'Fetch', fps: 24, frames: [1, 30], duration: 29 / 24, loop: true, family: 'expression' },
-  { id: 'howl', name: '仰头叫', sourceName: 'Howl', fps: 24, frames: [1, 70], duration: 69 / 24, loop: true, family: 'expression' },
-  { id: 'death', name: '倒地', sourceName: 'Death', fps: 24, frames: [1, 35], duration: 34 / 24, loop: false, family: 'collapse' },
-];
+import { SOURCE_CLIPS, CAT_MOTION_CLIPS } from './catMotion/clipCatalog.js';
+import { sampleAuthoredPose } from './catMotion/authoredPoses.js';
+export const MESH2MOTION_ACTIONS = SOURCE_CLIPS;
 
-const ACTION_BY_ID = new Map(MESH2MOTION_ACTIONS.map((action) => [action.id, action]));
+const ACTION_BY_ID = new Map(CAT_MOTION_CLIPS.map((action) => [action.id, action]));
 
 const POSE_COMPATIBILITY = {
   standing: { grade: 'full', scale: 1, label: '完整四足绑定' },
@@ -111,6 +98,13 @@ export function sampleMesh2MotionAction(
   const state = blankState(action, phase, progress);
   state.travelDirection = travelDirection < 0 ? -1 : 1;
   const pingPong = 0.5 - 0.5 * Math.cos(phase);
+
+  if (action.source === 'meow-authored') {
+    const authored = sampleAuthoredPose(action.id, progress, amount);
+    Object.assign(state, authored.root, {authoredPose:authored, sourceExact:false,
+      source:'meow-authored', compatibility, amount, sourcePose:null});
+    return state;
+  }
 
   switch (action.id) {
     case 'idle':

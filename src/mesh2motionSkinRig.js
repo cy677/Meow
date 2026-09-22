@@ -6,27 +6,8 @@ import {
 } from './mesh2motionRig.js';
 import { SOURCE_BONE_ORDER } from './mesh2motionSource.js';
 
-const BONE_PARENT = Object.freeze({
-  hips: null,
-  spineLow: 'hips',
-  spineHigh: 'spineLow',
-  head: 'spineHigh',
-  frontLUpper: 'spineHigh',
-  frontLLower: 'frontLUpper',
-  frontLFoot: 'frontLLower',
-  frontRUpper: 'spineHigh',
-  frontRLower: 'frontRUpper',
-  frontRFoot: 'frontRLower',
-  backLUpper: 'hips',
-  backLLower: 'backLUpper',
-  backLFoot: 'backLLower',
-  backRUpper: 'hips',
-  backRLower: 'backRUpper',
-  backRFoot: 'backRLower',
-  tailBase: 'hips',
-  tailMid: 'tailBase',
-  tailTip: 'tailMid',
-});
+import { BONE_PARENT } from './catMotion/skeleton.js';
+import { authoredGlobalQuaternions } from './catMotion/authoredPoses.js';
 
 const BONE_INDEX = new Map(SOURCE_BONE_ORDER.map((name, index) => [name, index]));
 const LEG_PREFIX_BY_ID = Object.freeze([
@@ -772,7 +753,11 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
       pose,
       travelDirection: options.travelDirection,
     });
-    const retarget = prepareSourceRetarget(state, metrics, {
+    const retarget = state.authoredPose ? {
+      quaternions: authoredGlobalQuaternions(state.authoredPose),
+      sourceFrame: null,
+      source: 'meow-authored',
+    } : prepareSourceRetarget(state, metrics, {
       localCap: null,
       limitLocalDeltas: false,
     });

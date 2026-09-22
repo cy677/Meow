@@ -248,6 +248,7 @@ export function createPetScene(host) {
     },
     stop(immediate=false){if(immediate){dynamicEntry?.player?.cancel();if(staticEntry)selectEntry(staticEntry,false);motionBar.hidden=true;host.dataset.motionPlaying='false';}else dynamicEntry?.player?.stop();},
     getMotionDiagnostics:()=>host.getMotionDiagnostics(),
+    getMotionRuntime:()=>dynamicEntry?.player??null,
     dispose() {disposed=true;cancelAnimationFrame(frame);input.dispose();toyInput.dispose();environment.dispose();roomTools.remove();host.removeEventListener('meow:overlay-change',onOverlay);document.removeEventListener('visibilitychange',syncEnvironmentPause);delete host.getSceneDiagnostics;observer.disconnect();workspaceObserver?.disconnect();controls.removeEventListener('change',recordView);controls.dispose();clearEntries();motionBar.remove();delete host.getMotionDiagnostics;release(floor);renderer.dispose();renderer.domElement.remove();},
   };
 }
