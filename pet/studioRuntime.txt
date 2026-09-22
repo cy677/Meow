@@ -50,7 +50,7 @@ export const petStudio = {applyModels:petApplyModels,disposeModels:petDisposeMod
     controls.enableDamping=false;controls.update();
     camera.position.set(view.x+motionCameraOffset.x,view.y,view.z+motionCameraOffset.y);
     controls.target.set(view.targetX+motionCameraOffset.x,view.targetY,view.targetZ+motionCameraOffset.y);
-    controls.update();controls.enableDamping=damping;
+    controls.update();controls.enableDamping=damping;petModelLayer?.fitView();
   },
   setAccess(access) {
     petChildMotion=true;

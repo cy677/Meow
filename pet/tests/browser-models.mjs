@@ -40,10 +40,10 @@ try {
  await page.screenshot({path:fileURLToPath(new URL('models-rewards.png',out))});
  // Exercise a real UI unequip/equip; this must preserve balance and ownership.
  const card=page.locator('[data-reward-id=kenney-chick]');await card.locator('button[data-action=unequip]').click();
- await page.waitForFunction(()=>!document.querySelector('[data-reward-id=kenney-chick] button[data-busy]'));
+ await page.locator('#rewards-dialog').waitFor({state:'hidden'});
  if(!await page.locator('#rewards-dialog').isVisible())await page.locator('[data-action=open-rewards]').click();
  await page.locator('[data-category=model]').click();await page.locator('[data-reward-id=kenney-chick] button[data-action=equip]').click();
- if(await page.locator('#rewards-dialog').isVisible())await page.locator('[data-action=close-rewards]').click();
+ await page.locator('#rewards-dialog').waitFor({state:'hidden'});
  await frame.waitForFunction(()=>window.meowHome.models().items.some(e=>e.id==='chick'));
  assert.equal(app.store.snapshot().balance,balance);mark('visible model filter, real thumbnails and authenticated equip/unequip work without charging twice');
  // Every alternative in the paid catalogue is loaded at least once.

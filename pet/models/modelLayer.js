@@ -81,8 +81,31 @@ export function createModelRewardsLayer({scene,camera,canvas,controls,toyWorld,g
         entries.set(def.id,made);errors.delete(def.id);
       }catch(error){for(const entry of made)remove(entry);if(!disposed&&token===generation){errors.set(def.id,error.message);console.error(`模型 ${def.id} 加载失败`,error);}}
       finally{loading--;if(!disposed)status();}
-    }));
+    })).then(()=>{if(!disposed&&token===generation)fitView();});
     return pending;
+  }
+  // Fit only after equipment changes or explicit view reset, never on each frame/poll.
+  // Preserve the viewing direction and target; ordinary orbit/zoom remains available.
+  function fitView() {
+    if(disposed||!entries.size)return;
+    const bounds=new THREE.Box3();
+    for(const items of entries.values())for(const entry of items)bounds.expandByObject(entry.asset.root);
+    const cat=getCat();if(cat)bounds.expandByObject(cat);
+    if(bounds.isEmpty())return;
+    bounds.expandByScalar(.16);camera.updateMatrixWorld(true);
+    const backward=camera.position.clone().sub(controls.target).normalize();
+    const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
+    const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+    const tanV=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+    const tanH=tanV*camera.aspect;
+    let distance=camera.position.distanceTo(controls.target);
+    for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]) {
+      const relative=new THREE.Vector3(x,y,z).sub(controls.target),depth=relative.dot(backward);
+      distance=Math.max(distance,depth+Math.abs(relative.dot(right))/(tanH*.84),depth+Math.abs(relative.dot(up))/(tanV*.72));
+    }
+    distance=Math.min(controls.maxDistance,distance);
+    camera.position.copy(controls.target).addScaledVector(backward,distance);
+    controls.update();camera.updateMatrixWorld(true);
   }
   function projected(e) {
     const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);
@@ -161,5 +184,5 @@ export function createModelRewardsLayer({scene,camera,canvas,controls,toyWorld,g
     const center=new THREE.Box3().setFromObject(entry.asset.root).getCenter(new THREE.Vector3()).project(camera),rect=canvas.getBoundingClientRect();
     return [(center.x+1)*rect.width/2,(1-center.y)*rect.height/2];
   }
-  return {select,update,diagnostics(){return {loading,errors:[...errors],cached:assets.size,dragging:!!drag,items:[...entries.values()].flat().map(e=>({id:e.def.id,index:e.index,position:e.asset.root.position.toArray(),screen:screenPoint(e),size:e.asset.dimensions.toArray(),animations:[...e.actions.keys()],animationTime:e.mixer?.time||0,body:!!e.body,shapes:e.body?.shapes.map(s=>s.type)||[],light:e.light?.intensity}))};},dispose(){if(disposed)return;disposed=true;generation++;release();for(const items of entries.values())for(const e of items)remove(e);entries.clear();assets.dispose();group.removeFromParent();notice.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',up,true);window.removeEventListener('blur',up);canvas.removeEventListener('lostpointercapture',up);}};
+  return {select,update,fitView,diagnostics(){return {loading,errors:[...errors],cached:assets.size,dragging:!!drag,items:[...entries.values()].flat().map(e=>({id:e.def.id,index:e.index,position:e.asset.root.position.toArray(),screen:screenPoint(e),size:e.asset.dimensions.toArray(),animations:[...e.actions.keys()],animationTime:e.mixer?.time||0,body:!!e.body,shapes:e.body?.shapes.map(s=>s.type)||[],light:e.light?.intensity}))};},dispose(){if(disposed)return;disposed=true;generation++;release();for(const items of entries.values())for(const e of items)remove(e);entries.clear();assets.dispose();group.removeFromParent();notice.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',up,true);window.removeEventListener('blur',up);canvas.removeEventListener('lostpointercapture',up);}};
 }

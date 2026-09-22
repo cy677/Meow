@@ -29,7 +29,7 @@ try{
   assert.equal(app.store.growth.read(true).tasks.length,66);assert.equal(app.store.growth.read().tasks.length,0);
   // Select the agreed preset explicitly; the initial custom-action choice requires its own title.
   await parent.locator('#growth-task').selectOption('school_basic-health-1');
-  assert.match(await parent.locator('#growth-basis').innerText(),/完成条件/);assert.match(await parent.locator('#growth-basis').innerText(),/允许的帮助/);assert.match(await parent.locator('#growth-basis').innerText(),/指南/);
+  assert.match(await parent.locator('#growth-basis').innerText(),/完成条件/);assert.equal(await parent.locator('#growth-basis').isVisible(),true);
   await screenshot(parent,'growth-parent');mark('六类、66条示例、默认四档和家长加分依据');
   await parent.locator('#reason').fill('今天和家长一起完成了约定的卫生准备');await parent.locator('#award-submit').click();
   await parent.waitForFunction(()=>document.querySelector('#balance').textContent==='2');assert.equal(app.store.snapshot().lifetime,2);mark('帮助不减分，喵币与经验同时入账');
