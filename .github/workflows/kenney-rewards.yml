@@ -4,44 +4,34 @@ on:
     branches: [feature/kenney-rewards-20260922]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: kenney-rewards-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - name: Audit official source archives
+      - name: Import reviewed model subset
+        run: python3 scripts/import_kenney_models.py
+      - name: Commit assets on implementation branch only
+        if: github.ref == 'refs/heads/feature/kenney-rewards-20260922'
         run: |
-          python3 - <<'PY'
-          import urllib.request, io, zipfile, json, struct, hashlib
-          packs = {
-            'cube-pets': 'https://kenney.nl/media/pages/assets/cube-pets/44e58e945f-1774520254/kenney_cube-pets_1.0.zip',
-            'toy-car-kit': 'https://kenney.nl/media/pages/assets/toy-car-kit/42e19cc426-1736346027/kenney_toy-car-kit.zip',
-            'brick-kit': 'https://kenney.nl/media/pages/assets/brick-kit/46a22f3d08-1716981002/kenney_brick-kit.zip',
-            'furniture-kit': 'https://kenney.nl/media/pages/assets/furniture-kit/440e0608a4-1677580847/kenney_furniture-kit.zip',
-          }
-          for pack, url in packs.items():
-            data = urllib.request.urlopen(url, timeout=90).read()
-            z = zipfile.ZipFile(io.BytesIO(data))
-            print('\nPACK', pack, 'SHA256', hashlib.sha256(data).hexdigest())
-            for name in z.namelist():
-              if 'license' in name.lower() and name.lower().endswith('.txt'):
-                print('LICENSE', name, z.read(name).decode('utf-8-sig'))
-              if name.lower().endswith(('.glb', '.gltf')):
-                raw = z.read(name)
-                if name.lower().endswith('.glb'):
-                  length = struct.unpack_from('<I', raw, 12)[0]
-                  doc = json.loads(raw[20:20+length])
-                else:
-                  doc = json.loads(raw)
-                print('MODEL', name, 'BYTES', len(raw), 'ANIMATIONS', [a.get('name') for a in doc.get('animations', [])])
-                if pack == 'cube-pets' and any(s in name.lower() for s in ('bunny', 'chick', 'bee', 'caterpillar')):
-                  print('DETAIL', json.dumps({'nodes':doc.get('nodes'), 'meshes':[{'name':m.get('name'), 'primitives':m.get('primitives')} for m in doc.get('meshes',[])], 'accessors': [{k:v for k,v in a.items() if k in ('type','min','max','count')} for a in doc.get('accessors',[])]}))
-          PY
+          git add public/models/kenney third_party/kenney
+          if ! git diff --cached --quiet; then
+            git -c user.name='Meow asset import' -c user.email='actions@users.noreply.github.com' commit -m 'assets: vendor 23 verified CC0 Kenney GLB models and licenses'
+            git push origin HEAD:feature/kenney-rewards-20260922
+          fi
+      - run: npm ci --ignore-scripts
+      - name: Prepare isolated validation workspace
+        run: tar --exclude=.git --exclude=pet/data --exclude='*.pem' --exclude='*.key' -czf /tmp/meow-validation.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meow-validation-workspace
+          path: /tmp/meow-validation.tar.gz
+          retention-days: 1
