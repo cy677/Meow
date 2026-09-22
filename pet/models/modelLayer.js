@@ -49,6 +49,15 @@ export function createModelRewardsLayer({scene,camera,canvas,controls,toyWorld,g
       play(entry,'idle');
     }else {entry.body=modelBody(positioned,asset,toyWorld.world);entry.body.modelRewardId=def.id;}
     if(def.kind==='lamp') {
+      // The visible pole can be thinner than a screen pixel. A bounded invisible
+      // target makes finger taps reliable without enlarging the lamp or its collider.
+      // modelBody already centres the static visual at the body's origin.
+      entry.pickProxy=new THREE.Mesh(
+        new THREE.BoxGeometry(Math.max(.38,asset.dimensions.x),asset.dimensions.y,Math.max(.38,asset.dimensions.z)),
+        new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,colorWrite:false})
+      );
+      entry.pickProxy.name='lamp-touch-target';entry.pickProxy.userData.skipShadow=true;
+      asset.root.add(entry.pickProxy);
       entry.light=new THREE.PointLight('#ffd6a0',.9,4,2);entry.light.position.set(def.position[0],def.size*.86,def.position[2]);entry.light.castShadow=false;group.add(entry.light);
     }
     group.add(asset.root,shadow);
