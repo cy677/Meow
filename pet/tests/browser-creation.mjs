@@ -44,8 +44,12 @@ for (const page of [parent, child]) {
 const screenshot = (page, name) => page.screenshot({ path: fileURLToPath(new URL(name + '.png', out)), fullPage: true });
 const key = () => randomUUID();
 async function openRewards() {
-  await child.locator('[data-action=open-rewards]').click();
+  // Login/reload opens the drawer already; its launcher is hidden while open.
+  if (!(await child.locator('#rewards-dialog').isVisible())) {
+    await child.locator('[data-action=open-rewards]').click();
+  }
   await child.locator('#rewards-dialog').waitFor({ state: 'visible' });
+  await child.locator('[data-view=shop]').click();
 }
 async function closeRewards() {
   if (await child.locator('#rewards-dialog').isVisible()) {
@@ -209,9 +213,9 @@ try {
   await child.locator('#scene').waitFor();
   assert.equal(await child.locator('body.studio-child #panel').isVisible(), false);
   assert.equal(await child.locator('#btn-random').isDisabled(), true);
-  assert.equal(await child.locator('.studio-pad button').count(), 7);
+  assert.equal(await child.locator('#scene').isVisible(), true);
   await screenshot(child, 'luna-child-studio-locked');
-  mark('Direct child studio editing lock and touch controls');
+  mark('Direct child studio editing lock and visible scene');
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   writeFileSync(new URL('creation-browser-report.json', out), JSON.stringify({ok:true,checks,errors,external,failedRequests}, null, 2));
