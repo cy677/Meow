@@ -1,4 +1,4 @@
-/** Browser regression for parent-only creation rewards and child mystery reveal. */
+/** Browser regression for parent-only creations and the fully visible child catalogue. */
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -20,10 +20,7 @@ const parentContext = await browser.newContext({ viewport: { width: 1280, height
 const childContext = await browser.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: true });
 const parent = await parentContext.newPage();
 const child = await childContext.newPage();
-const errors = [];
-const external = [];
-const failedRequests = [];
-const checks = [];
+const errors = [], external = [], failedRequests = [], checks = [];
 const mark = message => { checks.push(message); console.log('PASS', message); };
 await child.addInitScript(() => {
   window.__homeMessages = [];
@@ -44,22 +41,18 @@ for (const page of [parent, child]) {
     if (/^https?:/.test(request.url()) && !request.url().startsWith(origin + '/')) external.push(request.url());
   });
 }
-
 const screenshot = (page, name) => page.screenshot({ path: fileURLToPath(new URL(name + '.png', out)), fullPage: true });
 const key = () => randomUUID();
-
 async function openRewards() {
   await child.locator('[data-action=open-rewards]').click();
   await child.locator('#rewards-dialog').waitFor({ state: 'visible' });
 }
-
 async function closeRewards() {
   if (await child.locator('#rewards-dialog').isVisible()) {
     await child.locator('[data-action=close-rewards]').click();
     await child.locator('#rewards-dialog').waitFor({ state: 'hidden' });
   }
 }
-
 async function revealReward(id) {
   for (let i = 0; i < 100; i += 1) {
     const card = child.locator(`.reward-card[data-reward-id="${id}"]`);
@@ -70,34 +63,20 @@ async function revealReward(id) {
   }
   throw new Error(`reward ${id} was not rendered in the catalogue`);
 }
-
-async function openChildFeature(name) {
-  const menu = child.locator('.child-functions');
-  if ((await menu.getAttribute('open')) === null) await menu.locator('summary').click();
-  const button = child.locator(`[data-feature="${name}"]`);
-  assert.equal(await button.count(), 1, `${name} remains in the free child menu`);
-  await button.click();
-}
-
 try {
   await parent.goto(origin + '/parent.html');
-  for (const [name, value] of Object.entries({
-    setupToken: app.setupToken,
-    pin: '864209',
-    childCode: '2468',
-    childName: '测试小朋友',
-    petName: '小橘',
-  })) await parent.locator(`#setup-form [name="${name}"]`).fill(value);
+  for (const [name, value] of Object.entries({setupToken:app.setupToken,pin:'864209',childCode:'2468',childName:'测试小朋友',petName:'小橘'})) {
+    await parent.locator(`#setup-form [name="${name}"]`).fill(value);
+  }
   await parent.locator('#setup-form [name=age]').selectOption('6');
   await parent.locator('#setup-form [name=mode]').selectOption('school_basic');
   await parent.locator('#setup-form button[type=submit]').click();
   await parent.locator('#workspace').waitFor({ state: 'visible' });
-
   await parent.goto(origin + '/studio.html?mode=parent');
   await parent.locator('body[data-studio-ready="true"]').waitFor();
   await parent.locator('#scene').waitFor();
   for (const label of ['随机生成', '保存为解锁奖励', '另存为新奖励', '保存草稿']) {
-    assert.equal(await parent.getByRole('button', { name: label, exact: true }).count(), 1, `parent exposes ${label}`);
+    assert.equal(await parent.getByRole('button', { name: label, exact: true }).count(), 1);
   }
   await parent.getByRole('button', { name: '随机生成', exact: true }).click();
   await parent.waitForFunction(() => Number(document.querySelector('#viewport')?.dataset.lastRandomizeMs) >= 0);
@@ -105,7 +84,6 @@ try {
   assert.equal(await poseChip.count(), 1);
   await poseChip.click();
   await parent.locator('#viewport[data-cat-pose="slouchSit"]').waitFor();
-
   await parent.getByRole('button', { name: '保存为解锁奖励', exact: true }).click();
   await parent.locator('#creation-form').waitFor({ state: 'visible' });
   await parent.locator('#creation-form [name=title]').fill('Luna固定作品');
@@ -116,27 +94,21 @@ try {
   await parent.locator('#creation-form').waitFor({ state: 'hidden' });
   await parent.locator('.studio-bar [role=status]').filter({ hasText: '已保存奖励' }).waitFor();
   const creation = app.store.catalog().rewards.find(reward => reward.title === 'Luna固定作品');
-  assert.ok(creation, 'parent save created a catalogue reward');
+  assert.ok(creation);
   assert.equal(creation.category, 'creation');
   assert.equal(creation.cost, 10);
   assert.equal(creation.unlockAt, 20);
-  assert.equal(creation.preset.params.pose, 'slouchSit', 'saved reward keeps the generated result');
+  assert.equal(creation.preset.params.pose, 'slouchSit');
 
-  // A parent-only draft can be saved without changing the child state.
-  const loafChip = parent.locator('.chip[data-id="loaf"]');
-  assert.equal(await loafChip.count(), 1);
-  await loafChip.click();
+  await parent.locator('.chip[data-id="loaf"]').click();
   await parent.getByRole('button', { name: '保存草稿', exact: true }).click();
   await parent.locator('.studio-bar [role=status]').filter({ hasText: '草稿已保存' }).waitFor();
-  assert.equal(app.store.studio(false).preset && Object.keys(app.store.studio(false).preset).length, 0, 'draft is not sent to child');
+  assert.equal(app.store.studio(false).preset && Object.keys(app.store.studio(false).preset).length, 0);
   await screenshot(parent, 'luna-creation-parent');
   mark('Parent creation saved; separate draft does not change child state');
-  // Finish the parent workflow through its visible navigation before opening the
-  // child's renderer. Two software-rendered studios otherwise contend for the CI GPU.
   await parent.getByRole('link', {name:'返回家长页', exact:true}).click();
   await parent.locator('#workspace').waitFor({state:'visible'});
-  assert.equal(app.store.snapshot().creation, null, 'returning does not equip the parent draft');
-
+  assert.equal(app.store.snapshot().creation, null);
   await child.goto(origin + '/');
   await child.locator('#code').fill('2468');
   await child.locator('#login-form button').click();
@@ -146,14 +118,12 @@ try {
   let home = child.frame({ url: /studio\.html\?embedded=1/ });
   await home.locator('#initial-loader').waitFor({ state: 'hidden' });
   assert.equal(app.store.snapshot().creation, null);
-  assert.equal(await home.evaluate(() => window.__getAnimation().bindingPose), app.store.snapshot().params.pose, 'child ignores parent draft');
-  assert.equal(await child.locator('[data-feature=parameters]').count(), 0, 'child menu has no parameter entry');
-  assert.equal(await child.locator('[data-feature=random]').count(), 0, 'child menu has no random entry');
-  assert.equal(await home.locator('body.studio-child #panel').isVisible(), false, 'child studio hides the parameter panel');
-  assert.equal(await home.locator('#btn-random').isDisabled(), true, 'child random control is disabled in source runtime');
-
+  assert.equal(await home.evaluate(() => window.__getAnimation().bindingPose), app.store.snapshot().params.pose);
+  assert.equal(await child.locator('[data-feature=parameters]').count(), 0);
+  assert.equal(await child.locator('[data-feature=random]').count(), 0);
+  assert.equal(await home.locator('body.studio-child #panel').isVisible(), false);
+  assert.equal(await home.locator('#btn-random').isDisabled(), true);
   mark('Child native iframe ready; saved draft remains private');
-  // Reopen the actual app repeatedly; readiness must not depend on late chunk loading.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await child.reload();
     await child.locator('#pet-scene[data-ready=true]').waitFor({state:'attached'});
@@ -164,75 +134,52 @@ try {
   }
   mark('Three consecutive native homepage reloads complete');
 
-  // Free original menu features remain reachable with zero points.
+  // Current main exposes stage tools directly and reserves export editing for parents.
   const balanceBefore = app.store.snapshot().balance;
-  await openChildFeature('capture');
-  await home.locator('.share-card-overlay').waitFor({ state: 'visible' });
+  await home.locator('#btn-export-png').click();
+  await home.locator('.share-card-overlay').waitFor({state:'visible'});
   await home.locator('.share-card-close-button').click();
-  const [glbDownload] = await Promise.all([
-    child.waitForEvent('download'),
-    openChildFeature('glb'),
-  ]);
-  assert.match(glbDownload.suggestedFilename(), /\.glb$/);
-  await openChildFeature('codex');
-  await home.locator('.codex-pet-overlay').waitFor({ state: 'visible' });
-  await home.locator('.codex-pet-close').click();
-  await openChildFeature('music');
-  await openChildFeature('lighting');
-  await home.locator('body.studio-lighting-open').waitFor();
-  await openChildFeature('weather');
-  await home.locator('body.studio-weather-open').waitFor();
-  assert.equal(app.store.snapshot().balance, balanceBefore, 'free original features do not spend points');
+  // The record continuously rotates: click its actual centre, not a fictitious stable frame.
+  const music = home.locator('#bgm-toggle');
+  const playing = await music.getAttribute('aria-pressed');
+  const rect = await music.boundingBox();
+  assert.ok(rect);
+  await child.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  await home.waitForFunction(before => document.querySelector('#bgm-toggle').getAttribute('aria-pressed') !== before, playing);
+  assert.equal(await home.locator('#btn-export-glb').count(),0);
+  assert.equal(await home.locator('#btn-codex-pet').count(),0);
+  assert.equal(app.store.snapshot().balance,balanceBefore);
+  mark('Direct stage capture/music remain free; parent-only exports are absent');
 
-  mark('Free original capture, GLB, Codex, music, lighting and weather');
-
-  // The first page exposes the first two unowned rewards; later unowned rewards are mystery cards.
-  const stateResponse = await childContext.request.get(origin + '/api/state');
-  assert.equal(stateResponse.status(), 200);
+  // The complete collection is visible on current main; do not restore obsolete mystery cards.
+  const stateResponse = await childContext.request.get(origin+'/api/state');
+  assert.equal(stateResponse.status(),200);
   const childState = await stateResponse.json();
-  const hiddenReward = childState.rewards.find(reward => reward.mystery && ['coat', 'shape', 'eyes', 'pose', 'trick'].includes(reward.category));
-  assert.ok(hiddenReward, 'child state contains a mystery reward');
+  assert.equal(childState.rewards.filter(r=>r.mystery).length,0);
+  assert.equal(childState.rewards.filter(r=>r.category==='model').length,14);
+  const selected = childState.rewards.find(r=>!r.owned&&r.category==='coat');
+  assert.ok(selected);
   await openRewards();
-  for (let i = 0; i < 100 && !(await child.locator('.reward-card.is-mystery').count()); i += 1) {
-    const next = child.locator('#reward-next');
-    if (await next.isDisabled()) break;
-    await next.click();
-  }
-  assert.ok((await child.locator('.reward-card.is-mystery').count()) > 0, 'mystery cards are visible in the shop');
-  const firstMystery = child.locator('.reward-card.is-mystery').first();
-  assert.equal(await firstMystery.locator('h3').innerText(), '???');
-  assert.equal(await firstMystery.locator('.reward-foot').count(), 0, 'mystery card exposes no price or action');
-  await screenshot(child, 'luna-mystery-first-page');
+  assert.equal(await child.locator('.reward-card.is-mystery').count(),0);
+  await child.locator('[data-action=category][data-category=coat]').click();
+  const selectedCard = await revealReward(selected.id);
+  assert.notEqual(await selectedCard.locator('h3').innerText(),'???');
+  await screenshot(child,'luna-visible-catalogue');
   await closeRewards();
-
-  mark('Shop mystery cards preserve configured reveal order');
-
-  // Category filtering and pagination keep the same catalogue-wide mystery decision.
-  await openRewards();
-  const categoryButton = child.locator(`[data-action=category][data-category="${hiddenReward.category}"]`);
-  assert.equal(await categoryButton.count(), 1);
-  await categoryButton.click();
-  const categoryCard = child.locator(`.reward-card[data-reward-id="${hiddenReward.id}"]`);
-  assert.equal(await categoryCard.count(), 1);
-  assert.equal(await categoryCard.locator('h3').innerText(), '???', 'category filter cannot reveal the reward');
-  await closeRewards();
-
-  // Owning a previously hidden reward reveals its title in the owned collection.
-  const hiddenCatalogReward = app.store.catalog().rewards.find(reward => reward.id === hiddenReward.id);
-  app.store.points({ delta: 10000, reason: '浏览器临时验证积分', idempotencyKey: key() });
-  app.store.purchase({ rewardId: hiddenCatalogReward.id, expectedCost: hiddenCatalogReward.cost, idempotencyKey: key() });
+  mark('Full reward catalogue, model category and traditional category filtering');
+  app.store.points({delta:10000,reason:'浏览器临时验证积分',idempotencyKey:key()});
+  const selectedReward=app.store.catalog().rewards.find(r=>r.id===selected.id);
+  app.store.purchase({rewardId:selected.id,expectedCost:selectedReward.cost,idempotencyKey:key()});
   await child.reload();
-  await child.locator('#pet-scene[data-ready=true]').waitFor({ state: 'attached' });
-  await child.locator('#pet-scene iframe').waitFor({ state: 'visible' });
+  await child.locator('#pet-scene[data-ready=true]').waitFor({state:'attached'});
+  await child.locator('#pet-scene iframe').waitFor({state:'visible'});
   await openRewards();
   await child.locator('[data-view=owned]').click();
-  const ownedCard = await revealReward(hiddenReward.id);
-  assert.notEqual(await ownedCard.locator('h3').innerText(), '???', 'owned reward stays visible');
+  const ownedCard=await revealReward(selected.id);
+  assert.equal(await ownedCard.locator('h3').innerText(),selectedReward.title);
   await closeRewards();
+  mark('Owned collection shows the purchased reward');
 
-  mark('Category/pagination privacy and owned collection');
-
-  // Reveal the saved creation by owning the earlier catalogue entries, then equip its fixed preset.
   const creationIndex = app.store.catalog().rewards.findIndex(reward => reward.id === creation.id);
   const nowOwned = new Set(app.store.snapshot().owned);
   for (const reward of app.store.catalog().rewards.slice(0, creationIndex)) {
@@ -250,16 +197,13 @@ try {
   await creationCard.locator('button').click();
   await child.locator('#purchase-confirm').click();
   await child.locator('#purchase-dialog').waitFor({ state: 'hidden' });
-  const equippedCard = child.locator(`.reward-card[data-reward-id="${creation.id}"]`);
-  await equippedCard.locator('button').click();
+  await child.locator(`.reward-card[data-reward-id="${creation.id}"] button`).click();
   await child.locator('#rewards-dialog').waitFor({ state: 'hidden' });
   await child.waitForFunction(() => document.querySelector('#pet-scene iframe')?.contentWindow?.__getAnimation?.().bindingPose === 'slouchSit');
-  assert.deepEqual(app.store.snapshot().creation.preset.params.pose, creation.preset.params.pose, 'child receives the saved creation snapshot');
+  assert.equal(app.store.snapshot().creation.preset.params.pose, creation.preset.params.pose);
   await screenshot(child, 'luna-creation-child');
-
   mark('Purchased fixed creation equips without regenerating');
 
-  // Direct child studio keeps the original action canvas and touch controls while hiding editing UI.
   await child.goto(origin + '/studio.html');
   await child.locator('body[data-studio-ready="true"]').waitFor();
   await child.locator('#scene').waitFor();
@@ -267,22 +211,14 @@ try {
   assert.equal(await child.locator('#btn-random').isDisabled(), true);
   assert.equal(await child.locator('.studio-pad button').count(), 7);
   await screenshot(child, 'luna-child-studio-locked');
-
   mark('Direct child studio editing lock and touch controls');
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   writeFileSync(new URL('creation-browser-report.json', out), JSON.stringify({ok:true,checks,errors,external,failedRequests}, null, 2));
-  console.log('PASS: parent-only random/parameters; fixed creation save and draft isolation; child mystery cards across category/pagination; owned reveal; free capture/GLB/Codex/music/light/weather; child creation equip; direct child studio lock; no external requests.');
 } catch (error) {
   const frames = [];
   for (const frame of child.frames()) {
-    const detail = await frame.evaluate(() => ({
-      url:location.href, visibility:document.visibilityState, studioReady:document.body?.dataset.studioReady,
-      runtimeReady:!!window.meowHome, loader:document.getElementById('initial-loader')?.outerHTML,
-      host:document.getElementById('pet-scene')?.outerHTML, status:document.querySelector('.studio-bar [role=status]')?.textContent,
-      messages:window.__homeMessages,
-    })).catch(e => ({error:e.message}));
-    frames.push(detail);
+    frames.push(await frame.evaluate(() => ({url:location.href,visibility:document.visibilityState,studioReady:document.body?.dataset.studioReady,runtimeReady:!!window.meowHome,messages:window.__homeMessages})).catch(e=>({error:e.message})));
   }
   const report = {ok:false,checks,errors,external,failedRequests,frames,error:error.stack};
   writeFileSync(new URL('creation-browser-report.json', out), JSON.stringify(report, null, 2));
@@ -295,5 +231,5 @@ try {
   await childContext.close().catch(() => {});
   await browser.close().catch(() => {});
   await app.close();
-  assert.equal(app.server.listening, false, 'temporary test server closed');
+  assert.equal(app.server.listening, false);
 }

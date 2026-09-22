@@ -27,7 +27,7 @@ try{
   await parent.waitForFunction(()=>document.querySelector('#growth-task').options.length>1);mark('家长初始化填年龄，6岁入学推荐，模式可确认');
   assert.equal(await parent.locator('[data-growth-category]').count(),6);assert.deepEqual(await parent.locator('#delta option').evaluateAll(os=>os.map(o=>o.value)),['0','1','2','3','5']);
   assert.equal(app.store.growth.read(true).tasks.length,66);assert.equal(app.store.growth.read().tasks.length,0);
-  // Select the agreed preset explicitly; the initial custom-action choice requires its own title.
+  // Current main keeps the condition in the compact panel, without the former guide modal.
   await parent.locator('#growth-task').selectOption('school_basic-health-1');
   assert.match(await parent.locator('#growth-basis').innerText(),/完成条件/);assert.equal(await parent.locator('#growth-basis').isVisible(),true);
   await screenshot(parent,'growth-parent');mark('六类、66条示例、默认四档和家长加分依据');
@@ -36,7 +36,6 @@ try{
   await parent.getByRole('button',{name:'目标与项目库',exact:true}).click();assert.equal(await parent.locator('.growth-library .growth-task-card').count(),18);
   await parent.locator('.growth-library .growth-task-card').nth(1).getByRole('button',{name:'启用目标',exact:true}).click();
   await parent.waitForFunction(()=>document.querySelector('.growth-dialog-body').textContent.includes('当前启用 1 项'));await screenshot(parent,'growth-targets');await close();mark('学龄基础推荐18条，目标少量启用');
-  await parent.getByRole('button',{name:'家长加分指南',exact:true}).click();assert.equal(await parent.locator('.growth-source').count(),5);assert.match(await parent.locator('.growth-dialog-body').innerText(),/不是指南规定/);await screenshot(parent,'growth-parent-guide');await close();mark('指南离线展示，参考来源与适用年龄明确');
   await child.goto(origin+'/');await child.locator('#code').fill('2468');await child.locator('#login-form button').click();await child.locator('#open-growth').click();await child.locator('.growth-garden-card').first().waitFor();
   assert.equal(await child.locator('.growth-garden-card').count(),6);await screenshot(child,'growth-child-garden');
   assert.ok(await child.locator('.growth-garden-card').evaluateAll(cards=>{const r=cards.map(c=>c.getBoundingClientRect());return r.slice(0,3).every(x=>Math.abs(x.top-r[0].top)<2)&&r.slice(3).every(x=>x.top>r[0].top)&&r.every(x=>Math.abs(x.width-r[0].width)<2);}));mark('1180×820横屏六类等大3×2成长卡片');
@@ -55,9 +54,7 @@ try{
   await parent.locator('#history-category').selectOption('unclassified');await parent.locator('#history-entries').getByRole('button',{name:'给旧记录归类',exact:true}).click();await parent.locator('#growth-dialog [name=category]').selectOption('responsibility');await parent.locator('#growth-dialog [name=reason]').fill('家长确认原记录为整理桌面');await parent.getByRole('button',{name:'确认保存',exact:true}).click();await parent.locator('#growth-dialog').waitFor({state:'hidden'});assert.equal(app.store.snapshot().balance,8);assert.equal(app.store.growth.read(true).unclassified,0);mark('旧记录手动归类不重复发放积分');
   await parent.locator('#history-category').selectOption('responsibility');await parent.locator('#history-entries').getByRole('button',{name:'更正误录',exact:true}).click();await parent.locator('#growth-dialog [name=reason]').fill('测试误录更正，关联原记录');await parent.locator('#growth-dialog [name=points]').fill('0');await parent.getByRole('button',{name:'确认保存',exact:true}).click();await parent.locator('#growth-dialog').waitFor({state:'hidden'});assert.equal(app.store.snapshot().balance,5);assert.equal(app.store.snapshot().lifetime,8);mark('误录更正关联原流水，不透支、不回收收藏');
   await parent.locator('[data-parent-tab=settings]').click();assert.equal(await parent.locator('.growth-summary-card').count(),6);assert.match(await parent.locator('.growth-summary').innerText(),/不代表孩子的能力/);await screenshot(parent,'growth-family-distribution');
-  // Preserve a pending draft across poll refreshes.
   await parent.locator('[data-parent-tab=award]').click();await parent.locator('[data-growth-category=creativity]').click();await parent.locator('#growth-task').selectOption('');await parent.locator('#growth-title').fill('画出自己的想法');await parent.locator('#delta').selectOption('0');await parent.locator('#award-submit').click();await parent.waitForFunction(()=>document.querySelector('#reason').value==='');assert.equal(app.store.snapshot().balance,5);assert.equal(app.store.history({kind:'observation'}).total,1);mark('仅记录保存成长回忆，不增加喵币或经验');
-  // Verify first-time parent guidance through the actual child page and native scene.
   await child.waitForFunction(()=>document.querySelector('#balance').textContent==='5');await child.setViewportSize({width:1024,height:768});await child.locator('#open-growth').click();await screenshot(child,'growth-child-ipad');
   assert.ok(await child.locator('#growth-dialog').evaluate(e=>e.scrollWidth<=e.clientWidth+1));await child.locator('#growth-dialog .growth-dialog-heading button').click();
   assert.equal(await child.locator('#pet-scene iframe').count(),1);await child.waitForFunction(()=>document.querySelector('#pet-scene').dataset.ready==='true');mark('1024×768弹窗不横向溢出，原版小猫首页仍正常加载');
