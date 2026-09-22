@@ -31,6 +31,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   store.installSceneRewards();
   store.installUpstreamRewards();
   store.installGrowthReward();
+  store.installModelRewards();
   const db=store.db;
   const configured=()=>!!db.prepare("SELECT role FROM credentials WHERE role='parent'").get();
   let setupToken=configured()?null:random();
@@ -85,7 +86,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   for(const list of Object.values(networkInterfaces()))for(const item of list||[])knownHosts.add(item.address.includes(':')?`[${item.address}]`:item.address);
   let vite;
   if(dev){const {createServer}=await import('vite');vite=await createServer({configFile:resolve(here,'vite.config.mjs'),server:{middlewareMode:true},appType:'mpa'});}
-  const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.mp3':'audio/mpeg','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'};
+  const types={'.glb':'model/gltf-binary','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.mp3':'audio/mpeg','.svg':'image/svg+xml','.woff2':'font/woff2','.ico':'image/x-icon'};
   const handler=async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
     res.setHeader('Permissions-Policy',cameraPermissionsPolicy(''));
@@ -101,7 +102,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
       // Upstream controls use element style attributes; exports preview local Blob images.
       if(path==='/studio.html'){
         res.setHeader('X-Frame-Options','SAMEORIGIN');
-        if(!dev)res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+        if(!dev)res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
       }
       const method=req.method;
       if(path.startsWith('/api/')) {

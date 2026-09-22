@@ -1,0 +1,387 @@
+{
+  "schemaVersion": 1,
+  "license": "CC0-1.0",
+  "reviewedAt": "2026-09-22",
+  "packs": [
+    {
+      "id": "cube-pets",
+      "version": "2.0",
+      "source": "https://kenney.nl/assets/cube-pets",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/cube-pets/44e58e945f-1774520254/kenney_cube-pets_1.0.zip",
+      "archiveSha256": "b3bdc99a2ec92c687b875718c5d01e9231d2711ed0e2845f295b474bb42a1283",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "toy-car-kit",
+      "version": "1.2",
+      "source": "https://kenney.nl/assets/toy-car-kit",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/toy-car-kit/42e19cc426-1736346027/kenney_toy-car-kit.zip",
+      "archiveSha256": "26c11bbb77102b8dd00cdaf7b2c7ab692416d750dd064de886d809acec346782",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "brick-kit",
+      "version": "1.0",
+      "source": "https://kenney.nl/assets/brick-kit",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/brick-kit/46a22f3d08-1716981002/kenney_brick-kit.zip",
+      "archiveSha256": "b303d293c278fab713eed28395829b18513b171d2562f7f518c3355c2896861a",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "furniture-kit",
+      "version": "2.0",
+      "source": "https://kenney.nl/assets/furniture-kit",
+      "archiveUrl": "https://kenney.nl/media/pages/assets/furniture-kit/440e0608a4-1677580847/kenney_furniture-kit.zip",
+      "archiveSha256": "e67652d0932cee41683f74711c03d3e192a2af9979ef8e6b237711f5482d46b0",
+      "license": "CC0-1.0"
+    }
+  ],
+  "models": [
+    {
+      "pack": "cube-pets",
+      "file": "public/models/kenney/cube-pets/animal-chick.glb",
+      "sourceFile": "Models/GLB format/animal-chick.glb",
+      "sourceSha256": "86dd5f030c9341486313b35b9e827500c430274a83b5d683cab5b1f55bc1024d",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "2f6d0032e51c2d49b13b8e689d59eb39aa3ee6c32f2a1851213e11fc7593177d"
+        }
+      ],
+      "sha256": "52c6ba257624cb90343e4c73ba87c5ae116d9e6bc9d11acdde18c92eb734a254",
+      "bytes": 139808,
+      "animations": [
+        "static",
+        "idle",
+        "walk",
+        "run",
+        "eat",
+        "dance",
+        "gesture-positive",
+        "gesture-negative"
+      ]
+    },
+    {
+      "pack": "cube-pets",
+      "file": "public/models/kenney/cube-pets/animal-bunny.glb",
+      "sourceFile": "Models/GLB format/animal-bunny.glb",
+      "sourceSha256": "94b654915d9de70071bcf0bfa13de379a3ba4fdfeb231f0fec49335232cbc821",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "2f6d0032e51c2d49b13b8e689d59eb39aa3ee6c32f2a1851213e11fc7593177d"
+        }
+      ],
+      "sha256": "3b826de954bd68819f836ba21797163bb689965e4299c79bd3546ec39f1de234",
+      "bytes": 146056,
+      "animations": [
+        "static",
+        "idle",
+        "walk",
+        "run",
+        "eat",
+        "dance",
+        "gesture-positive",
+        "gesture-negative"
+      ]
+    },
+    {
+      "pack": "cube-pets",
+      "file": "public/models/kenney/cube-pets/animal-bee.glb",
+      "sourceFile": "Models/GLB format/animal-bee.glb",
+      "sourceSha256": "9d3116da6c22eabf0b46efeeec7fceae8fbd01e101fddd4e6746379ff851e192",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "2f6d0032e51c2d49b13b8e689d59eb39aa3ee6c32f2a1851213e11fc7593177d"
+        }
+      ],
+      "sha256": "66479f276bfe0b2d19adb95a89ba6f716adf27dbe83167303961894a5d251b8d",
+      "bytes": 178772,
+      "animations": [
+        "static",
+        "idle",
+        "walk",
+        "run",
+        "eat",
+        "dance",
+        "gesture-positive",
+        "gesture-negative"
+      ]
+    },
+    {
+      "pack": "cube-pets",
+      "file": "public/models/kenney/cube-pets/animal-caterpillar.glb",
+      "sourceFile": "Models/GLB format/animal-caterpillar.glb",
+      "sourceSha256": "470d2481ba246ff957da0164707326e805c54dde553468a104e83ad9c7281723",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "2f6d0032e51c2d49b13b8e689d59eb39aa3ee6c32f2a1851213e11fc7593177d"
+        }
+      ],
+      "sha256": "6f68cc99b8a834dbf2fada3187824455e744a2ca62a3420dea5c459cb23c42e7",
+      "bytes": 145452,
+      "animations": [
+        "static",
+        "idle",
+        "walk",
+        "run",
+        "eat",
+        "dance",
+        "gesture-positive",
+        "gesture-negative"
+      ]
+    },
+    {
+      "pack": "toy-car-kit",
+      "file": "public/models/kenney/toy-car-kit/vehicle-speedster.glb",
+      "sourceFile": "Models/GLB format/vehicle-speedster.glb",
+      "sourceSha256": "64e7e343e5039105949a827234de550630d75183cf5836d76b113ab65e355175",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "0d4947d34ff32acf4a359c7f22ca784e057e7e72f622170a9a77b6fc88fdb70e"
+        }
+      ],
+      "sha256": "0b4161fd8522515281dbf72015747383b1699f326011ad5039f2b17a2cf516da",
+      "bytes": 115200,
+      "animations": []
+    },
+    {
+      "pack": "toy-car-kit",
+      "file": "public/models/kenney/toy-car-kit/vehicle-racer.glb",
+      "sourceFile": "Models/GLB format/vehicle-racer.glb",
+      "sourceSha256": "2cdf369f231bf3e38bdf3a376144971f1b4d1a1e558000047ac927c5ac81a42c",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "0d4947d34ff32acf4a359c7f22ca784e057e7e72f622170a9a77b6fc88fdb70e"
+        }
+      ],
+      "sha256": "8f883617d611d4069bd0f4c09dcbf0b6deaf67376336bba39bb3bc1eab03ceef",
+      "bytes": 115896,
+      "animations": []
+    },
+    {
+      "pack": "toy-car-kit",
+      "file": "public/models/kenney/toy-car-kit/vehicle-truck.glb",
+      "sourceFile": "Models/GLB format/vehicle-truck.glb",
+      "sourceSha256": "7de382da801189fcbf8672ae18ac97af6aa3e248234d9e50cd7debe16475e69b",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "0d4947d34ff32acf4a359c7f22ca784e057e7e72f622170a9a77b6fc88fdb70e"
+        }
+      ],
+      "sha256": "1b1a111bef6dba2492d950e8c50853e6a1a744ebee3c7c5189c91664c4db42ac",
+      "bytes": 115052,
+      "animations": []
+    },
+    {
+      "pack": "toy-car-kit",
+      "file": "public/models/kenney/toy-car-kit/track-wide-straight-hill-complete.glb",
+      "sourceFile": "Models/GLB format/track-wide-straight-hill-complete.glb",
+      "sourceSha256": "b9a0e054f0c5e13cdd0a40a590e538de2fd2ad8d70eeab7d2f5ba145f3c35ca8",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "0d4947d34ff32acf4a359c7f22ca784e057e7e72f622170a9a77b6fc88fdb70e"
+        }
+      ],
+      "sha256": "c099f11491de1130eb1b4e7ebaff6cf8c8941cb77c0c7e549b5df833678c4e7a",
+      "bytes": 33388,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-1x1.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-1x1.glb",
+      "sourceSha256": "e50816da44cf81480cfff6e1a4830e1d2bb1dd562071b207bbe5618f2e800e0e",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "f2ddd380b32991fbcb2d07651e412310c97707db3969ff16f70e557d8423f13a",
+      "bytes": 15540,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-1x2.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-1x2.glb",
+      "sourceSha256": "fbc71790b3fb12fd49f7fc0d6f844a5f21097ae9d202a2fd61bb8cd1c202d463",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "b3f02a311900c562ba999cbe761f222316a3df7101f3fabd554adc419cb3431a",
+      "bytes": 16756,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-1x4.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-1x4.glb",
+      "sourceSha256": "87b9a0378458f7f0baaa36723d4f55046e79caf127aabce1b137a49900961fee",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "98ba667550f2873b76cad98bfe16dde1178ada990adc0173384585e4d617f38c",
+      "bytes": 19200,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-2x2.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-2x2.glb",
+      "sourceSha256": "be40e760b7c2d49f5cb2712e93a3834001577d7d1d65fe179bc8be5bb9a22365",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "1b97e02d62b936dc9f4b8b480b1e565ce9d171c82b0de264a9fc9a0bdd8a0446",
+      "bytes": 19200,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-2x4.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-2x4.glb",
+      "sourceSha256": "8f9d70c0b234433f2418b0941a944c9ebb451d7f17cea0f1bf1174dd83cc638c",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "2298c5731c2575fdb01cf34db4f3f26901bfb24d4a71121b3f48245d27af086f",
+      "bytes": 24076,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-1x1-round.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-1x1-round.glb",
+      "sourceSha256": "f516da9772d589d47b11ee736ba27c9c98b17770727b1389ec769191d08f9d7c",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "adde0fdfc75aa5c5b374910f0f88331207946e36dfbce5dba3727ba7e2562880",
+      "bytes": 17628,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-slope-1x2.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-slope-1x2.glb",
+      "sourceSha256": "8e1e13e7f5c9b3910f099bbc4a51dda98d32c9bb28ee406e822b0405d7f1e80f",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "f4961b087018926345aba28392c002f381b76f9cb8e920d4e0e2f241a141f535",
+      "bytes": 15856,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-slope-2x2.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-slope-2x2.glb",
+      "sourceSha256": "3882a60214a8c8e486b8fe631e8bd303113ac738b18ac49b0ef9aca0c619ed5c",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "09c0b2b04c7d38971344736b826fb0c14a02c0d45f1120d4c8a0cd036e6e97fd",
+      "bytes": 17076,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-brick-corner.glb",
+      "sourceFile": "Models/GLB format/round-lq-brick-corner.glb",
+      "sourceSha256": "b473b69b7b36ca153a6ecaa90566ede105a3c97a66a067b51a6febde635f55df",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "98f80a39415bb2aaffb1311b58181d437e22a4921a81ffe86abda1f380a9bb0a",
+      "bytes": 18592,
+      "animations": []
+    },
+    {
+      "pack": "brick-kit",
+      "file": "public/models/kenney/brick-kit/round-lq-plate-2x4.glb",
+      "sourceFile": "Models/GLB format/round-lq-plate-2x4.glb",
+      "sourceSha256": "d4adc3c0b8521ecfa5f3b2bccb411cdcbf21706a02e7ca350c614b87104f0846",
+      "embeddedResources": [
+        {
+          "file": "Models/GLB format/Textures/colormap.png",
+          "sha256": "a802b8c02c0b0cc07654cd8edca30439a9e9d505b10088502169ab3b9cf5e94f"
+        }
+      ],
+      "sha256": "9f48cf1deb87c4c704334be8fbc14a6e9d056379e1a3839a28c785e1e5a68bdc",
+      "bytes": 24076,
+      "animations": []
+    },
+    {
+      "pack": "furniture-kit",
+      "file": "public/models/kenney/furniture-kit/stoolBar.glb",
+      "sourceFile": "Models/GLTF format/stoolBar.glb",
+      "sourceSha256": "a86167a9f92401a61fec7e509ad089ecc552d0f299743add3aeb919acb24e341",
+      "embeddedResources": [],
+      "sha256": "a86167a9f92401a61fec7e509ad089ecc552d0f299743add3aeb919acb24e341",
+      "bytes": 11816,
+      "animations": []
+    },
+    {
+      "pack": "furniture-kit",
+      "file": "public/models/kenney/furniture-kit/sideTable.glb",
+      "sourceFile": "Models/GLTF format/sideTable.glb",
+      "sourceSha256": "8227810584f7d37582e4e9ec821c56f1dc54b99c88a8dc74242ea3b7402bc472",
+      "embeddedResources": [],
+      "sha256": "8227810584f7d37582e4e9ec821c56f1dc54b99c88a8dc74242ea3b7402bc472",
+      "bytes": 8800,
+      "animations": []
+    },
+    {
+      "pack": "furniture-kit",
+      "file": "public/models/kenney/furniture-kit/bookcaseOpenLow.glb",
+      "sourceFile": "Models/GLTF format/bookcaseOpenLow.glb",
+      "sourceSha256": "6d4d625faf977a2dbf155f1313cd32c6310e463114a1cd4c08cb9f80a5fb1d75",
+      "embeddedResources": [],
+      "sha256": "6d4d625faf977a2dbf155f1313cd32c6310e463114a1cd4c08cb9f80a5fb1d75",
+      "bytes": 11520,
+      "animations": []
+    },
+    {
+      "pack": "furniture-kit",
+      "file": "public/models/kenney/furniture-kit/lampRoundFloor.glb",
+      "sourceFile": "Models/GLTF format/lampRoundFloor.glb",
+      "sourceSha256": "50fe1b5b588edf15bfa9cc880f71a02a4fda6036350b24733d0ef4de5cc5e908",
+      "embeddedResources": [],
+      "sha256": "50fe1b5b588edf15bfa9cc880f71a02a4fda6036350b24733d0ef4de5cc5e908",
+      "bytes": 6600,
+      "animations": []
+    }
+  ]
+}

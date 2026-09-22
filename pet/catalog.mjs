@@ -5,6 +5,7 @@ import { validateStudio } from './studioSchema.mjs';
 /** Strict capability schema shared by the service and tests. No arbitrary JS/URLs. */
 export { AppError, fail, object, text, integer, validateFields } from './validation.mjs';
 import { fail, object, text, integer, validateFields } from './validation.mjs';
+import {validateModelReward} from './modelCatalog.mjs';
 export const CAT_SLOTS = ['coat', 'shape', 'eyes', 'pose'];
 export const SLOTS = [...CAT_SLOTS,...SCENE_SLOTS];
 export const ACTIONS = ACTION_IDS;
@@ -18,12 +19,16 @@ export function validateCatalog(input) {
     if (typeof reward.id !== 'string' || !/^[a-z][a-z0-9-]{2,63}$/.test(reward.id) || ids.has(reward.id)) fail(400,'奖励 ID 无效或重复');
     ids.add(reward.id);
     text(reward.title,'奖励名称',30); text(reward.description,'奖励说明',140);
-    if (![...SLOTS,'trick','theme','capability','creation'].includes(reward.category)) fail(400,'奖励类别不正确');
+    if (![...SLOTS,'trick','theme','capability','creation','model'].includes(reward.category)) fail(400,'奖励类别不正确');
     integer(reward.cost,'价格'); integer(reward.unlockAt,'成长门槛');
     if (reward.starter !== undefined && typeof reward.starter !== 'boolean') fail(400,'starter 必须为布尔值');
     if (reward.starter) {
       if (!SLOTS.includes(reward.category) || reward.cost || reward.unlockAt || starters.has(reward.category)) fail(400,'每个装扮类别必须且只能有一个免费初始奖励');
       starters.add(reward.category);
+    }
+    if(reward.category==='model'){
+      try { validateModelReward(reward); } catch(error) { fail(400,error.message); }
+      continue;
     }
     if(reward.category==='creation'){
       if(reward.params!==undefined||reward.action!==undefined||reward.motion!==undefined||reward.starter)fail(400,'家长作品只接受完整参数方案');

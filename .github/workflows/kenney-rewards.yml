@@ -1,0 +1,51 @@
+name: Kenney reward verification
+on:
+  push:
+    branches: [main, feature/kenney-rewards-20260922]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kenney-rewards-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: npm ci --ignore-scripts
+      - name: Install isolated browser test dependency
+        run: |
+          npm install --prefix "$RUNNER_TEMP/model-browser" --no-package-lock --ignore-scripts playwright@1.55.0
+          ln -s "$RUNNER_TEMP/model-browser/node_modules/playwright" node_modules/playwright
+          "$RUNNER_TEMP/model-browser/node_modules/.bin/playwright" install --with-deps chromium > /tmp/browser-install.log 2>&1 || { tail -80 /tmp/browser-install.log; exit 1; }
+      - name: Unit tests and both builds
+        run: |
+          npm run test:pet > /tmp/unit.log 2>&1 || { cat /tmp/unit.log; exit 1; }
+          tail -10 /tmp/unit.log
+          npm run pet:build > /tmp/build.log 2>&1 || { cat /tmp/build.log; exit 1; }
+          tail -8 /tmp/build.log
+          npm run build > /tmp/original-build.log 2>&1 || { cat /tmp/original-build.log; exit 1; }
+          tail -8 /tmp/original-build.log
+      - name: Model browser regression
+        run: node pet/tests/browser-models.mjs
+      - name: Existing growth regression
+        if: always()
+        run: node pet/tests/browser-growth.mjs
+      - name: Existing creation regression
+        if: always()
+        run: node pet/tests/browser-creation.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kenney-model-review
+          path: pet/test-results/
+          retention-days: 7

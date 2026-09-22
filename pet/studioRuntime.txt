@@ -1,3 +1,4 @@
+import { createModelRewardsLayer } from '../pet/models/modelLayer.js';
 // Appended only by the pet build to extend the shared renderer.
 import { STUDIO_FIELDS as petStudioFields } from '../pet/studioSchema.mjs';
 import { containerBuild as petContainerBuild } from '../pet/environment/containerAdapter.js';
@@ -43,13 +44,13 @@ function petSampleMotion(elapsed,options){
 let petRoomBed=null,petRoomBedBody=null;
 const petOriginalRoom={keyColor:key.color.clone(),keyIntensity:key.intensity,ambientColor:ambient.color.clone(),ambientIntensity:ambient.intensity,fov:camera.fov,fog:scene.fog.clone()};
 const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
-export const petStudio = {
+export const petStudio = {applyModels:petApplyModels,disposeModels:petDisposeModels,modelDiagnostics:()=>petModelLayer?.diagnostics()||{items:[],errors:[],loading:0},
   resetView(view) {
     const damping=controls.enableDamping;
     controls.enableDamping=false;controls.update();
     camera.position.set(view.x+motionCameraOffset.x,view.y,view.z+motionCameraOffset.y);
     controls.target.set(view.targetX+motionCameraOffset.x,view.targetY,view.targetZ+motionCameraOffset.y);
-    controls.update();controls.enableDamping=damping;
+    controls.update();controls.enableDamping=damping;petModelLayer?.fitView();
   },
   setAccess(access) {
     petChildMotion=true;
@@ -125,5 +126,17 @@ export const petStudio = {
   },
   pauseAudio(){bgm.pause();},
   motionKey(code,down){motionMachine.setKey(code,down);if(down&&motionMachine.triggerCode(code))motionElapsed=0;},
-  lock(){bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},
+  lock(){petDisposeModels();bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},
 };
+
+// Share the existing physical world and render clock; never create another animation loop.
+let petModelLayer=null;
+const petOriginalToyStep=toyWorld.step;
+toyWorld.step=dt=>{petOriginalToyStep(dt);petModelLayer?.update(dt);};
+function petApplyModels(ids){
+  if(!petModelLayer&&!ids.length)return;
+  petModelLayer??=createModelRewardsLayer({scene,camera,canvas:renderer.domElement,controls,toyWorld,getCat:()=>cat});
+  void petModelLayer.select(ids);
+}
+function petDisposeModels(){petModelLayer?.dispose();petModelLayer=null;}
+window.addEventListener('pagehide',petDisposeModels);

@@ -37,3 +37,5 @@ body:has(#viewport[data-share-card-open="true"]) .studio-bar{display:none}body:h
 .studio-child .child-photo-actions{position:absolute;bottom:40px;left:18px;right:12px;z-index:5;display:flex;gap:10px;flex-wrap:wrap}
 .studio-child .child-photo-actions .child-photo,.studio-child .child-photo-actions .child-reset-view{position:static;min-height:44px;margin:0}
 .studio-child #viewport[data-share-card-open="true"] .child-photo-actions{display:none}
+
+.model-load-status { position:absolute; bottom:5.5rem; left:50%; transform:translateX(-50%); z-index:6; padding:.5rem .8rem; border-radius:.8rem; color:#594d42; background:#fff8edeb; font-size:.85rem; pointer-events:none; max-width:80%; }
