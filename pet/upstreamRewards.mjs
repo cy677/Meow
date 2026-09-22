@@ -1,5 +1,6 @@
 import { COATS, POSES, EYE_COLORS } from '../src/coats.js';
-import { CLIPS, MOTION_REWARDS, defaultDuration } from './motionPrograms.mjs';
+import { MOTION_REWARDS, defaultDuration } from './motionPrograms.mjs';
+import { SOURCE_CLIPS as CLIPS } from '../src/catMotion/clipCatalog.js';
 export const BASIC_ACTIONS = ['idle','idle-alert','walk','run','sneak'];
 
 

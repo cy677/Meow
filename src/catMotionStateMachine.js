@@ -1,4 +1,4 @@
-import { MESH2MOTION_ACTIONS } from './mesh2motionRig.js';
+import { CAT_MOTION_CLIPS as MESH2MOTION_ACTIONS } from './catMotion/clipCatalog.js';
 
 const ACTION_DURATION = new Map(
   MESH2MOTION_ACTIONS.map((action) => [action.id, action.duration])

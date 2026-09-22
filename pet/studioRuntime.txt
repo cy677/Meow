@@ -5,14 +5,32 @@ import { containerBuild as petContainerBuild } from '../pet/environment/containe
 import { scaleToy as petScaleToy } from '../pet/environment/upstreamAdapters.js';
 import { disposeObjects as petDisposeObjects } from '../pet/environment/dispose.js';
 import * as petCannon from 'cannon-es';
-import { createMotionTimeline as petCreateMotionTimeline } from '../pet/motionTimeline.js';
+import { createClipPlayer as petCreateClipPlayer } from '../src/catMotion/clipPlayer.js';
+import { createMotionController as petCreateMotionController } from '../src/catMotion/motionController.js';
+import { createMotionEvents as petCreateMotionEvents } from '../src/catMotion/motionEvents.js';
+import { planMotion as petPlanMotion } from '../src/catMotion/motionScript.js';
 import { timelineLayers as petTimelineLayers } from '../pet/motionPrograms.mjs';
 import { SPEECH_BUBBLE_COPY as petSpeechCopy } from '../src/speechBubbles.js';
 import { CAT_DIALOGUE as petCatDialogue, TOY_DIALOGUE as petToyDialogue } from '../pet/catDialogue.js';
 petSpeechCopy['zh-CN'].cat.push(...petCatDialogue);
 for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy['zh-CN'][role].push(...lines);
-let petActivePlan=null,petTimeline=null,petTimelineRig=null;
+let petActivePlan=null,petMotion=null,petPosePlayer=null,petMotionRig=null,petMotionClock=0,petProgramEnabled=false,petAccess=null;
+const petMotionEvents=petCreateMotionEvents();
+function petEnsureMotion() {
+  if(!motionRig||!cat)throw new Error('小猫骨骼尚未准备好');
+  if(petMotionRig!==motionRig) {
+    petMotion?.dispose();petMotionRig=motionRig;
+    petPosePlayer=petCreateClipPlayer(motionRig,cat,{applyRoot:false});
+    petMotion=petCreateMotionController(petPosePlayer);
+    petMotion.on('*',event=>petMotionEvents.emit(event.type,event));
+  }
+  return petMotion;
+}
+function petValidateMotionAccess(action,motion) {
+  if(petAccess&&!petAccess.actions.some(a=>a.action===action&&JSON.stringify(a.motion||{})===JSON.stringify(motion||{})))throw new Error('此动作尚未获得使用权限');
+}
 let petChildMotion=false,petLastElapsed=0;
+let petWanderPlan=null;
 const petWander={x:0,z:0,heading:0,targetX:0,targetZ:.8};
 function petChooseDestination(){
   const angle=Math.random()*Math.PI*2,radius=.65+Math.random()*.4;
@@ -20,6 +38,7 @@ function petChooseDestination(){
   if(Math.hypot(petWander.targetX-petWander.x,petWander.targetZ-petWander.z)<.45){petWander.targetX=-petWander.targetX;petWander.targetZ=-petWander.targetZ;}
 }
 function petAdvanceWander(plan,elapsed){
+  if(petWanderPlan!==plan){petWanderPlan=plan;petLastElapsed=elapsed;}
   const dt=Math.max(0,Math.min(.1,elapsed-petLastElapsed));petLastElapsed=elapsed;
   if(plan.action==='spin')return;
   const speed=petTimelineLayers(plan,elapsed).reduce((sum,layer)=>sum+({walk:.56,run:1.05,sneak:.28}[layer.clip]||0)*layer.weight,0)*(plan.motion.speed??1);
@@ -33,12 +52,15 @@ function petAdvanceWander(plan,elapsed){
   const radius=Math.hypot(petWander.x,petWander.z);
   if(radius>1.25){petWander.x*=1.25/radius;petWander.z*=1.25/radius;petWander.targetX=0;petWander.targetZ=0;}
 }
-function petSampleMotion(elapsed,options){
-  if(!petActivePlan)return motionRig.update(elapsed,options);
-  if(petTimelineRig!==motionRig){petTimelineRig=motionRig;petTimeline=petCreateMotionTimeline(motionRig,cat);}
-  const state=petTimeline(petActivePlan,elapsed);
-  petAdvanceWander(petActivePlan,elapsed);
-  params.motionAction=state.actionId;
+function petSampleMotion(elapsed,options) {
+  if(!petProgramEnabled)return motionRig.update(elapsed,options);
+  const controller=petEnsureMotion(),dt=Math.max(0,Math.min(.1,elapsed-petMotionClock));
+  petMotionClock=elapsed;controller.update(dt);
+  const state=petPosePlayer.getState(),running=controller.getState().current;
+  petActivePlan=controller.getPlan();
+  if(petActivePlan&&running)petAdvanceWander(petActivePlan,running.elapsed);
+  else petLastElapsed=0;
+  params.motionAction=state.actionId||'idle';
   return state;
 }
 let petRoomBed=null,petRoomBedBody=null;
@@ -53,7 +75,7 @@ export const petStudio = {applyModels:petApplyModels,disposeModels:petDisposeMod
     controls.update();controls.enableDamping=damping;petModelLayer?.fitView();
   },
   setAccess(access) {
-    petChildMotion=true;
+    petChildMotion=true;petAccess=structuredClone(access);
     // Called only for a child session. Editing and random generation belong to parents.
     for(const el of document.querySelectorAll('#controls input,#controls select,#controls button,#btn-random'))el.disabled=true;
   },
@@ -67,6 +89,7 @@ export const petStudio = {applyModels:petApplyModels,disposeModels:petDisposeMod
     };
   },
   restore(value) {
+    petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
     resetMotionWorld();
     if(value.rug)Object.assign(rugState,value.rug);
     if(value.params){Object.assign(params,value.params);staticPoseBeforeMotion=params.pose;window.__setParams(value.params);}
@@ -92,13 +115,35 @@ export const petStudio = {applyModels:petApplyModels,disposeModels:petDisposeMod
     for(const t of toyWorld.toys){const visible=active.has(t)||(t.kind==='bed'&&cushion);if(visible)shown++;t.mesh.visible=visible;t.shadowProxy.visible=visible;t.body.collisionFilterMask=visible?-1:0;if(!visible)t.body.position.set(0,-100-hidden++,0);}
     toyWorld.group.visible=shown>0;
   },
-  playProgram(plan){petActivePlan=plan;petLastElapsed=0;window.__setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});},
-  stop(){
-    petActivePlan=null;window.__setAnimation({enabled:false,stateMachine:false});
+  playProgram(plan,options={}) {
+    petValidateMotionAccess(plan.action,plan.motionInput||plan.motion);
+    // Enabling animation may rebuild a static pose. Bind the controller AFTER it.
+    window.__setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});
+    petMotionClock=0;petLastElapsed=0;petProgramEnabled=true;
+    const result=petEnsureMotion().playPlan(plan,options);petActivePlan=petMotion.getPlan();
+    return result;
+  },
+  motionState(){return petMotion?.getState()||{active:false,status:'idle',targetsApplied:false};},
+  motion:{
+    play(action,motion={},options={}){return petStudio.playProgram(petPlanMotion(action,motion,motion.script),options);},
+    playScript(script,motion={},options={}){return typeof script==='string'?this.play(script,motion,options):this.play('sequence',{...motion,script},options);},
+    enqueue(action,motion={},options={}){return this.play(action,motion,{...options,enqueue:true});},
+    stop(options={}){petStudio.stop(options.immediate===true);},
+    pause(){petMotion?.pause();},resume(){petMotion?.resume();},
+    on:petMotionEvents.on,
+    setTarget(slot,point){petEnsureMotion().setTarget(slot,point);},
+    getTargets(){return petMotion?.getTargets()||{};},
+    getState(){return petStudio.motionState();},
+  },
+  stop(immediate=false){
+    if(!immediate&&petProgramEnabled&&petMotion?.active){petMotion.stop();return;}
+    petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
+    window.__setAnimation({enabled:false,stateMachine:false});
     if(petChildMotion&&cat){cat.position.x=petWander.x;cat.position.z=petWander.z;cat.rotation.set(0,petWander.heading,0);cat.updateMatrixWorld(true);}
   },
   clearKeys(){motionMachine.clearKeys();},
   resetRoom(){
+    petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
     Object.assign(petWander,{x:0,z:0,heading:0,targetX:0,targetZ:.8});petLastElapsed=0;
     if(petRoomBed){petDisposeObjects([petRoomBed]);petRoomBed=null;}
     if(petRoomBedBody){toyWorld.world.removeBody(petRoomBedBody);petRoomBedBody=null;}
@@ -126,7 +171,7 @@ export const petStudio = {applyModels:petApplyModels,disposeModels:petDisposeMod
   },
   pauseAudio(){bgm.pause();},
   motionKey(code,down){motionMachine.setKey(code,down);if(down&&motionMachine.triggerCode(code))motionElapsed=0;},
-  lock(){petDisposeModels();bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},
+  lock(){petMotion?.dispose();petMotionEvents.dispose();petDisposeModels();bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},
 };
 
 // Share the existing physical world and render clock; never create another animation loop.
@@ -140,3 +185,6 @@ function petApplyModels(ids){
 }
 function petDisposeModels(){petModelLayer?.dispose();petModelLayer=null;}
 window.addEventListener('pagehide',petDisposeModels);
+
+// Stable developer-facing animation facade; household permissions still apply.
+window.meowMotion=petStudio.motion;
