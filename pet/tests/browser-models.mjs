@@ -36,7 +36,7 @@ try {
  // The model category is an actual visible shop tab, not just an unused catalogue definition.
  await page.locator('[data-category=model]').click();assert.equal(await page.locator('.reward-card[data-reward-id^="kenney-"]').count(),6);
  assert.ok((await page.locator('#reward-page-status').innerText()).includes('14'));
- await page.locator('.model-reward-thumbnail').first().waitFor();assert.equal(await page.locator('.model-reward-thumbnail').first().evaluate(img=>img.complete&&img.naturalWidth>0),true);
+ await page.waitForFunction(()=>{const img=document.querySelector('.model-reward-thumbnail');return img?.complete&&img.naturalWidth>0;});
  await page.screenshot({path:fileURLToPath(new URL('models-rewards.png',out))});
  // Exercise a real UI unequip/equip; this must preserve balance and ownership.
  const card=page.locator('[data-reward-id=kenney-chick]');await card.locator('button[data-action=unequip]').click();

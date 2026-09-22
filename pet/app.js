@@ -103,7 +103,7 @@ function renderRewards(){
     const card=el('article',`reward-card ${reward.owned?'is-owned':reward.eligible?'':'is-locked'}`);card.dataset.rewardId=reward.id;
     const art=el('div',`reward-art art-${reward.category}`);art.append(el('span','',icons[reward.category]),el('small','',labels[reward.category]));
     if(reward.category==='model'){
-      const image=el('img','model-reward-thumbnail');image.src=`./models/kenney/previews/${reward.modelId}.png`;image.alt=reward.title;image.loading='lazy';
+      const image=el('img','model-reward-thumbnail');image.src=`./models/kenney/previews/${reward.modelId}.png`;image.alt=reward.title;image.loading='eager';
       image.addEventListener('error',()=>image.remove(),{once:true});art.prepend(image);
       art.querySelector('small').textContent=reward.modelGroup;
     }
