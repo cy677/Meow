@@ -1,15 +1,19 @@
-// Appended only by the pet build to extend the shared renderer.
-import { STUDIO_FIELDS as petStudioFields } from '../pet/studioSchema.mjs';
-import { containerBuild as petContainerBuild } from '../pet/environment/containerAdapter.js';
-import { scaleToy as petScaleToy } from '../pet/environment/upstreamAdapters.js';
-import { disposeObjects as petDisposeObjects } from '../pet/environment/dispose.js';
+import { STUDIO_FIELDS as petStudioFields } from '../studioSchema.mjs';
+import { containerBuild as petContainerBuild } from '../environment/containerAdapter.js';
+import { scaleToy as petScaleToy } from '../environment/upstreamAdapters.js';
+import { disposeObjects as petDisposeObjects } from '../environment/dispose.js';
 import * as petCannon from 'cannon-es';
-import { createMotionTimeline as petCreateMotionTimeline } from '../pet/motionTimeline.js';
-import { timelineLayers as petTimelineLayers } from '../pet/motionPrograms.mjs';
-import { SPEECH_BUBBLE_COPY as petSpeechCopy } from '../src/speechBubbles.js';
-import { CAT_DIALOGUE as petCatDialogue, TOY_DIALOGUE as petToyDialogue } from '../pet/catDialogue.js';
-petSpeechCopy['zh-CN'].cat.push(...petCatDialogue);
-for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy['zh-CN'][role].push(...lines);
+import { createMotionTimeline as petCreateMotionTimeline } from '../motionTimeline.js';
+import { timelineLayers as petTimelineLayers } from '../motionPrograms.mjs';
+import { SPEECH_BUBBLE_COPY as petSpeechCopy } from '../../src/speechBubbles.js';
+import { CAT_DIALOGUE as petCatDialogue, TOY_DIALOGUE as petToyDialogue } from '../catDialogue.js';
+
+let dialogueInstalled=false;
+/** All access to the upstream renderer passes through this explicit port. */
+export function createStudioAdapter(host) {
+  const {THREE,params,key,ambient,camera,scene,controls,motionCameraOffset,floorParams,rugState,lightAngles,weatherAmounts,pokeUniforms,pokeFeel,hatchUniforms,sketchShadowMat,blockShadowMat,refreshers,petControlSyncs,ground,toyWorld,rugLayer,motionMachine,bgm,weatherAudio,renderer,resetMotionWorld,drawWoodFloor,syncRugPlacement,updateKeyLight,syncLightOrb,setThunder,setWeather,setWeatherAmount}=host;
+if(!dialogueInstalled){petSpeechCopy['zh-CN'].cat.push(...petCatDialogue);
+for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy['zh-CN'][role].push(...lines);dialogueInstalled=true;}
 let petActivePlan=null,petTimeline=null,petTimelineRig=null;
 let petChildMotion=false,petLastElapsed=0;
 const petWander={x:0,z:0,heading:0,targetX:0,targetZ:.8};
@@ -33,8 +37,8 @@ function petAdvanceWander(plan,elapsed){
   if(radius>1.25){petWander.x*=1.25/radius;petWander.z*=1.25/radius;petWander.targetX=0;petWander.targetZ=0;}
 }
 function petSampleMotion(elapsed,options){
-  if(!petActivePlan)return motionRig.update(elapsed,options);
-  if(petTimelineRig!==motionRig){petTimelineRig=motionRig;petTimeline=petCreateMotionTimeline(motionRig,cat);}
+  if(!petActivePlan)return host.motionRig.update(elapsed,options);
+  if(petTimelineRig!==host.motionRig){petTimelineRig=host.motionRig;petTimeline=petCreateMotionTimeline(host.motionRig,host.cat);}
   const state=petTimeline(petActivePlan,elapsed);
   petAdvanceWander(petActivePlan,elapsed);
   params.motionAction=state.actionId;
@@ -43,7 +47,12 @@ function petSampleMotion(elapsed,options){
 let petRoomBed=null,petRoomBedBody=null;
 const petOriginalRoom={keyColor:key.color.clone(),keyIntensity:key.intensity,ambientColor:ambient.color.clone(),ambientIntensity:ambient.intensity,fov:camera.fov,fog:scene.fog.clone()};
 const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
-export const petStudio = {
+const studio = {
+  get childMotion() { return petChildMotion; },
+  get worldPose() { return petWander; },
+  sampleMotion: petSampleMotion,
+  photo: host.photo,
+  animationState: host.animationState,
   resetView(view) {
     const damping=controls.enableDamping;
     controls.enableDamping=false;controls.update();
@@ -59,7 +68,7 @@ export const petStudio = {
   capture() {
     return {
       params:petPick(petStudioFields.params,params),floor:{...floorParams},rug:{...rugState},light:{...lightAngles},
-      weather:{mode:weatherMode,thunder:thunderEnabled,...weatherAmounts},
+      weather:{mode:host.weatherMode,thunder:host.thunderEnabled,...weatherAmounts},
       poke:{radius:pokeUniforms.uPokeRadius.value,freq:pokeFeel.freq,damping:pokeFeel.damping},
       hatch:Object.fromEntries(petStudioFields.hatch.map(f=>{const v=hatchUniforms[f.key].value;return [f.key,v?.isColor?'#'+v.getHexString():v];})),
       camera:{x:camera.position.x-motionCameraOffset.x,y:camera.position.y,z:camera.position.z-motionCameraOffset.y,targetX:controls.target.x-motionCameraOffset.x,targetY:controls.target.y,targetZ:controls.target.z-motionCameraOffset.y},
@@ -68,7 +77,7 @@ export const petStudio = {
   restore(value) {
     resetMotionWorld();
     if(value.rug)Object.assign(rugState,value.rug);
-    if(value.params){Object.assign(params,value.params);staticPoseBeforeMotion=params.pose;window.__setParams(value.params);}
+    if(value.params){Object.assign(params,value.params);host.staticPoseBeforeMotion=params.pose;host.setParams(value.params);}
     if(value.floor){Object.assign(floorParams,value.floor);drawWoodFloor();}
     if(value.rug){rugLayer.setSeed(rugState.seed);rugLayer.setVisible(rugState.enabled);syncRugPlacement();}
     if(value.light){Object.assign(lightAngles,value.light);updateKeyLight();syncLightOrb();}
@@ -91,10 +100,10 @@ export const petStudio = {
     for(const t of toyWorld.toys){const visible=active.has(t)||(t.kind==='bed'&&cushion);if(visible)shown++;t.mesh.visible=visible;t.shadowProxy.visible=visible;t.body.collisionFilterMask=visible?-1:0;if(!visible)t.body.position.set(0,-100-hidden++,0);}
     toyWorld.group.visible=shown>0;
   },
-  playProgram(plan){petActivePlan=plan;petLastElapsed=0;window.__setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});},
+  playProgram(plan){petActivePlan=plan;petLastElapsed=0;host.setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});},
   stop(){
-    petActivePlan=null;window.__setAnimation({enabled:false,stateMachine:false});
-    if(petChildMotion&&cat){cat.position.x=petWander.x;cat.position.z=petWander.z;cat.rotation.set(0,petWander.heading,0);cat.updateMatrixWorld(true);}
+    petActivePlan=null;host.setAnimation({enabled:false,stateMachine:false});
+    if(petChildMotion&&host.cat){host.cat.position.x=petWander.x;host.cat.position.z=petWander.z;host.cat.rotation.set(0,petWander.heading,0);host.cat.updateMatrixWorld(true);}
   },
   clearKeys(){motionMachine.clearKeys();},
   resetRoom(){
@@ -124,6 +133,9 @@ export const petStudio = {
     }
   },
   pauseAudio(){bgm.pause();},
-  motionKey(code,down){motionMachine.setKey(code,down);if(down&&motionMachine.triggerCode(code))motionElapsed=0;},
+  motionKey(code,down){motionMachine.setKey(code,down);if(down&&motionMachine.triggerCode(code))host.motionElapsed=0;},
   lock(){bgm.pause();weatherAudio.setRain(false);motionMachine.clearKeys();renderer.setAnimationLoop(null);},
 };
+
+  return studio;
+}

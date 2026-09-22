@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 NODE="$ROOT/runtime/node"
-SETTINGS="$ROOT/pet-settings.json"
 ACTION="start"
 NO_BROWSER=0
 
@@ -23,23 +22,22 @@ if [[ ! -x "$NODE" ]]; then
   printf '%s\n' '缺少内置运行环境，或 runtime/node 没有执行权限。请重新解压完整的 tar.gz 包。' >&2
   exit 1
 fi
-if [[ ! -f "$SETTINGS" || ! -f "$ROOT/pet/dist/index.html" ]]; then
+if [[ ! -f "$ROOT/pet/config/cli.mjs" || ! -f "$ROOT/pet/dist/index.html" ]]; then
   printf '%s\n' '便携包文件不完整，请重新解压完整的 tar.gz 包。' >&2
   exit 1
 fi
 
-readarray -d '' -t CONFIG < <("$NODE" - "$SETTINGS" <<'NODE'
-const fs = require('node:fs');
-const path = require('node:path');
-const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const values = [config.port ?? 8792, config.dataDir ?? 'pet/data', config.publicIp ?? '', config.openBrowser !== false ? '1' : '0'];
-for (const value of values) process.stdout.write(String(value) + '\0');
-NODE
-)
+# A failing config reader must stop the launcher, not yield an empty process substitution.
+CONFIG_FILE="$(mktemp)"
+trap 'rm -f -- "$CONFIG_FILE"' EXIT
+"$NODE" "$ROOT/pet/config/cli.mjs" --nul > "$CONFIG_FILE"
+readarray -d '' -t CONFIG < "$CONFIG_FILE"
+rm -f -- "$CONFIG_FILE"
+trap - EXIT
 
-PORT="${MEOW_PORT:-${CONFIG[0]}}"
-DATA_SETTING="${MEOW_DATA_DIR:-${CONFIG[1]}}"
-PUBLIC_IP="${MEOW_PUBLIC_IP:-${CONFIG[2]}}"
+PORT="${CONFIG[0]}"
+DATA_SETTING="${CONFIG[1]}"
+PUBLIC_IP="${CONFIG[2]}"
 OPEN_BROWSER="${CONFIG[3]}"
 [[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || { printf '%s\n' '端口必须是 1 到 65535 的整数。' >&2; exit 1; }
 if [[ "$DATA_SETTING" = /* ]]; then DATA_DIR="$DATA_SETTING"; else DATA_DIR="$ROOT/$DATA_SETTING"; fi
@@ -72,7 +70,7 @@ if [[ "$ACTION" == "reset" ]]; then
   exit 0
 fi
 
-export MEOW_HOST="0.0.0.0"
+export MEOW_HOST="${CONFIG[4]}"
 export MEOW_PORT="$PORT"
 export MEOW_DATA_DIR="$DATA_DIR"
 export MEOW_PUBLIC_IP="$PUBLIC_IP"

@@ -1,9 +1,5 @@
-name: Points pet checks
+name: Points pet checks (manual)
 on:
-  push:
-    branches: ['main', 'feature/points-pet-*']
-  pull_request:
-    paths: ['pet/**', 'package.json', '.github/workflows/points-pet.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,9 +7,9 @@ defaults:
   run:
     shell: bash
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,28 +17,12 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Reproducible offline build dependencies
-        run: tar -czf /tmp/meow-node-tools.tgz node_modules
-      - uses: actions/upload-artifact@v4
-        with:
-          name: meow-node-tools
-          path: /tmp/meow-node-tools.tgz
-          retention-days: 1
-      - name: Domain and HTTP tests
-        run: |
-          mkdir -p pet/test-results
-          npm run test:pet 2>&1 | tee pet/test-results/tests.txt
-      - name: Build pet and original editor
-        run: npm run pet:build && npm run build
-      - name: Install browser test runner
-        run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0 && npx playwright install --with-deps chromium
-      - name: Current native home, parent creations and exports
-        run: node pet/tests/browser-creation.mjs 2>&1 | tee pet/test-results/browser-creation.txt
-      - name: Age modes, parent guidance and six-category growth
-        run: node pet/tests/browser-growth.mjs 2>&1 | tee pet/test-results/browser-growth.txt
-      - name: Source snapshot
-        if: always()
-        run: mkdir -p pet/test-results && git archive --format=zip HEAD -o pet/test-results/source.zip && cp -R pet/dist pet/test-results/pet-dist
+      - run: npm run test:pet
+      - run: npm run pet:build && npm run build
+      - run: |
+          npm install --prefix /tmp/meow-browser-tools --ignore-scripts playwright@1.55.0
+          /tmp/meow-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          MEOW_PLAYWRIGHT=/tmp/meow-browser-tools/node_modules/playwright/index.mjs node pet/tests/browser-maintenance.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

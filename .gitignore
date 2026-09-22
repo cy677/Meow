@@ -24,3 +24,6 @@ docs/App-Store-Launch-Plan-*.md
 RELEASE.json
 docs/review-2026-09-17.md
 docs/review-originals-2026-09-17.zip
+
+# Actual installation settings are never distributed or versioned.
+/pet-settings.json

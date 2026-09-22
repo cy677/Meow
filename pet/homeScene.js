@@ -3,6 +3,7 @@ export function createHomeScene(host) {
   const frame = document.createElement('iframe');
   frame.className = 'home-scene';
   frame.title = '小猫互动场景';
+  frame.allow = "camera 'self'; web-share 'self'";
   let disposed = false;
   let settled = false;
   let pollTimer;
