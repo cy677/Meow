@@ -14,24 +14,39 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run test:pet
-      - run: npm run test:motion
-      - run: npm run pet:build && npm run build
-      - name: Reproducible source and dependencies
-        if: always()
+      - name: Unit tests and original source rig acceptance
         run: |
-          git archive --format=tar.gz HEAD -o meow-source.tar.gz
-          tar -czf meow-dependencies.tar.gz node_modules
+          npm run test:pet
+          npm run test:motion
+      - name: Both production builds
+        run: npm run pet:build && npm run build
+      - name: Install isolated browser test tooling
+        id: browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/cat-motion-browser" --no-package-lock --ignore-scripts playwright@1.55.0
+          ln -s "$RUNNER_TEMP/cat-motion-browser/node_modules/playwright" node_modules/playwright
+          "$RUNNER_TEMP/cat-motion-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Cat motion production WebGL regression
+        run: npm run test:cat-motion:browser
+      - name: Existing model rewards regression
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
+        run: node pet/tests/browser-models.mjs
+      - name: Existing growth regression
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
+        run: node pet/tests/browser-growth.mjs
+      - name: Existing creation regression
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
+        run: node pet/tests/browser-creation.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cat-motion-stage1-source
-          path: |
-            meow-source.tar.gz
-            meow-dependencies.tar.gz
+          name: cat-motion-stage1-review
+          path: pet/test-results/
           retention-days: 7
