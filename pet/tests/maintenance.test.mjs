@@ -72,8 +72,7 @@ test('maintenance: growth summary excludes replaced corrections, fills days and 
   assert.equal(summary.dailyStats.length,7);assert.equal(summary.categoryStats.length,6);
   const original=s.growth.read(true).recent[0];
   s.growth.correct({recordId:original.id,points:3,reason:'纠正分值',idempotencyKey:randomUUID()});
-  summary=s.growth.summary({days:7});
-  assert.equal(summary.periodCount,105);assert.equal(summary.periodPoints,107);
+  summary=s.growth.summary({days:7});assert.equal(summary.periodCount,105);assert.equal(summary.periodPoints,107);
   assert.equal(summary.weeklyStats.reduce((n,w)=>n+w.points,0),107);
   assert.equal(summary.dailyStats.reduce((n,d)=>n+d.count,0),105);
   assert.equal(createGrowthService(s).read(createUserContext('parent'),{days:7}).visualization.periodPoints,107);
@@ -90,7 +89,7 @@ test('maintenance: registered model and scene camera are used, cleanup is idempo
   assert.equal(calls.filter(v=>Array.isArray(v)&&v[0]==='dispose').length,1);
   assert.equal(calls.filter(v=>v==='photo-dispose').length,1);
   assert.ok(calls.some(v=>Array.isArray(v)&&v[0]==='applyAppearance'));assert.throws(()=>runtime.playProgram({}));
-  assert.throws(()=>createDeviceCameraProvider(),/尚未接入/);
+  const device=createDeviceCameraProvider();assert.equal(device.capabilities.deviceCamera,true);assert.equal(device.state,'idle');device.dispose();device.dispose();assert.equal(device.state,'disposed');
 });
 
 function patchFixture(t){

@@ -1,6 +1,7 @@
-/** Scene and future device implementations share start/stop/capture/dispose. */
+/** Scene capture and the device camera have independent, disposable lifetimes. */
 export function createSceneCaptureProvider(capture) {
   for(const key of ['open','close','capture','dispose'])if(typeof capture?.[key]!=='function')throw new TypeError(`缺少拍照能力：${key}`);
+  capture.setOutputMode?.('photos');
   let disposed=false;
   const ensure=()=>{if(disposed)throw new Error('拍照提供者已销毁');};
   return {
@@ -12,6 +13,4 @@ export function createSceneCaptureProvider(capture) {
     dispose(){if(disposed)return;disposed=true;capture.dispose();},
   };
 }
-export function createDeviceCameraProvider() {
-  throw new Error('设备摄像头尚未接入；本版本仅支持场景留影');
-}
+export {createDeviceCameraProvider} from '../../src/camera/deviceCamera.js';

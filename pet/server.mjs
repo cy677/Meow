@@ -14,6 +14,7 @@ import { createAuthService } from './services/authService.mjs';
 import { createApiRouter } from './api/router.mjs';
 import { json } from './api/http.mjs';
 import { serveStatic } from './api/static.mjs';
+import { cameraPermissionsPolicy } from './api/cameraPolicy.mjs';
 const here=dirname(fileURLToPath(import.meta.url));
 
 export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), catalogPath=resolve(here,'rewards.json'), staticDir=resolve(here,'dist'), dev=false, publicOrigin=process.env.MEOW_ORIGIN || '', publicIp=process.env.MEOW_PUBLIC_IP || '', tls=null }={}) {
@@ -35,7 +36,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   if(dev){const {createServer}=await import('vite');vite=await createServer({configFile:resolve(here,'vite.config.mjs'),server:{middlewareMode:true},appType:'mpa'});}
   const handler=async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
-    res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=(), accelerometer=(self), gyroscope=(self), magnetometer=()');
+    res.setHeader('Permissions-Policy',cameraPermissionsPolicy(''));
     if(!dev)res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     try {
       if(!req.headers.host)fail(400,'缺少 Host');
@@ -44,6 +45,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
       catch{fail(403,'Host 不在允许列表');}
       if(req.headers.origin&&req.headers.origin!==expectedOrigin)fail(403,'不允许跨站请求');
       const path=new URL(req.url,expectedOrigin).pathname;
+      res.setHeader('Permissions-Policy',cameraPermissionsPolicy(path));
       // Upstream controls use element style attributes; exports preview local Blob images.
       if(path==='/studio.html'){
         res.setHeader('X-Frame-Options','SAMEORIGIN');
@@ -75,13 +77,13 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
       app.store.close();process.exitCode=1;
     });
     app.server.listen(port,host,()=>{
-      console.log(`本地数据文件：${app.store.storageInfo().path}（积分、理由、兑换和预设均保存在此处）`);
+      console.log(`服务端数据文件：${app.store.storageInfo().path}（积分、理由、兑换和预设保存在运行 Node 服务的机器，不是 Pad 浏览器）`);
       console.log(`监听地址：${host}:${port}`);
       for(const url of accessUrls(options))console.log(`\n孩子页面：${url}/\n家长页面：${url}/parent.html`);
       if(app.setupToken)console.log(`\n首次初始化口令（仅家长保管）：\n${app.setupToken}\n`);
-      if(host==='0.0.0.0'||host==='::')console.log('Pad 请连接同一局域网，选择电脑实际使用的 IP；VPN/虚拟网卡地址不一定可达。');
-      console.log(useTls?'倾斜功能需 Pad 信任此证书，再在页面主动授权。':'HTTP 支持触摸；倾斜传感器需可信 HTTPS，参见 pet/PAD.md。');
-      console.log('外网访问需放行网页 TCP 端口；公网登录建议使用 HTTPS，配置见 pet/PAD.md。');
+      if(host==='0.0.0.0'||host==='::')console.log('局域网访问时，Pad 请连接同一网络并选择服务机器实际使用的 IP；公网部署请使用配置的公网地址。');
+      console.log('摄像头和倾斜传感器需要可信 HTTPS，并由用户在页面授权。公开可信证书不需要 Pad 另装证书；自建 CA 才需要安装并信任根证书。');
+      console.log('外网访问需放行网页 TCP 端口；公网登录建议使用 HTTPS，配置见 pet/PAD.md。合影不上传服务器，由用户存储到 Pad 系统照片。');
       if(options.openBrowser){
         const origin=process.env.MEOW_ORIGIN||`${useTls?'https':'http'}://localhost:${port}`;
         const url=origin+(app.setupToken?'/parent.html':'/');

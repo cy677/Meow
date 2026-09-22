@@ -2,10 +2,11 @@
  * Run after npm run pet:build. Uses an isolated in-memory family, not pet/data.
  */
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync,statSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
 import {createPetServer} from '../server.mjs';
+import {checkDevicePhotos} from './browser-photo-checks.mjs';
 const {chromium}=await import(process.env.MEOW_PLAYWRIGHT||'playwright');
 const app=await createPetServer({dbPath:':memory:'});
 await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
@@ -14,7 +15,7 @@ const out=new URL('../test-results/',import.meta.url);mkdirSync(out,{recursive:t
 let browser;const checks=[],errors=[];
 const mark=value=>{checks.push(value);console.log('PASS',value);};
 try {
-  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
   const setup=await fetch(origin+'/api/parent/setup',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet'},body:JSON.stringify({setupToken:app.setupToken,age:6,mode:'school_basic',timeZone:'UTC',pin:'864209',childCode:'2468',childName:'测试',petName:'小橘'})});
   assert.equal(setup.status,200);
   const parent=await browser.newPage({viewport:{width:1280,height:900}});
@@ -36,10 +37,14 @@ try {
   await scene.locator('#btn-export-png').click();const frame=scene.locator('.share-card-live-frame');await frame.waitFor({state:'visible'});
   const box=await frame.boundingBox();assert.ok(box&&box.width>100&&box.height>100,JSON.stringify(box));
   await child.screenshot({path:fileURLToPath(new URL('maintenance-photo.png',out))});
-  const downloaded=child.waitForEvent('download');await scene.locator('.share-card-capture-button').click();const download=await downloaded;
-  const filename=fileURLToPath(new URL('maintenance-photo.png.download',out));await download.saveAs(filename);assert.ok(statSync(filename).size>1000);
+  await scene.locator('.share-card-capture-button').click();
+  await scene.locator('.device-photo-preview').waitFor({state:'visible'});
+  const photo=scene.locator('.device-photo-image');await photo.evaluate(img=>img.decode());
+  assert.deepEqual(await photo.evaluate(img=>[img.naturalWidth,img.naturalHeight]),[1200,1600]);
+  await scene.locator('.device-photo-done').click();
   await scene.locator('.share-card-close-button').click();await scene.locator('.share-card-overlay').waitFor({state:'hidden'});
-  await scene.locator('#btn-export-png').click();await frame.waitFor({state:'visible'});await scene.locator('.share-card-close-button').click();mark('Native photo frame, PNG and close/reopen');
+  await scene.locator('#btn-export-png').click();await frame.waitFor({state:'visible'});await scene.locator('.share-card-close-button').click();mark('Native photo frame, in-memory PNG preview and close/reopen');
+  await checkDevicePhotos({child,scene,out,mark});
   // These are functional checks, not simultaneous software-rendering load tests.
   // Dispose the verified child scene before loading the parent editor.
   await child.close();await parent.bringToFront();
