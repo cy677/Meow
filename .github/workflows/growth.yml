@@ -1,49 +1,48 @@
-name: Growth system checks
+name: Meow maintenance checks
 on:
-  push:
-    branches: ['feature/points-pet-growth-*']
   pull_request:
-    paths: ['pet/**', 'README*', '.github/workflows/growth.yml']
+    paths: ['pet/**', 'src/**', 'scripts/**', 'index.html', 'Meow', 'package*.json', 'pet-settings.example.json', 'vite*.js', '.github/workflows/**']
+  push:
+    branches: ['main']
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: meow-maintenance-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
 jobs:
-  growth:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Source snapshot
-        run: git archive --format=zip HEAD -o /tmp/meow-growth-source.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: meow-growth-source
-          path: /tmp/meow-growth-source.zip
-          retention-days: 7
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run test:pet
-      - run: npm run pet:build && npm run build
-      - name: Growth browser regression
-        if: hashFiles('pet/tests/browser-growth.mjs') != ''
+      - name: Domain and HTTP regression
         run: |
-          npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
-          npx playwright install --with-deps chromium
-          set -o pipefail
           mkdir -p pet/test-results
-          node pet/tests/browser-growth.mjs 2>&1 | tee pet/test-results/browser-growth.txt
-      - name: Native kitten and parent creation regression
-        if: ${{ !cancelled() && hashFiles('pet/tests/browser-creation.mjs') != '' }}
+          npm run test:pet 2>&1 | tee pet/test-results/tests.txt
+      - name: Both application builds
+        run: npm run pet:build && npm run build
+      - name: Current application smoke
         run: |
-          set -o pipefail
-          node pet/tests/browser-creation.mjs 2>&1 | tee pet/test-results/browser-creation.txt
+          npm install --prefix /tmp/meow-browser-tools --ignore-scripts playwright@1.55.0
+          /tmp/meow-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+          MEOW_PLAYWRIGHT=/tmp/meow-browser-tools/node_modules/playwright/index.mjs node pet/tests/browser-maintenance.mjs 2>&1 | tee pet/test-results/browser-maintenance.txt
+      - name: Source snapshot
+        if: always()
+        run: |
+          mkdir -p pet/test-results
+          git archive --format=zip HEAD -o pet/test-results/source.zip
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: meow-growth-evidence
+          name: meow-maintenance-evidence
           path: pet/test-results/
-          if-no-files-found: ignore
           retention-days: 7

@@ -766,6 +766,17 @@ const speechBubbles = createSpeechBubbleController({
   },
 });
 window.__speechBubbles = speechBubbles;
+toyWorld.onCatContact(({ kind, point, speed }) => {
+  if (!cat) return;
+  cat.updateMatrixWorld(true);
+  const local = cat.worldToLocal(new THREE.Vector3(point.x, point.y, point.z));
+  const inward = cat.userData.headC.clone().sub(local).normalize();
+  pulsePoke(local, inward, Math.min(.65, .2 + speed * .12));
+  const messages = i18n.locale === 'zh-CN'
+    ? { ball: '小球，滚起来！', yarn: '毛线团，别跑呀～', fish: '抓到小鱼啦！', duck: '小鸭，来一起玩！', object: '哎呀，前面有东西～', bed: '软乎乎，蹭一下～' }
+    : i18n.locale === 'ja-JP' ? { object: 'あれ、何かにぶつかった！' } : { object: 'Oh! Something to play with!' };
+  speechBubbles.showNow('cat', messages[kind] || messages.object);
+});
 window.addEventListener('meow:speech', (event) => {
   speechBubbles.showNow(event.detail?.role ?? '');
 });
@@ -1311,7 +1322,6 @@ function syncFaceToPokes() {
 let softWasActive = false;
 function stepSim(dt) {
   updatePokes(dt);
-  toyWorld.step(dt);
   fishRain.update(dt);
 
   // 整猫提起（跟手）与松手落回（欠阻尼弹簧 + 落地截断）
@@ -1375,13 +1385,6 @@ function stepSim(dt) {
         + containerJiggle.position.y,
       worldZ - rootX * s + rootZ * c + containerJiggle.position.z
     );
-    if (containerJiggleEnabled()) {
-      toyWorld.setCatTransform?.(
-        containerJiggle.position.x,
-        containerJiggle.position.z,
-        0
-      );
-    }
     if (motionState) {
       cat.rotation.set(
         motionState.rootPitch,
@@ -1390,9 +1393,11 @@ function stepSim(dt) {
       );
     }
     if (params.motionDebug && params.motionStateMachine) {
-      toyWorld.setCatTransform?.(worldX, worldZ, worldHeading);
       followMotionCamera(worldX, worldZ, dt);
     }
+    const contactShift = toyWorld.syncCat(cat, dt);
+    motionMachine.translate(contactShift.x, contactShift.z);
+    worldX += contactShift.x; worldZ += contactShift.z;
     const viewportEl = document.getElementById('viewport');
     viewportEl.dataset.motionEnabled = String(!!params.motionDebug);
     viewportEl.dataset.motionStateMachine = String(!!params.motionStateMachine);
@@ -1442,6 +1447,7 @@ function stepSim(dt) {
     }
   }
 
+  toyWorld.step(dt);
   const softActive = anyPokeActive();
   if (softActive || softWasActive) syncFaceToPokes(); // 多同步一帧保证复位归零
   softWasActive = softActive;
@@ -1455,6 +1461,16 @@ function syncScreenScale() {
 }
 
 const clock = new THREE.Clock();
+window.render_game_to_text = () => JSON.stringify({
+  coordinates: 'world units; y up, x right, z forward',
+  cat: cat ? { position: cat.position.toArray(), ...toyWorld.catDiagnostics() } : null,
+  toys: toyWorld.toys.filter(t => t.mesh.visible).map(t => ({ kind: t.kind, position: t.body.position.toArray() })),
+});
+window.advanceTime = (ms) => {
+  const frames = Math.max(1, Math.ceil(ms / (1000 / 60)));
+  for (let i = 0; i < frames; i++) stepSim(Math.min(ms / 1000 / frames, 1 / 30));
+  renderer.render(scene, camera);
+};
 const staticIdleViewport = document.getElementById('viewport');
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 1 / 30);
@@ -2685,6 +2701,11 @@ function randomizeAll() {
 document.getElementById('btn-random').addEventListener('click', randomizeAll);
 
 const shareCardCapture = createShareCardCapture({
+  poseControl: {
+    options: () => POSES.map(p=>({title:p.name,params:{pose:p.id}})),
+    current: () => params.pose,
+    select: option => {window.__setAnimation({enabled:false,stateMachine:false});window.__setParams(option.params);},
+  },
   viewport: document.getElementById('viewport'),
   renderer,
   scene,

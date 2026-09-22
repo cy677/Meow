@@ -1,16 +1,82 @@
 import { readFileSync } from 'node:fs';
-// Reuse the original renderer and original HTML, not a reduced reconstruction.
+
+export function replaceChecked(code,needle,replacement,expected=1) {
+  const count=code.split(needle).length-1;
+  if(count!==expected)throw new Error(`原版适配点失配：${needle}；预期 ${expected}，实际 ${count}`);
+  return code.split(needle).join(replacement);
+}
+// Compatibility boundary only. Runtime behavior now lives in an ordinary module.
+const anchors = [
+  [
+    "    motionMachine.translate(contactShift.x, contactShift.z);",
+    "    if (petStudio.childMotion) { petStudio.worldPose.x += contactShift.x; petStudio.worldPose.z += contactShift.z; }\n    else motionMachine.translate(contactShift.x, contactShift.z);",
+    1
+  ],
+  [
+    "let worldX = 0;",
+    "let worldX = petStudio.childMotion ? petStudio.worldPose.x : 0;",
+    1
+  ],
+  [
+    "let worldZ = 0;",
+    "let worldZ = petStudio.childMotion ? petStudio.worldPose.z : 0;",
+    1
+  ],
+  [
+    "let worldHeading = 0;",
+    "let worldHeading = petStudio.childMotion ? petStudio.worldPose.heading : 0;",
+    1
+  ],
+  [
+    "    motionWasEnabled = true;",
+    "    if (petStudio.childMotion) { worldX=petStudio.worldPose.x; worldZ=petStudio.worldPose.z; worldHeading=petStudio.worldPose.heading; }\n    motionWasEnabled = true;",
+    1
+  ],
+  [
+    "    if (params.motionDebug && params.motionStateMachine) {",
+    "    if (petStudio.childMotion && !motionState) cat.rotation.set(0,worldHeading,0);\n    if ((params.motionDebug && params.motionStateMachine) || petStudio.childMotion) {",
+    1
+  ],
+  [
+    "motionState = motionRig.update(motionElapsed, {",
+    "motionState = petStudio.sampleMotion(motionElapsed, {",
+    1
+  ],
+  [
+    "const i18n =",
+    "const petControlSyncs = [];\nconst i18n =",
+    1
+  ],
+  [
+    "return { row, input, sync };",
+    "petControlSyncs.push(sync); return { row, input, sync };",
+    3
+  ],
+  [
+    "return { row, select, sync };",
+    "petControlSyncs.push(sync); return { row, select, sync };",
+    1
+  ],
+  [
+    "return refresh;",
+    "petControlSyncs.push(refresh); return refresh;",
+    1
+  ]
+];
+const bridge = "\nimport { createStudioAdapter } from '../pet/runtime/createStudioAdapter.js';\nexport const petStudio=createStudioAdapter({\n  THREE,params,key,ambient,camera,scene,controls,motionCameraOffset,floorParams,rugState,lightAngles,weatherAmounts,pokeUniforms,pokeFeel,hatchUniforms,sketchShadowMat,blockShadowMat,refreshers,petControlSyncs,ground,toyWorld,rugLayer,motionMachine,bgm,weatherAudio,renderer,resetMotionWorld,drawWoodFloor,syncRugPlacement,updateKeyLight,syncLightOrb,setThunder,setWeather,setWeatherAmount,\n  get cat(){return cat;},get motionRig(){return motionRig;},\n  get weatherMode(){return weatherMode;},get thunderEnabled(){return thunderEnabled;},\n  set staticPoseBeforeMotion(value){staticPoseBeforeMotion=value;},\n  set motionElapsed(value){motionElapsed=value;},\n  setParams:value=>window.__setParams(value),setAnimation:value=>window.__setAnimation(value),\n  animationState:()=>window.__getAnimation(),photo:shareCardCapture,\n});\n";
 export function studioBuild() {
   const template=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const bridge=readFileSync(new URL('./studioRuntime.txt',import.meta.url),'utf8');
   return {name:'pet-original-runtime',enforce:'pre',
     transformIndexHtml:{order:'pre',handler(html,context){
       if(!context.filename.replaceAll('\\','/').endsWith('/pet/studio.html'))return html;
-      return template.replaceAll('/src/','../src/').replace('src="../src/main.js"','src="./studio.js"').replace('<title>Meow Generator</title>','<title>原版互动 · Meow 积分小猫</title>');
+      let result=template.replaceAll('/src/','../src/');
+      result=replaceChecked(result,'src="../src/main.js"','src="./studio.js"');
+      return replaceChecked(result,'<title>Meow Generator</title>','<title>原版互动 · Meow 积分小猫</title>');
     }},
     transform(code,id){
-      if(!id.replaceAll('\\','/').endsWith('/src/main.js'))return null;
-      return {code:code.replace('let worldX = 0;', 'let worldX = petChildMotion ? petWander.x : 0;').replace('let worldZ = 0;', 'let worldZ = petChildMotion ? petWander.z : 0;').replace('let worldHeading = 0;', 'let worldHeading = petChildMotion ? petWander.heading : 0;').replace('    motionWasEnabled = true;', '    if (petChildMotion) { worldX=petWander.x; worldZ=petWander.z; worldHeading=petWander.heading; }\n    motionWasEnabled = true;').replace('    if (params.motionDebug && params.motionStateMachine) {', '    if (petChildMotion && !motionState) cat.rotation.set(0,worldHeading,0);\n    if ((params.motionDebug && params.motionStateMachine) || petChildMotion) {').replace('motionState = motionRig.update(motionElapsed, {','motionState = petSampleMotion(motionElapsed, {').replace('const i18n =','const petControlSyncs = [];\nconst i18n =').replaceAll('return { row, input, sync };','petControlSyncs.push(sync); return { row, input, sync };').replaceAll('return { row, select, sync };','petControlSyncs.push(sync); return { row, select, sync };').replaceAll('return refresh;','petControlSyncs.push(refresh); return refresh;')+'\n'+bridge,map:null};
+      if(!id.split('?')[0].replaceAll('\\','/').endsWith('/src/main.js'))return null;
+      for(const [needle,replacement,count] of anchors)code=replaceChecked(code,needle,replacement,count);
+      return {code:code+bridge,map:null};
     },
   };
 }

@@ -1,6 +1,8 @@
-# 在家长电脑运行，通过 Pad 浏览器使用
+# 通过 Pad 浏览器使用 Meow（局域网或公网）
 
-数据仍然只保存在家长电脑的 `pet/data/pet.sqlite`（或 `MEOW_DATA_DIR` 指定的位置）。Pad 不需要安装应用，也不会使用自己的浏览器缓存另建一套积分账本。原有加分理由、兑换快照和预设保存方式不变。服务停止或电脑休眠时 Pad 无法连接；重新启动服务后继续使用已有数据。
+业务数据保存在运行 Node.js 服务的机器上，默认路径为 `pet/data/pet.sqlite`，实际目录可由配置或 `MEOW_DATA_DIR` 指定。家庭电脑部署时在家庭电脑，公网服务器部署时在服务器，不在 Pad 浏览器。Pad 不需要安装应用，也不会使用浏览器缓存另建积分账本。服务停止时 Pad 无法连接；重启后继续使用原有数据。
+
+摄像头合影只在 Pad 内存中生成，点击拍照即通过浏览器保存 PNG 文件，不上传到服务端，也没有网页本地相册。用法见 [第一版合影说明](../docs/photo-v1.md)。
 
 ## 1. 最简单的局域网 IP 访问（HTTP + 触摸）
 
@@ -37,7 +39,7 @@ New-NetFirewallRule -DisplayName "Meow 家庭积分宠物 HTTP" -Direction Inbou
 
 点“奖励小屋”或“我的收藏”打开当前页面内的弹窗，不打开新窗口。弹窗有发现奖励、我的收藏、成长记录三个页面；奖励每页 6 项，支持分类及前后翻页；成长记录每页 5 条，保留查询、过滤、奖励快照和前后翻页。换装或播放动作成功后自动回到小猫；兑换确认后留在弹窗，可以继续选择。关闭、取消或翻页不会扣积分。
 
-后台加分不会重置孩子正在浏览的奖励页码。弹窗打开时，小猫不接收触摸，倾斜暂时让位；关闭后继续观看，不重建画布。家长页面及本地数据库接口不变。详细布局和测试说明见 `LANDSCAPE.md`。
+后台加分不会重置孩子正在浏览的奖励页码。弹窗打开时，小猫不接收触摸，倾斜暂时让位；关闭后继续观看，不重建画布。家长页面及服务端数据库接口不变。详细布局和测试说明见 `LANDSCAPE.md`。
 
 ### 触摸及倾斜
 
@@ -60,7 +62,9 @@ W3C 的 Device Orientation and Motion 规范把方向/运动数据限定为安�
 - https://developer.mozilla.org/en-US/docs/Web/API/DeviceOrientationEvent/requestPermission_static
 - https://threejs.org/docs/pages/OrbitControls.html
 
-## 4. 通过 IP 使用 HTTPS（启用传感器的前提）
+## 4. 通过 IP 使用 HTTPS（摄像头和传感器的前提）
+
+已有公网 HTTPS 时优先沿用。证书由 iPad 已信任的公开 CA 签发、覆盖该 IP、证书链完整且有效时，不需要在 Pad 上安装证书；仍需首次确认摄像头权限。下面的 mkcert 安装步骤只针对自建 CA，并不是所有 HTTPS 部署的必做步骤。
 
 程序已支持原生 Node HTTPS。准备一张 **Pad 信任、且包含服务器实际 IP 的证书**和对应私钥，然后设置以下路径。关闭旧 HTTP 服务后执行：
 
@@ -70,7 +74,7 @@ $env:MEOW_TLS_KEY="C:\Meow\pet\certs\meow-key.pem"
 npm run pet:lan:https
 ```
 
-HTTPS 默认端口 **8793**，仍使用同一个本地数据库。例如 Pad 打开 `https://192.168.1.20:8793/`；浏览器确认连接可信后，点“开启倾斜”并允许方向传感器。`MEOW_PORT` 可以改端口。证书缺失或无效时启动失败，不会悄悄改成 HTTP。更新代码、切换 HTTP/HTTPS 都不要删除 `pet/data/`。
+HTTPS 默认端口 **8793**，仍使用同一个服务端数据库。例如 Pad 打开 `https://192.168.1.20:8793/`；浏览器确认连接可信后，点“开启倾斜”并允许方向传感器。`MEOW_PORT` 可以改端口。证书缺失或无效时启动失败，不会悄悄改成 HTTP。更新代码、切换 HTTP/HTTPS 都不要删除 `pet/data/`。
 
 需要放行 HTTPS 端口时，家长可在管理员 PowerShell 中执行同样受限的规则：
 
@@ -98,7 +102,7 @@ Apple 手工安装证书信任说明：https://support.apple.com/en-us/102390
 
 ## 5. 数据、权限和测试边界
 
-数据仍在本地服务，不接入外部传感器平台、云存储或遥测。HTTPS 会话使用 Secure/HttpOnly/SameSite Cookie，HTTP 保留原角色校验；LAN 模式仍验证 Host、Origin、CSRF、价格和拥有权，不能因为监听 0.0.0.0 就绕过权限。
+业务数据通过当前服务写入运行服务机器的 SQLite，不自动同步到 GitHub、外部传感器平台或第三方存储。公网部署时这台机器就是公网服务器。相机画面和照片不走这些业务接口。HTTPS 会话使用 Secure/HttpOnly/SameSite Cookie，HTTP 保留原角色校验；LAN 模式仍验证 Host、Origin、CSRF、价格和拥有权，不能因为监听 0.0.0.0 就绕过权限。
 
 `node --test pet/tests/*.test.mjs` 包括真实网卡 IP 访问、TLS 证书验证、积分回归和传感器状态机测试。TLS 测试用临时 OpenSSL 证书，仅测试机内使用，不写入源码。`pet/tests/browser-landscape.mjs` 检查全窗口画布、奖励与历史分页、弹窗关闭/焦点、兑换/换装、后台加分和各横屏尺寸。`pet/tests/browser-pad.mjs` 使用 Chromium 的 CDP 单指/双指触摸输入，并对传感器做**模拟事件/授权测试**；这不是实体 iPad/Android 陀螺仪测试。现有双角色、参数预设和数据库重启用例仍保留。
 

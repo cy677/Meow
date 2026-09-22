@@ -8,9 +8,18 @@ export function mountHomeRuntime(runtime,data,defaults){
   let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+2500,activePlan=null,lastAction='';
   const initial=defaults||runtime.capture();
   let homeView=runtime.capture().camera;
+  let poseUntil=0,lastRandomId='';
   const stop=()=>{if(disposed)return;activePlan=null;runtime.clearKeys();runtime.stop(true);nextAt=performance.now()+5000+Math.random()*4000;};
   function applyState(next,first=false){
     if(disposed)return;
+    // The parent page calls this bridge directly across an iframe realm.
+    // Normalize inputs here so motion validation sees local plain objects.
+    next=structuredClone(next);
+    if(JSON.stringify(next.randomScript)!==JSON.stringify(state.randomScript)){
+      stop();poseUntil=0;
+      const removedPose=state.randomScript?.find(r=>r.id===lastRandomId&&r.category==='pose');
+      if(removedPose&&!next.randomScript?.some(r=>r.id===lastRandomId))runtime.restore({params:Object.fromEntries(PARAM_FIELDS.pose.map(f=>[f.key,next.params[f.key]??initial.params[f.key]]).filter(([,v])=>v!==undefined))});
+    }
     runtime.applyModels(next.models||[]);
     if(next.creation){
       if(first||JSON.stringify(next.creation)!==JSON.stringify(state.creation)){
@@ -45,23 +54,32 @@ export function mountHomeRuntime(runtime,data,defaults){
   applyState(state,true);
   function play(action,motion={}){
     if(disposed||paused||document.hidden)return;
+    motion=structuredClone(motion);
     if(!state.access.actions.some(a=>a.action===action&&JSON.stringify(a.motion||{})===JSON.stringify(motion)))return;
     activePlan=planMotion(action,motion,motion.script);
     lastAction=action;runtime.clearKeys();runtime.playProgram(activePlan);
   }
   // One render clock drives the program. A background tab never catches up by
   // firing a queue of expired segment timers. Rest restores the selected pose.
+  let previousTick=performance.now();
   function tick(now){
     if(disposed)return;
+    const delta=Math.max(0,Math.min(.1,(now-previousTick)/1000));previousTick=now;
+    runtime.update(delta);
     const blocked=paused||pointerHeld||document.hidden||document.querySelector('#viewport[data-share-card-open="true"]');
     if(blocked){if(activePlan)stop();nextAt=now+2500;}
+    else if(poseUntil>now){ /* Hold a chosen static pose before the next script item. */ }
     else if(activePlan||runtime.motionState().active){if(!runtime.motionState().active)stop();}
     else if(now>=nextAt){
-      const available=state.access.actions.filter(a=>canAutoPlay(a.action,a.motion||{}));
-      const pool=available.filter(a=>a.action!==lastAction);
+      const available=(state.randomScript??state.access.actions).filter(a=>a.category==='pose'||canAutoPlay(a.action,a.motion||{}));
+      const pool=available.filter(a=>(a.id||a.action)!==lastRandomId);
       const choices=pool.length?pool:available;
       const chosen=choices[Math.floor(Math.random()*choices.length)];
-      if(chosen)play(chosen.action,chosen.motion||{});else nextAt=now+5000;
+      if(chosen){
+        lastRandomId=chosen.id||chosen.action;
+        if(chosen.category==='pose'){stop();runtime.restore({params:chosen.params});poseUntil=now+4500;nextAt=poseUntil;}
+        else {poseUntil=0;play(chosen.action,chosen.motion||{});}
+      }else nextAt=now+5000;
     }
     if(!disposed)raf=requestAnimationFrame(tick);
   }
@@ -93,7 +111,7 @@ export function mountHomeRuntime(runtime,data,defaults){
   raf=requestAnimationFrame(tick);
   return {applyState,play,models:()=>runtime.modelDiagnostics(),overlay(open){if(disposed)return;paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
     if(disposed)return;
-    if(name==='capture')photo.click();
+    if(name==='capture'){stop();runtime.camera.start();}
     if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}

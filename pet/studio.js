@@ -1,3 +1,5 @@
+import {createApiClient} from './ui/apiClient.js';
+import {createPetRuntime} from './runtime/petRuntime.js';
 import './studio.css';
 import { mountHomeRuntime } from './homeRuntime.js';
 
@@ -22,11 +24,13 @@ function stopStudio(){
   clearTimeout(playTimer);clearTimeout(pollTimer);requests.abort();
   removeVisibilityListener();barSize.disconnect();
   delete document.body.dataset.studioReady;
-  try{window.meowHome?.dispose();}finally{runtime?.lock();}
+  try{window.meowHome?.dispose();}finally{runtime?.dispose();}
 }
-async function request(path,method='GET',data){
-  const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',signal:requests.signal,headers:data?{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':csrf}:{},body:data?JSON.stringify(data):undefined});
-  const result=await response.json();if(stopped)throw new DOMException('页面已关闭','AbortError');if(!response.ok){const error=new Error(result.error);error.status=response.status;throw error;}return result;
+const apiRequest=createApiClient({getCsrf:()=>csrf,signal:requests.signal});
+async function request(...args){
+  const result=await apiRequest(...args);
+  if(stopped)throw new DOMException('页面已关闭','AbortError');
+  return result;
 }
 function button(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',async()=>{if(stopped)return;b.disabled=true;try{await fn();}catch(e){if(!stopped){status.textContent=e.message;if(e.status===401)expire();}}finally{b.disabled=stopped;}});bar.append(b);return b;}
 function expire(){if(stopped)return;stopStudio();delete document.body.dataset.studioReady;document.body.dataset.studioStage='expired';document.body.dataset.studioError='登录已过期，请返回重新登录。';document.body.classList.add('studio-loading');for(const control of bar.querySelectorAll('button,select'))control.disabled=true;status.textContent='登录已过期，请返回重新登录。';if(embedded)window.parent.postMessage({type:'meow:error',message:status.textContent},location.origin);}
@@ -34,8 +38,11 @@ async function startStudio(){
 try {
   const session=await request(`/api/${parent?'parent':'child'}/session`);if(stopped)return;csrf=session.csrf;document.body.dataset.studioStage='configuration';
   let data=await request(endpoint);if(stopped)return;revision=data.revision;document.body.dataset.studioStage='renderer';
-  const {petStudio}=await import('../src/main.js');
-  if(stopped){petStudio.lock();return;}
+  const {petStudio:nativeStudio}=await import('../src/main.js');
+  if(stopped){nativeStudio.lock();return;}
+  const petStudio=createPetRuntime(nativeStudio);
+  runtime=petStudio;await petStudio.ready;
+  if(stopped)return;
   runtime=petStudio;document.body.dataset.studioStage='preset';
   const initial=petStudio.capture();
   const defaults=()=>{petStudio.resetRoom();petStudio.restore(initial);petStudio.restore(Object.keys(data.preset).length?data.preset:{params:data.state.params});};

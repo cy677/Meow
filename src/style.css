@@ -811,11 +811,15 @@ select {
   display: flex;
   gap: 9px;
   width: max-content;
+  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
   pointer-events: auto;
   transform: translateX(-50%);
 }
 
 .share-card-skin-button,
+.share-card-pose-button,
 .share-card-capture-button,
 .share-card-close-button {
   min-width: 108px;
@@ -913,6 +917,7 @@ select {
   }
 
   .share-card-skin-button,
+  .share-card-pose-button,
   .share-card-capture-button,
   .share-card-close-button {
     min-width: 82px;

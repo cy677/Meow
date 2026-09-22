@@ -166,6 +166,7 @@ export function createCatMotionStateMachine() {
     reset,
     setKey,
     clearKeys,
+    translate(dx, dz) { position.x += dx; position.z += dz; },
     trigger,
     triggerCode,
     getState: () => ({

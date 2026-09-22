@@ -30,6 +30,7 @@ export function upstreamAccess(catalog, owned) {
   return {full:true, capabilities:['capture','music','weather','lighting','speech'],
     editors:[],
     coats:rewards.filter(r=>r.category==='coat').map(r=>r.params.coatId),poses:rewards.filter(r=>r.category==='pose').map(r=>r.params.pose),
+    poseOptions:rewards.filter(r=>r.category==='pose').map(r=>({id:r.id,title:r.title,params:r.params})),
     actions:rewards.filter(r=>r.category==='trick').map(r=>({id:r.id,title:r.title,action:r.action,motion:r.motion}))};
 }
 
@@ -43,7 +44,8 @@ export function isFreeOriginal(reward) {
 // custom prices and all existing ownership/ledger entries remain intact.
 export function restoreSpecialPrices(catalog) {
   return {...catalog,rewards:catalog.rewards.map(r=>{
-    if(r.category!=='trick'||BASIC_ACTIONS.includes(r.action)||r.cost!==0||r.unlockAt!==0||!r.description.endsWith('，默认开放，可直接使用。'))return r;
+    const builtIn = CLIPS.find(clip => r.id === `original-motion-${clip.id}` && r.action === clip.id && r.title === clip.name);
+    if(!builtIn||r.category!=='trick'||BASIC_ACTIONS.includes(r.action)||r.cost!==0||r.unlockAt!==0||!r.description.endsWith('，默认开放，可直接使用。'))return r;
     return {...r,cost:r.action==='jump'?15:25,unlockAt:r.action==='jump'?20:40,description:`${r.title}，解锁后加入小猫的随机动作脚本。`};
   })};
 }

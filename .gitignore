@@ -27,3 +27,5 @@ docs/review-originals-2026-09-17.zip
 
 # Reviewed local runtime assets; unrelated exported GLBs remain ignored.
 !public/models/kenney/**/*.glb
+# Actual installation settings are never distributed or versioned.
+/pet-settings.json

@@ -28,7 +28,7 @@ try {
   const result=await parent.evaluate(async({key})=>{
     const session=await (await fetch('/api/parent/session')).json();
     const funds=await fetch('/api/parent/points',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':session.csrf},body:JSON.stringify({delta:50,reason:'测试兑换余额',idempotencyKey:key+'-funds'})});if(!funds.ok)throw new Error('准备积分失败');
-    const response=await fetch('/api/parent/growth/award',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':session.csrf},body:JSON.stringify({category:'health',title:'记录一次准备',delta:3,occurredAt:new Date().toISOString(),idempotencyKey:key})});
+    const response=await fetch('/api/parent/growth/award',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':session.csrf},body:JSON.stringify({category:'health',title:'记录一次准备',delta:3,reason:'按约定完成了健康活动准备',basisConfirmed:true,occurredAt:new Date().toISOString(),idempotencyKey:key})});
     const preferred='/api/parent/growth/summary?days=7';
     const preferredResponse=await fetch(preferred);
     const summaryPath=preferredResponse.ok?preferred:'/api/parent/growth?days=7';

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRng } from './rng.js';
 import { createFlatFishFin, createFlatFishTail } from './fishTail.js';
+import { resolveCatObstacles } from './catContacts.js';
 
 export const FISH_GRAB_HIT_AREA = Object.freeze({
   width: 0.82,
@@ -587,6 +588,15 @@ export function createToyWorld(scene) {
   // ---- 猫身碰撞体（静态球组，随重建更新）----------------------------------
   let catBody = null;
   let catColliderSource = [];
+  let contactCooldown = 0, contactCount = 0, lastContact = null, contactHandler = null;
+  function reportContact(body, point, speed) {
+    if (contactCooldown > 0 || speed < .12) return;
+    contactCooldown = 1.5;
+    const kind = toys.find(t => t.body === body)?.kind ?? 'object';
+    lastContact = { kind, speed, point: { x: point.x, y: point.y, z: point.z } };
+    contactCount++;
+    contactHandler?.(lastContact);
+  }
   function setCatColliders(spheres) {
     if (catBody) world.removeBody(catBody);
     catColliderSource = spheres.map((s) => ({
@@ -608,19 +618,41 @@ export function createToyWorld(scene) {
     world.addBody(catBody);
   }
 
-  function setCatTransform(x = 0, z = 0, yaw = 0) {
+  function setCatTransform(x = 0, z = 0, yaw = 0, y = 0) {
     if (!catBody) return;
-    catBody.position.set(x, 0, z);
+    catBody.position.set(x, y, z);
     catBody.quaternion.setFromEuler(0, yaw, 0);
     catBody.aabbNeedsUpdate = true;
     const c = Math.cos(yaw);
     const s = Math.sin(yaw);
     currentCatColliders = catColliderSource.map((collider) => ({
       x: x + collider.x * c + collider.z * s,
-      y: collider.y,
+      y: y + collider.y,
       z: z - collider.x * s + collider.z * c,
       r: collider.r,
     }));
+  }
+
+  function syncCat(object, dt) {
+    if (!catBody || !object) return { x: 0, z: 0 };
+    const previous = catBody.position.clone();
+    setCatTransform(object.position.x, object.position.z, object.rotation.y, object.position.y);
+    const shift = resolveCatObstacles(currentCatColliders, world.bodies, catBody);
+    if (shift.body) reportContact(shift.body, object.position, Math.hypot(shift.x, shift.z) / Math.max(dt, 1 / 120));
+    object.position.x += shift.x; object.position.z += shift.z;
+    setCatTransform(object.position.x, object.position.z, object.rotation.y, object.position.y);
+    // Static collider velocities transfer the cat's motion to dynamic toys.
+    catBody.velocity.copy(catBody.position.vsub(previous).scale(1 / Math.max(dt, 1 / 120)));
+    if (catBody.velocity.length() > 4) catBody.velocity.scale(4 / catBody.velocity.length(), catBody.velocity);
+    if (catBody.velocity.lengthSquared() > .0001) {
+      catBody.updateAABB();
+      for (const body of world.bodies) {
+        if (body.type !== CANNON.Body.DYNAMIC || !body.collisionFilterMask) continue;
+        if (body.aabbNeedsUpdate) body.updateAABB();
+        if (body.aabb.overlaps(catBody.aabb)) body.wakeUp();
+      }
+    }
+    return shift;
   }
 
   // ---- 石头碰撞体（静态球组，随环境重建更新）------------------------------
@@ -852,7 +884,15 @@ export function createToyWorld(scene) {
   }
 
   function step(dt) {
+    contactCooldown = Math.max(0, contactCooldown - dt);
     world.step(1 / 60, dt, 6);
+    for (const contact of world.contacts) {
+      if (contact.bi !== catBody && contact.bj !== catBody) continue;
+      const other = contact.bi === catBody ? contact.bj : contact.bi;
+      if (other.type !== CANNON.Body.DYNAMIC || !other.collisionFilterMask) continue;
+      const offset = contact.bi === catBody ? contact.ri : contact.rj;
+      reportContact(other, catBody.position.vadd(offset), Math.abs(contact.getImpactVelocityAlongNormal()));
+    }
     for (const t of toys) {
       t.mesh.position.copy(t.body.position);
       t.mesh.position.y += VISUAL_CONTACT_LIFT;
@@ -868,7 +908,9 @@ export function createToyWorld(scene) {
   }
 
   return {
-    group, toys, world, step, setCatColliders, setCatTransform, setRockColliders,
+    group, toys, world, step, setCatColliders, setCatTransform, setRockColliders, syncCat,
+    onCatContact(handler) { contactHandler = handler; },
+    catDiagnostics() { return { spheres: currentCatColliders, contactCount, lastContact }; },
     grabToy, moveGrab, releaseGrab, scatterAroundRug, updateFishPupils,
     get dragging() { return !!constraint; },
   };

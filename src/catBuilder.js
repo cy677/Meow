@@ -2331,8 +2331,8 @@ export function buildCat(params, quality = 'full') {
   cat.userData.rigAnchorHints = rigAnchorHints;
   cat.userData.buttC = V(0, bbox.max.y * 0.42, bbox.min.z + 0.14);
   cat.userData.colliders = [
-    { c: V(0, bbox.max.y * 0.35, (bbox.min.z + bbox.max.z) * 0.5), r: Math.min((bbox.max.x - bbox.min.x), bbox.max.y) * 0.42 },
-    { c: headC.clone(), r: hr * 1.05 },
+    { c: V(0, bbox.max.y * 0.35, (bbox.min.z + bbox.max.z) * 0.5), r: Math.min((bbox.max.x - bbox.min.x), bbox.max.y) * 0.48 },
+    { c: headC.clone(), r: hr * 1.16 },
   ];
   cat.userData.buildTimings = {
     meshMs: meshCompletedAt - buildStartedAt,

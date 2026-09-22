@@ -34,7 +34,7 @@ for (const page of [parent, child]) {
   page.setDefaultTimeout(60000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
-    if (message.type() === 'error' && !/\/api\/(?:child|parent)\/session$/.test(message.location().url)) errors.push(message.text());
+    if (message.type() === 'error' && !/\/api\/(?:child|parent)\/session$/.test(message.location().url)) errors.push(`${message.text()} (${message.location().url})`);
   });
   page.on('requestfailed', request => failedRequests.push({url:request.url(),error:request.failure()?.errorText}));
   page.on('request', request => {

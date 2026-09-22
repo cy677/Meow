@@ -1,3 +1,6 @@
+import {createSessionState} from './ui/account/sessionState.js';
+import {createApiClient} from './ui/apiClient.js';
+import {createRewardView} from './ui/rewards/rewardView.js';
 import {createGrowthUI,attachAgeModeFields} from './growthUI.js';
 import './style.css';
 import {CATEGORY_LABELS} from './presetSchema.mjs';
@@ -5,38 +8,30 @@ import {SCENE_SLOTS} from './environmentSchema.mjs';
 import './environment.css';
 import './child.css';
 import { childMarkup, createChildOverlay } from './childLayout.js';
-import { rewardPage } from './rewardPages.mjs';
 import { createPresetEditor } from './presetEditor.js';
 import { createHistoryView } from './history.js';
 import { isFreeOriginal } from './upstreamRewards.mjs';
 const parent=document.body.dataset.role==='parent';
 const role=parent?'parent':'child';
+const sessionState=createSessionState(role);
 const $=selector=>document.querySelector(selector);
 const el=(tag,cls,content)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(content!==undefined)e.textContent=content;return e;};
 const labels=CATEGORY_LABELS;
-const icons={model:'✿',coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',creation:'✿',capability:'✧',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
 const uid=()=>Array.from(crypto.getRandomValues(new Uint8Array(20)),n=>n.toString(16).padStart(2,'0')).join('');
 let growthUI=null,setupAge=null;
 let state=null,csrf='',scene=null,sceneLoading=null,category='all',view='shop',catalog=null,online=true,selectedReward=null,toastTimer,catalogRevision='',presetEditor=null,historyView=null,childOverlay=null,rewardPageIndex=0,rewardRenderKey='';
+const rewardView=createRewardView({onCategoryChange(value){category=value;rewardPageIndex=0;renderRewards();}});
 const operationKeys=new Map();
 function keyFor(intent){if(!operationKeys.has(intent))operationKeys.set(intent,uid());return operationKeys.get(intent);}
 function toast(message,error=false){const box=$('#toast');box.textContent=message;box.classList.toggle('error',error);box.hidden=false;const popup=$('#purchase-dialog')?.open?$('#purchase-error'):$('#rewards-dialog')?.open?$('#rewards-message'):null;if(popup){popup.textContent=message;popup.hidden=false;popup.classList.toggle('error',error);}clearTimeout(toastTimer);toastTimer=setTimeout(()=>box.hidden=true,5000);}
-async function api(path,method='GET',data,extraHeaders={}) {
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
-  try{
-    const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:{...(data===undefined?{}:{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':csrf}),...extraHeaders},...(data===undefined?{}:{body:JSON.stringify(data)})});
-    const result=await response.json();
-    if(!response.ok){const error=new Error(result.error||'操作失败');error.status=response.status;throw error;}
-    return result;
-  }catch(error){if(error.name==='AbortError')throw new Error('连接超时；重试会沿用同一请求 ID，不会重复扣分');throw error;}finally{clearTimeout(timeout);}
-}
+const api=createApiClient({getCsrf:()=>sessionState.csrf});
 async function run(button,work){
   if(button?.dataset.busy)return;
   if(button){button.dataset.busy='true';button.disabled=true;}
   try{await work();}catch(error){toast(error.message,true);if(error.status===401&&csrf)lock();}
   finally{if(button){delete button.dataset.busy;button.disabled=false;}}
 }
-function lock(){csrf='';state=null;growthUI?.reset();childOverlay?.close();scene?.dispose();scene=null;sceneLoading=null;document.body.classList.remove('child-active');rewardRenderKey='';presetEditor?.close();historyView?.reset();$('#purchase-dialog')?.close();$('#auth').hidden=false;$('#workspace').hidden=true;$('#login-form').reset();$('#code').focus();}
+function lock(){sessionState.clear();operationKeys.clear();rewardView.reset();csrf='';state=null;growthUI?.reset();childOverlay?.close();scene?.dispose();scene=null;sceneLoading=null;document.body.classList.remove('child-active');rewardRenderKey='';presetEditor?.close();historyView?.reset();$('#purchase-dialog')?.close();$('#auth').hidden=false;$('#workspace').hidden=true;$('#login-form').reset();$('#code').focus();}
 function download(name,data){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function button(text,action,cls='button'){const b=el('button',cls,text);b.type='button';b.dataset.action=action;return b;}
 function statMarkup(){return `<div class="stat"><span>喵币余额</span><strong id="balance">0</strong><small>兑换只使用喵币余额</small></div><div class="stat growth"><span>累计成长经验</span><strong id="lifetime">0</strong><small>不会因为兑换而减少</small></div><div class="stat"><span>已收集奖励</span><strong id="owned-count">0</strong><small>解锁后可以一直使用</small></div>`;}
@@ -47,21 +42,21 @@ $('#app').innerHTML=`
 <form id="setup-form" hidden><p class="note">首次使用：复制启动终端里的一次性口令。家长密码和孩子进入码必须不同。</p><label>一次性初始化口令<input name="setupToken" required autocomplete="off" maxlength="64"></label><div class="form-grid"><label>家长密码（6–12 位数字）<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{6,12}" required autocomplete="new-password"></label><label>孩子进入码（4–12 位数字）<input name="childCode" type="password" inputmode="numeric" pattern="[0-9]{4,12}" required autocomplete="off"></label><label>孩子昵称<input name="childName" value="小朋友" maxlength="20" required></label><label>小猫名字<input name="petName" value="小橘" maxlength="20" required></label></div><button type="submit" class="button primary">创建我们的积分小猫</button></form></section>
 <main id="workspace" hidden>${parent?`<div class="page-heading"><div><span class="eyebrow">${parent?'GROW TOGETHER':'A LITTLE BETTER, EVERY DAY'}</span><h1 id="greeting"></h1><p>${parent?'把值得鼓励的事情记下来，让努力变成看得见的成长。':'慢慢积累，慢慢长大。你的每一份努力，小猫都记得。'}</p></div><button type="button" class="button quiet" data-action="logout">${parent?'锁定家长页面':'退出'}</button></div><p id="network" class="network" role="status" hidden>暂时没有连接到服务，正在重连。积分以服务端记录为准。</p><div class="stats">${statMarkup()}</div>
 `:""}
-${parent?`<nav class="section-tabs" aria-label="家长功能"><button type="button" data-parent-tab="award" aria-selected="true">日常加分</button><button type="button" data-parent-tab="catalog">奖励预设</button><button type="button" data-parent-tab="settings">记录与设置</button></nav>
-<section id="panel-award" class="parent-grid"><article class="panel"><span class="eyebrow">NOTICE THE GOOD</span><h2>今天，有什么值得鼓励？</h2><div id="growth-award-mount"></div></article><article class="panel"><div class="panel-title"><h2>积分理由与兑换记录</h2><span class="subtle">本地完整记录</span></div><div id="ledger"></div></article></section>
-<section id="panel-catalog" class="panel" hidden><div class="panel-title"><div><h2>设计属于你们的小猫奖励</h2><p>直接调节花色、体型、眼睛、姿态与互动参数，预览后保存到本地。兑换消耗为 0 时，达到解锁积分后自动获得。</p></div></div><div class="toolbar"><button class="button primary" type="button" data-action="new-preset">新增奖励预设</button><button class="button" type="button" data-action="save-catalog">保存价格与门槛</button><button class="button" type="button" data-action="export-catalog">导出预设 JSON</button><label class="button file-button">导入预设 JSON<input id="catalog-file" type="file" accept="application/json,.json"></label></div><div id="catalog-stale" class="catalog-stale" hidden><p>目录已有新版本，当前未保存的表格修改仍保留。</p><button type="button" class="button small" data-action="reload-catalog">重新读取目录</button></div><p id="catalog-dirty" class="note" hidden>有尚未保存的奖励设置。</p><div class="table-scroll"><table class="catalog-table"><thead><tr><th>奖励</th><th>类别</th><th>兑换价格</th><th>解锁积分</th><th>参数预设</th></tr></thead><tbody id="catalog-body"></tbody></table></div><p class="note">点击“调参数”修改预设，也可以复制成新奖励；所有保存写入本地数据库。已有奖励的 ID、类别和初始标记不能改变。JSON 导入导出作为可选的批量配置工具。</p></section>
-<section id="panel-settings" hidden><div class="local-storage"><strong>本地数据保存位置</strong><p><code id="local-data-path">正在读取…</code></p><p id="local-data-info"></p><p>积分、加分理由、兑换内容和参数预设都保存在运行服务的电脑，不上传 GitHub 或云端。关闭页面、清理浏览器数据不会删除此文件。备份前请停止服务并复制整个数据目录。</p></div><div class="parent-grid"><article class="panel"><h2>我们的小档案</h2><form id="profile-form"><label>孩子昵称<input name="childName" maxlength="20" required></label><label>小猫名字<input name="petName" maxlength="20" required></label><button class="button primary" type="submit">保存名字</button></form><hr><h3>导出成长记录</h3><p class="note">导出包含全部积分流水、当前装扮和奖励设置，不包含密码。这是可查阅的记录，不是自动恢复文件。</p><button class="button" type="button" data-action="export-progress">下载成长记录 JSON</button></article><article class="panel"><h2>密码与进入码</h2><form id="password-form"><label>当前家长密码<input name="currentPin" type="password" inputmode="numeric" required autocomplete="current-password"></label><label>新家长密码（留空不改）<input name="newPin" type="password" inputmode="numeric" pattern="[0-9]{6,12}" autocomplete="new-password"></label><label>新孩子进入码（留空不改）<input name="childCode" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="off"></label><p class="note">修改密码会使对应角色的其他设备退出。家长登录在 15 分钟后自动锁定。</p><button type="submit" class="button primary">更新密码</button></form></article></div></section>`:
+${parent?`<nav class="section-tabs" aria-label="家长功能"><button type="button" data-parent-tab="award" aria-selected="true">日常加分</button><button type="button" data-parent-tab="growth">成长记录</button><button type="button" data-parent-tab="catalog">奖励预设</button><button type="button" data-parent-tab="settings">家庭设置</button></nav>
+<section id="panel-award"><article class="panel"><span class="eyebrow">NOTICE THE GOOD</span><h2>今天，有什么值得鼓励？</h2><div id="growth-award-mount"></div></article></section><section id="panel-growth" hidden><article class="panel"><div class="panel-title"><h2>积分理由与兑换记录</h2><span class="subtle">服务端完整记录</span></div><div id="ledger"></div></article></section>
+<section id="panel-catalog" class="panel" hidden><div class="panel-title"><div><h2>设计属于你们的小猫奖励</h2><p>直接调节花色、体型、眼睛、姿态与互动参数，预览后保存到服务端。兑换消耗为 0 时，达到解锁积分后自动获得。</p></div></div><div class="toolbar"><button class="button primary" type="button" data-action="new-preset">新增奖励预设</button><button class="button" type="button" data-action="save-catalog">保存价格与门槛</button><button class="button" type="button" data-action="export-catalog">导出预设 JSON</button><label class="button file-button">导入预设 JSON<input id="catalog-file" type="file" accept="application/json,.json"></label></div><div id="catalog-stale" class="catalog-stale" hidden><p>目录已有新版本，当前未保存的表格修改仍保留。</p><button type="button" class="button small" data-action="reload-catalog">重新读取目录</button></div><p id="catalog-dirty" class="note" hidden>有尚未保存的奖励设置。</p><div class="table-scroll"><table class="catalog-table"><thead><tr><th>奖励</th><th>类别</th><th>兑换价格</th><th>解锁积分</th><th>参数预设</th></tr></thead><tbody id="catalog-body"></tbody></table></div><p class="note">点击“调参数”修改预设，也可以复制成新奖励；这些预设写入服务端数据库。已有奖励的 ID、类别和初始标记不能改变。JSON 导入导出作为可选的批量配置工具。</p></section>
+<section id="panel-settings" hidden><div class="local-storage"><strong>服务端数据保存位置</strong><p><code id="local-data-path">正在读取…</code></p><p id="local-data-info"></p><p>积分、加分理由、兑换内容和参数预设保存在运行 Node 服务的机器上的 SQLite 数据库。家庭电脑部署时在家庭电脑，公网服务器部署时在该服务器，不在 Pad 浏览器中，也不会自动同步到 GitHub 或其他第三方。关闭页面、清理浏览器数据不会删除服务端数据库。备份前请停止服务并复制整个数据目录。合影照片不写入此数据库，点击拍照即通过浏览器保存 PNG 文件；网页不建立相册或保存照片副本。</p></div><div class="parent-grid"><article class="panel"><h2>我们的小档案</h2><form id="profile-form"><label>孩子昵称<input name="childName" maxlength="20" required></label><label>小猫名字<input name="petName" maxlength="20" required></label><button class="button primary" type="submit">保存名字</button></form><hr><h3>导出成长记录</h3><p class="note">导出包含全部积分流水、当前装扮和奖励设置，不包含密码。这是可查阅的记录，不是自动恢复文件。</p><button class="button" type="button" data-action="export-progress">下载成长记录 JSON</button></article><article class="panel"><h2>密码与进入码</h2><form id="password-form"><label>当前家长密码<input name="currentPin" type="password" inputmode="numeric" required autocomplete="current-password"></label><label>新家长密码（留空不改）<input name="newPin" type="password" inputmode="numeric" pattern="[0-9]{6,12}" autocomplete="new-password"></label><label>新孩子进入码（留空不改）<input name="childCode" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="off"></label><p class="note">修改密码会使对应角色的其他设备退出。家长登录在 15 分钟后自动锁定。</p><button type="submit" class="button primary">更新密码</button></form></article></div></section>`:
 childMarkup()}
-</main><footer class="site-footer">Meow · 一点点努力，一点点长大 <span>数据只保存在运行服务的电脑</span></footer>`;
+</main><footer class="site-footer">Meow · 一点点努力，一点点长大 <span>业务数据保存在服务端；合影点击拍照保存为 PNG</span></footer>`;
 
 if(!parent)childOverlay=createChildOverlay({onOpen(nextView){if(nextView!==view){view=nextView;category='all';rewardPageIndex=0;}renderRewards();if(view==='history')historyView?.refresh();}});
-historyView=createHistoryView($('#ledger'),{api,parent,paginated:!parent,pageSize:parent?40:5,isActive:()=>parent||!!(childOverlay?.isOpen&&view==='history'),onError:error=>{toast(error.message,true);if(error.status===401&&csrf)lock();},onRecordAction:(record,kind,launcher)=>growthUI?.recordAction(record,kind,launcher)});
+historyView=createHistoryView($('#ledger'),{api,parent,paginated:!parent,pageSize:parent?40:5,isActive:()=>parent||!!(childOverlay?.isOpen&&view==='history'),onError:error=>{toast(error.message,true);if(error.status===401&&csrf)lock();},onRecordAction:(record,kind,launcher)=>growthUI?.recordAction(record,kind,launcher),onCategoryChange:value=>growthUI?.historyCategory(value)});
 setupAge=attachAgeModeFields($('#setup-form'));
-growthUI=createGrowthUI({api,parent,apply,notify:toast,onError:error=>{if(error.status===401&&csrf)lock();},onHistoryRefresh:()=>historyView?.reload()});
+growthUI=createGrowthUI({api,parent,apply,notify:toast,onError:error=>{if(error.status===401&&csrf)lock();},onHistoryRefresh:()=>historyView?.reload(),onHistoryCategory:value=>historyView?.setCategory(value)});
 if(parent){const link=el('a','button','生成奖励 / 参数面板');link.href='./studio.html?mode=parent';$('#panel-catalog .toolbar').prepend(link);}
 if(parent)presetEditor=createPresetEditor({api,onSaved:(next,nextCatalog)=>{
   catalog=nextCatalog;catalogRevision=next.catalogRevision;apply(next);renderCatalog();
-  $('#catalog-dirty').hidden=true;$('#catalog-stale').hidden=true;toast('预设已保存到本地，孩子页面会自动更新');
+  $('#catalog-dirty').hidden=true;$('#catalog-stale').hidden=true;toast('预设已保存到服务端，孩子页面会自动更新');
 }});
 function renderLedger(){historyView?.update(state?.ledger[0]?.id);}
 async function reloadCatalog(){
@@ -70,60 +65,14 @@ async function reloadCatalog(){
 }
 async function showStorage(){
   const data=await api('/api/parent/storage');$('#local-data-path').textContent=data.path||'测试模式：内存数据库，不用于正式使用';
-  $('#local-data-info').textContent=`${data.persistent?'已启用本地磁盘持久保存':'仅测试使用'} · ${data.ledgerCount} 条流水 · ${data.rewardCount} 项奖励预设`;
+  $('#local-data-info').textContent=`${data.persistent?'已启用服务端磁盘持久保存':'仅测试使用'} · ${data.ledgerCount} 条流水 · ${data.rewardCount} 项奖励预设`;
 }
 function allowTableDiscard(){
   if($('#catalog-dirty').hidden)return true;
   if(!confirm('表格里有未保存的价格或门槛。是否放弃这些修改，继续操作？'))return false;
   renderCatalog();$('#catalog-dirty').hidden=true;return true;
 }
-function renderRewards(){
-  if(parent||!state)return;
-  $('#reward-panel').hidden=view==='history';$('#history-panel').hidden=view!=='history';
-  $('#reward-panel').setAttribute('aria-labelledby',`tab-${view==='owned'?'owned':'shop'}`);
-  document.querySelectorAll('[data-view]').forEach(b=>{b.setAttribute('aria-selected',b.dataset.view===view);b.tabIndex=b.dataset.view===view?0:-1;});
-  const result=rewardPage(state.rewards.filter(r=>!r.menuOnly),{category,ownedOnly:view==='owned',page:rewardPageIndex});rewardPageIndex=result.page;
-  const key=JSON.stringify([view,category,rewardPageIndex,online,state.rewards]);
-  if(key===rewardRenderKey)return;rewardRenderKey=key;
-  const focused=document.activeElement;const focusId=focused?.dataset.id,focusCategory=focused?.dataset.category;
-  if(!$('#categories').children.length){
-    for(const [value,name]of [['all','全部'],...Object.entries(labels).filter(([id])=>!SCENE_SLOTS.includes(id)&&!['theme','capability'].includes(id))]){const b=button(name,'category','chip');b.dataset.category=value;$('#categories').append(b);}
-    const select=el('select','scene-filter');select.id='scene-category';select.setAttribute('aria-label','场景布置分类');
-    select.append(new Option('场景布置…',''));for(const slot of [...SCENE_SLOTS,'theme'].filter(s=>!['weather','lighting'].includes(s)))select.append(new Option(labels[slot],slot));
-    select.addEventListener('change',()=>{if(!select.value)return;category=select.value;rewardPageIndex=0;renderRewards();});
-    $('#categories').append(select);
-  }
-  $('#scene-category').value=[...SCENE_SLOTS,'theme'].includes(category)?category:'';
-  $('#categories').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.category===category));
-  const root=$('#reward-grid');root.replaceChildren();root.dataset.page=String(result.page+1);root.dataset.pages=String(result.pages);
-  $('#reward-prev').disabled=result.page===0;$('#reward-next').disabled=result.page>=result.pages-1;
-  $('#reward-page-status').textContent=`第 ${result.page+1} / ${result.pages} 页 · 共 ${result.total} 项`;
-  if(!result.items.length)root.append(el('p','empty','这里还没有收藏。去发现一份喜欢的奖励吧。'));
-  for(const reward of result.items){
-    const card=el('article',`reward-card ${reward.owned?'is-owned':reward.eligible?'':'is-locked'}`);card.dataset.rewardId=reward.id;
-    const art=el('div',`reward-art art-${reward.category}`);art.append(el('span','',icons[reward.category]),el('small','',labels[reward.category]));
-    if(reward.category==='model'){
-      const image=el('img','model-reward-thumbnail');image.src=`./models/kenney/previews/${reward.modelId}.png`;image.alt=reward.title;image.loading='eager';
-      image.addEventListener('error',()=>image.remove(),{once:true});art.prepend(image);
-      art.querySelector('small').textContent=reward.modelGroup;
-    }
-    art.append(el('span','reward-tag',reward.equipped?'使用中':reward.owned?'已收藏':reward.eligible?'可以兑换':'成长解锁'));
-    const content=el('div','reward-content');content.append(el('h3','',reward.title),el('p','',reward.description));
-    const foot=el('div','reward-foot');foot.append(el('strong','',reward.owned?'永久拥有':reward.cost===0?'成长礼物':`${reward.cost} 积分`));
-    let b;
-    if(reward.owned){
-      const canRemove=(SCENE_SLOTS.includes(reward.category)||reward.category==='model')&&reward.equipped&&!reward.starter;
-      b=button(canRemove?'卸下':reward.category==='trick'?'已加入随机脚本':reward.equipped?'正在使用':reward.category==='theme'?'应用整套':'换上它',canRemove?'unequip':reward.category==='trick'?'play':'equip','button small');
-      b.dataset.slot=reward.modelSlot||reward.category;b.disabled=reward.category==='trick'||(!canRemove&&reward.equipped)||!online;
-    }
-    else if(!reward.eligible){b=button(`还差 ${reward.unlockAt-state.lifetime} 成长分`,'purchase','button small');b.disabled=true;}
-    else{b=button(reward.affordable?'兑换':'余额不足','purchase','button small');b.disabled=!reward.affordable||!online;}
-    b.dataset.id=reward.id;foot.append(b);content.append(foot);card.append(art,content);root.append(card);
-  }
-  // Polling must not tear focus away from a keyboard user or a purchase confirmation.
-  if(childOverlay?.isOpen&&!$('#purchase-dialog').open&&focusId){const replacement=[...root.querySelectorAll('button')].find(b=>b.dataset.id===focusId);if(replacement&&!replacement.disabled)replacement.focus({preventScroll:true});}
-  if(focusCategory&&!focused.isConnected)$('#categories').querySelector(`[data-category="${focusCategory}"]`)?.focus({preventScroll:true});
-}
+function renderRewards(){if(!parent)rewardPageIndex=rewardView.render({state,view,category,online,page:rewardPageIndex,overlayOpen:childOverlay?.isOpen});}
 async function updateScene(){
   if(parent||!state)return;
   try{
@@ -164,19 +113,19 @@ function renderCatalog(){
     td.append(operations);tr.append(td);$('#catalog-body').append(tr);
   }
 }
-async function enter(result){csrf=result.csrf;if(!parent)document.body.classList.add('child-active');$('#auth').hidden=true;$('#workspace').hidden=false;$('#setup-form').hidden=true;$('#login-form').hidden=false;apply(result.state);if(!parent)childOverlay.open('shop');if(parent){$('#profile-form').elements.childName.value=state.childName;$('#profile-form').elements.petName.value=state.petName;await reloadCatalog();await showStorage();}}
+async function enter(result){csrf=sessionState.accept(result).csrf;if(!parent)document.body.classList.add('child-active');$('#auth').hidden=true;$('#workspace').hidden=false;$('#setup-form').hidden=true;$('#login-form').hidden=false;apply(result.state);if(!parent)childOverlay.open('shop');if(parent){$('#profile-form').elements.childName.value=state.childName;$('#profile-form').elements.petName.value=state.petName;await reloadCatalog();await showStorage();}}
 $('#login-form').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{await enter(await api(`/api/${role}/login`,'POST',{code:$('#code').value}));$('#login-form').reset();});});
 $('#setup-form').addEventListener('submit',event=>{event.preventDefault();run(event.submitter,async()=>{await enter(await api('/api/parent/setup','POST',{...Object.fromEntries(new FormData(event.currentTarget)),...setupAge.read()}));$('#setup-form').reset();setupAge.reset();toast('已经准备好啦。把孩子进入码告诉孩子，家长密码请自己保管。');});});
 if(parent){
   $('#profile-form').addEventListener('submit',event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));run(event.submitter,async()=>{apply(await api('/api/parent/profile','PUT',data));toast('名字已保存');});});
-  $('#password-form').addEventListener('submit',event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));run(event.submitter,async()=>{const result=await api('/api/parent/credentials','PUT',data);csrf=result.csrf;$('#password-form').reset();toast('密码已更新，对应角色的其他设备需要重新登录');});});
+  $('#password-form').addEventListener('submit',event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));run(event.submitter,async()=>{const result=await api('/api/parent/credentials','PUT',data);csrf=sessionState.accept(result).csrf;$('#password-form').reset();toast('密码已更新，对应角色的其他设备需要重新登录');});});
   $('#catalog-body').addEventListener('input',()=>$('#catalog-dirty').hidden=false);
   $('#catalog-file').addEventListener('change',event=>{const file=event.target.files[0];if(!file)return;if(!allowTableDiscard()){event.target.value='';return;}run(null,async()=>{if(file.size>131072)throw new Error('预设文件不能超过 128 KB');const next=JSON.parse(await file.text());apply(await api('/api/parent/catalog','PUT',next,{'If-Match':catalogRevision}));await reloadCatalog();$('#catalog-dirty').hidden=true;toast('预设已导入并保存');}).finally(()=>event.target.value='');});
 }
 document.addEventListener('click',event=>{
   const b=event.target.closest('button');if(!b)return;
   if(b.dataset.feature){run(b,async()=>{await updateScene();await scene?.feature(b.dataset.feature);});return;}
-  if(b.dataset.parentTab){document.querySelectorAll('[data-parent-tab]').forEach(t=>t.setAttribute('aria-selected',t===b));for(const tab of ['award','catalog','settings'])$(`#panel-${tab}`).hidden=tab!==b.dataset.parentTab;if(b.dataset.parentTab==='settings')run(null,showStorage);return;}
+  if(b.dataset.parentTab){document.querySelectorAll('[data-parent-tab]').forEach(t=>t.setAttribute('aria-selected',t===b));for(const tab of ['award','growth','catalog','settings'])$(`#panel-${tab}`).hidden=tab!==b.dataset.parentTab;if(b.dataset.parentTab==='settings')run(null,showStorage);return;}
   if(b.dataset.reason){$('#reason').value=b.dataset.reason;return;}
   if(b.dataset.points){$('#delta').value=b.dataset.points;return;}
   if(b.dataset.view){view=b.dataset.view;category='all';rewardPageIndex=0;$('#rewards-message').hidden=true;renderRewards();if(view==='history')historyView.refresh();return;}
@@ -198,12 +147,13 @@ document.addEventListener('click',event=>{
     if(action==='reload-catalog'){if(allowTableDiscard())await reloadCatalog();}
     if(action==='logout'){await api(`/api/${role}/logout`,'POST',{});lock();}
     if(action==='unequip'){apply(await api('/api/unequip','POST',{slot:b.dataset.slot}));childOverlay.close();toast('已卸下场景物品，拥有权仍然保留');}
+    if(action==='random-script'){const enabled=b.dataset.enabled==='true';apply(await api('/api/random-script','POST',{rewardId:b.dataset.id,enabled}));toast(enabled?'已加入随机脚本':'已从脚本中删除，兑换状态保留');}
     if(action==='equip'){apply(await api('/api/equip','POST',{rewardId:b.dataset.id}));childOverlay.close();toast('已经应用，回到小猫看看吧');}
     if(action==='play'){const result=await api('/api/play','POST',{rewardId:b.dataset.id});await updateScene();if(!scene)throw new Error('三维小猫尚未准备好，请刷新后重试');childOverlay.close();scene.play(result.action,result.motion);toast(matchMedia('(prefers-reduced-motion: reduce)').matches?'小猫完成了互动（已遵循减少动态效果设置）':'小猫来表演啦');}
     if(action==='confirm-purchase'){const reward=selectedReward;if(!reward)return;const intent=`purchase:${reward.id}:${reward.cost}`;apply(await api('/api/purchase','POST',{rewardId:reward.id,expectedCost:reward.cost,idempotencyKey:keyFor(intent)}));operationKeys.delete(intent);$('#purchase-dialog').close();toast(`已经收藏「${reward.title}」，去试试看吧`);}
     if(action==='save-catalog'){
       const next=structuredClone(catalog);for(const input of document.querySelectorAll('#catalog-body input')){if(!input.checkValidity()||input.value==='')throw new Error('请填写有效的整数价格和成长门槛');next.rewards.find(r=>r.id===input.dataset.rewardId)[input.dataset.field]=Number(input.value);}
-      const result=await api('/api/parent/catalog','PUT',next,{'If-Match':catalogRevision});catalog=next;catalogRevision=result.catalogRevision;apply(result);$('#catalog-dirty').hidden=true;$('#catalog-stale').hidden=true;toast('价格与解锁积分已保存到本地');
+      const result=await api('/api/parent/catalog','PUT',next,{'If-Match':catalogRevision});catalog=next;catalogRevision=result.catalogRevision;apply(result);$('#catalog-dirty').hidden=true;$('#catalog-stale').hidden=true;toast('价格与解锁积分已保存到服务端');
     }
     if(action==='export-catalog')download('meow-rewards.json',await api('/api/parent/catalog'));
     if(action==='export-progress')download('meow-progress.json',await api('/api/parent/export'));

@@ -1,23 +1,39 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {runtimeFiles} from './runtimeFiles.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const name='Meow-V6-Ubuntu-update-20260918';
+const args=process.argv.slice(2);
+function option(key){const i=args.indexOf(key);if(i<0)return null;if(!args[i+1]||args[i+1].startsWith('--'))throw new Error(key+'缺少值');return args[i+1];}
+for(let i=0;i<args.length;i+=2)if(!['--name','--base-build'].includes(args[i]))throw new Error('不支持的参数：'+args[i]);
+const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+const name=option('--name')||`Meow-${pkg.version}-Ubuntu-update-${new Date().toISOString().replace(/[-:.]/g,'')}`;
+if(!/^[\w.-]+$/.test(name)||name==='.'||name==='..')throw new Error('输出名称无效');
 const out=path.join(root,'Exports',name),payload=path.join(out,'payload');
-if(path.dirname(out)!==path.join(root,'Exports'))throw new Error('输出路径不合法');
-fs.rmSync(payload,{recursive:true,force:true});
-fs.mkdirSync(path.join(payload,'pet'),{recursive:true});
-fs.mkdirSync(path.join(payload,'src'),{recursive:true});
-for(const file of fs.readdirSync(path.join(root,'pet')).filter(f=>f.endsWith('.mjs')&&!['vite.config.mjs','studioBuild.mjs'].includes(f)))fs.copyFileSync(path.join(root,'pet',file),path.join(payload,'pet',file));
+if(fs.existsSync(out))throw new Error('输出目录已存在；请使用新的发布名称，避免混入旧文件');
+if(!fs.existsSync(path.join(root,'pet/dist/index.html')))throw new Error('请先执行 npm run pet:build');
+const previousPath=option('--base-build');
+const previous=previousPath?JSON.parse(fs.readFileSync(path.resolve(previousPath),'utf8').replace(/^\uFEFF/,'')):{};
+let commit=process.env.MEOW_SOURCE_REVISION||null;
+if(!commit){try{commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}}
+fs.mkdirSync(payload,{recursive:true});
+for(const file of [...runtimeFiles(root),'Meow','pet-settings.example.json']){
+  const dest=path.join(payload,file);fs.mkdirSync(path.dirname(dest),{recursive:true});fs.copyFileSync(path.join(root,file),dest);
+}
 fs.cpSync(path.join(root,'pet/dist'),path.join(payload,'pet/dist'),{recursive:true});
-fs.copyFileSync(path.join(root,'src/coats.js'),path.join(payload,'src/coats.js'));
-const previous=JSON.parse(fs.readFileSync(path.join(root,'Exports/Meow-V6-Ubuntu24/BUILD.json'),'utf8').replace(/^\uFEFF/,''));
-fs.writeFileSync(path.join(payload,'BUILD.json'),JSON.stringify({...previous,release:name,updatedAt:new Date().toISOString(),dataIncluded:false},null,2));
+fs.writeFileSync(path.join(payload,'BUILD.json'),JSON.stringify({...previous,release:name,version:pkg.version,commit,updatedAt:new Date().toISOString(),dataIncluded:false},null,2));
 fs.copyFileSync(path.join(root,'scripts/apply_ubuntu_update.sh'),path.join(out,'update.sh'));
 fs.copyFileSync(path.join(root,'scripts/apply_ubuntu_update.mjs'),path.join(out,'apply-update.mjs'));
+// The outer helper uses the same config reader even when updating a pre-module installation.
+fs.cpSync(path.join(root,'pet/config'),path.join(out,'config'),{recursive:true});
+fs.copyFileSync(path.join(root,'pet/lan.mjs'),path.join(out,'lan.mjs'));
 const files={};
-for(const file of fs.readdirSync(payload,{recursive:true})){const full=path.join(payload,file);if(fs.statSync(full).isFile())files[file.replaceAll('\\','/')]=createHash('sha256').update(fs.readFileSync(full)).digest('hex');}
-fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify({release:name,files},null,2));
-fs.writeFileSync(path.join(out,'使用说明.txt'),'Meow V6 Ubuntu 更新补丁\n\n1. 停止旧版 Meow 服务。\n2. 把补丁解压到旧版安装目录之外。\n3. 在补丁目录执行：bash update.sh /完整路径/Meow安装目录\n4. 返回安装目录执行：./Meow\n\n使用自定义 MEOW_DATA_DIR 时，更新命令需设置相同环境变量。\n补丁校验 SHA-256，并备份被替换的程序到 update-backups；失败会恢复程序。\n不覆盖 pet/data、pet-settings.json、证书、运行环境或现有账户记录。\n包含：精简加分表单、误录分值更正、孩子还原视角、去掉阴影开关、原版拍照页面。\n');
+for(const file of fs.readdirSync(payload,{recursive:true})){
+  const full=path.join(payload,file);if(fs.lstatSync(full).isSymbolicLink())throw new Error('补丁不接受链接');
+  if(fs.statSync(full).isFile())files[file.replaceAll('\\','/')]=createHash('sha256').update(fs.readFileSync(full)).digest('hex');
+}
+fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify({schemaVersion:1,release:name,files},null,2));
+fs.writeFileSync(path.join(out,'使用说明.txt'),'Meow Ubuntu 程序更新\n\n停止所有旧服务，备份数据。补丁放在安装目录外。\n执行 bash update.sh /绝对安装目录\n自定义 MEOW_DATA_DIR 须与服务保持一致。\n更新保留实际配置和家庭数据；停服快照与程序备份存于 update-backups。\n未实现断电后的自动恢复或数据库版本降级。SHA-256 校验不等于发布者签名。\n');
 console.log(out);

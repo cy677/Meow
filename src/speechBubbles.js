@@ -287,14 +287,14 @@ export function createSpeechBubbleController({
     return true;
   }
 
-  function showNow(preferredRole = '') {
+  function showNow(preferredRole = '', contactText = '') {
     const actors = availableActors();
     if (!actors.size) return false;
     const roles = new Set(actors.keys());
     const role = roles.has(preferredRole) ? preferredRole : weightedRole(roles);
     const roleActors = actors.get(role);
     const actor = pickRandom(roleActors);
-    const text = messageFor(role);
+    const text = contactText || messageFor(role);
     if (!actor || !text) return false;
 
     active = { role, actor };

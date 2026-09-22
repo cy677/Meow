@@ -4,7 +4,7 @@ const node = (tag, cls, text) => { const e = document.createElement(tag); if (cl
 const kinds = { all:'全部记录', earn:'加分理由', adjustment:'更正理由', purchase:'兑换记录', gift:'成长礼物', catalog:'预设修改', observation:'仅记录' };
 
 /** Parent keeps continuous history; the child's modal uses cursor-backed, five-item pages. */
-export function createHistoryView(root, { api, parent, onError, onRecordAction, paginated = false, pageSize = 40, isActive = () => true }) {
+export function createHistoryView(root, { api, parent, onError, onRecordAction, onCategoryChange, paginated = false, pageSize = 40, isActive = () => true }) {
   root.replaceChildren();
   const form = node('form', 'history-filters'), search = node('input'), filter = node('select'), submit = node('button', 'button small', '查询');
   search.type = 'search'; search.maxLength = 120; search.placeholder = '查询加分理由或兑换名称'; search.setAttribute('aria-label', '查询理由'); search.id = 'history-search';
@@ -78,7 +78,7 @@ export function createHistoryView(root, { api, parent, onError, onRecordAction, 
   }
   form.addEventListener('submit', event => { event.preventDefault(); active = { q:search.value.trim(), kind:filter.value, category:category.value }; void load(); });
   filter.addEventListener('change', () => { active = { q:search.value.trim(), kind:filter.value, category:category.value }; void load(); });
-  category.addEventListener('change',()=>{active={q:search.value.trim(),kind:filter.value,category:category.value};void load();});
+  category.addEventListener('change',()=>{onCategoryChange?.(category.value);active={q:search.value.trim(),kind:filter.value,category:category.value};void load();});
   more.addEventListener('click', () => { if (!busy && cursor !== null) void load(false, page + 1); });
   prev.addEventListener('click', () => { if (!busy && page > 0) void load(false, page - 1); });
   fresh.addEventListener('click', () => { if (!busy) void load(); });
@@ -86,6 +86,7 @@ export function createHistoryView(root, { api, parent, onError, onRecordAction, 
     update(latestId) { newest = latestId; refresh(); },
     refresh,
     reload(){void load();},
+    setCategory(value){category.value=value;active={q:search.value.trim(),kind:filter.value,category:value};void load();},
     reset() {
       sequence++; root.setAttribute('aria-busy', 'false'); busy = loaded = false; newest = loadedNewest = undefined; entries = []; cursor = null; total = page = 0; starts = [null];
       active = { q:'',kind:'all',category:'all' }; form.reset(); list.replaceChildren(); info.textContent = ''; fresh.hidden = true; more.hidden = !paginated;

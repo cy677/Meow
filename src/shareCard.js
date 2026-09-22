@@ -32,7 +32,7 @@ function captureCanvasRegion(canvas, source, ctx, target) {
   ctx.drawImage(canvas, sx, sy, sw, sh, target.x, target.y, target.width, target.height);
 }
 
-export function createShareCardCapture({viewport, renderer, scene, camera, controls, sceneCanvas, getSubject, getSeed, getPalette, getLocale, downloadBlob}) {
+export function createShareCardCapture({viewport, renderer, scene, camera, controls, sceneCanvas, getSubject, getSeed, getPalette, getLocale, downloadBlob, poseControl}) {
   const overlay = document.createElement('div'); overlay.className = 'share-card-overlay'; overlay.hidden = true;
   overlay.setAttribute('aria-hidden', 'true'); overlay.setAttribute('data-i18n-ignore', '');
   overlay.innerHTML = `<div class="share-card-shell" role="dialog" aria-modal="false">
@@ -46,6 +46,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
     </div>
     <p class="share-card-hint"></p><div class="share-card-actions">
       <button type="button" class="share-card-skin-button"></button><button type="button" class="share-card-capture-button"></button>
+      <button type="button" class="share-card-pose-button">切换姿势</button>
       <button type="button" class="share-card-close-button"></button>
     </div><output class="share-card-status" aria-live="polite"></output>
   </div>`;
@@ -56,6 +57,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
   const hintEl = overlay.querySelector('.share-card-hint'), skinButton = overlay.querySelector('.share-card-skin-button');
   const captureButton = overlay.querySelector('.share-card-capture-button'), closeButton = overlay.querySelector('.share-card-close-button');
   const statusEl = overlay.querySelector('.share-card-status');
+  const poseButton = overlay.querySelector('.share-card-pose-button');
   let skinVariant = 0, descriptor = getShareCardDescriptor(getSeed(), getPalette?.());
   let active = false, disposed = false, capturing = false, generation = 0, cameraPanFrame = 0, openedView = null;
   let device;
@@ -63,6 +65,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
     captureButton.disabled = !active || capturing || (device?.enabled && !device.ready);
     skinButton.disabled = !active || capturing;
     skinButton.hidden = Boolean(device?.enabled);
+    poseButton.disabled = !active || capturing || (poseControl?.options()?.length ?? 0) < 2;
     hintEl.textContent = device?.enabled ? '单指移动小猫，双指调整大小；仅真人画面镜像' : localeCopy(getLocale()).hint;
   }
   device = createDevicePhotoMode({overlay, viewport, scene, camera, controls, sceneCanvas, frame: windowEl, getSubject, statusEl,
@@ -88,6 +91,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
   function syncCopy() {
     const copy = localeCopy(getLocale());
     skinButton.textContent = `🎨 ${copy.skin}`; captureButton.textContent = `📸 ${copy.camera}`; closeButton.textContent = `× ${copy.close}`;
+    poseButton.textContent = getLocale()==='zh-CN'?'切换姿势':getLocale()==='ja-JP'?'ポーズを変更':'Change pose';
     subtitleEl.textContent = copy.title; serialEl.textContent = copy.cardNumber(descriptor.serial); shell.setAttribute('aria-label', copy.title); syncControls();
   }
   function applyDescriptor() {
@@ -163,10 +167,21 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
     } finally { if (request === generation && !disposed) { capturing = false; syncControls(); } }
   }
   for (const button of [skinButton, captureButton, closeButton]) button.addEventListener('pointerdown', event => event.stopPropagation());
+  poseButton.addEventListener('click', () => {
+    if(poseButton.disabled || !poseControl)return;
+    const options=poseControl.options(), index=options.findIndex(p=>p.params.pose===poseControl.current());
+    const next=options[(index+1)%options.length];
+    const position=camera.position.clone(),target=controls.target.clone(),fov=camera.fov;
+    cancelAnimationFrame(cameraPanFrame);
+    poseControl.select(next);
+    camera.position.copy(position);controls.target.copy(target);camera.fov=fov;camera.updateProjectionMatrix();
+    camera.lookAt(target);camera.updateMatrixWorld();
+    statusEl.textContent=next.title;viewport.dataset.photoPose=next.params.pose;
+  });
   skinButton.addEventListener('click', randomizeSkin); captureButton.addEventListener('click', () => void capture()); closeButton.addEventListener('click', close);
   const onKey = event => { if (event.key === 'Escape' && active) close(); };
   window.addEventListener('keydown', onKey); window.addEventListener('meow:localechange', syncCopy);
-  return {open, openTogether() { open(); return device.start(); }, close, capture, get active() { return active; }, dispose() {
+  return {open, setPoseControl(value) { poseControl=value;syncControls(); }, openTogether() { open(); return device.start(); }, close, capture, get active() { return active; }, dispose() {
     if (disposed) return; close(); disposed = true; device.dispose();
     window.removeEventListener('keydown', onKey); window.removeEventListener('meow:localechange', syncCopy); overlayController.dispose();
   }};

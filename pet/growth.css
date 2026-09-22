@@ -7,3 +7,63 @@
 body[data-growth-mode=preschool] .growth-garden-card{min-height:180px}body[data-growth-mode=preschool] .growth-garden-icon{font-size:36px}body[data-growth-mode=preschool] .growth-garden-card h3{font-size:22px}
 @media(max-width:700px){.growth-dialog-body{padding:14px}.growth-dialog-heading{padding:12px 14px}.growth-library,.growth-score-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.growth-garden{gap:8px}.growth-garden-card{padding:12px;min-height:150px}.growth-garden-card h3{font-size:17px}.growth-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.growth-story{grid-template-columns:32px 1fr}.growth-story small{grid-column:2}.growth-child-targets{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.growth-dialog *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+/* Parent action pages keep the existing cream and green visual language. */
+.growth-award-panel>.panel-title{align-items:flex-start;margin-bottom:0}
+.growth-award-panel>.panel-title h2{margin-bottom:6px}
+.growth-award-panel>.panel-title .note{margin:0}
+.growth-award-panel .growth-category-choices{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:24px 0}
+.growth-category[aria-selected=true]{border-color:#315843;box-shadow:0 0 0 1px #315843;font-weight:750}
+.growth-category-panel{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(320px,1fr);gap:28px;align-items:start}
+.growth-action-catalog{min-width:0}
+.growth-action-catalog h3{margin:0 0 6px;font-size:18px}
+.growth-action-catalog>.note{margin:0 0 18px;line-height:1.7;max-width:48ch}
+.growth-action-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.growth-task-choice{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;text-align:left;border:1.5px solid #d9dfd3;border-radius:14px;padding:16px;min-height:102px;background:#fffef9;color:#294139;font:inherit;line-height:1.5}
+.growth-task-choice strong{font-size:15px;overflow-wrap:anywhere}
+.growth-task-points{font-size:13px;color:#607065}
+.growth-task-choice[aria-pressed=true]{border-color:#2b654f;background:#eef5e9;box-shadow:inset 0 0 0 1px #2b654f}
+.growth-task-choice[aria-pressed=true] .growth-task-points{color:#2b654f;font-weight:650}
+.growth-task-choice:hover{border-color:#77967a}
+.growth-target-badge{font-size:11px;background:#dcebd7;border-radius:5px;padding:2px 6px}
+.growth-action-catalog>label{display:flex;align-items:center;gap:8px;font-size:13px;color:#607065}
+.growth-action-catalog input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#2b654f}
+.growth-action-catalog>.toolbar{margin:18px 0 0;flex-wrap:wrap}
+.growth-category-panel .growth-award-form{background:#f5f7ef;border:1px solid #dce4d6;border-radius:18px;padding:22px;gap:16px}
+.growth-selection .eyebrow{font-size:11px;letter-spacing:1px}
+.growth-selection h3{font-size:20px;line-height:1.5;margin:4px 0 0}
+.growth-category-panel .growth-basis{padding:0;background:none;border:0;border-radius:0;color:#607065;font-size:13px}
+.growth-category-panel .growth-basis p{margin:0}
+.growth-score-field{border:0;padding:0;margin:0;min-width:0}
+.growth-score-field legend{font-size:14px;font-weight:650;margin-bottom:10px;padding:0}
+.growth-score-choices{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.growth-score-choice{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72px;gap:2px;border:1px solid #ccd8c6;border-radius:10px;background:#fffef9;cursor:pointer;text-align:center}
+.growth-score-choice input{position:absolute;opacity:0;width:1px;height:1px}
+.growth-score-choice strong{font-size:21px;line-height:1.3}
+.growth-score-choice span{font-size:10px;white-space:nowrap}
+.growth-score-choice:has(input:checked){background:#2b654f;border-color:#2b654f;color:#fff}
+.growth-score-choice:has(input:disabled){opacity:.4;cursor:not-allowed}
+.growth-score-choice:has(input:focus-visible){outline:3px solid #d99e38;outline-offset:3px}
+.growth-score-field>.note{font-size:12px;margin:9px 0 0}
+.growth-reason{display:grid;gap:7px;font-size:14px}
+.growth-reason textarea{font:inherit;font-size:14px;line-height:1.65;width:100%;min-height:86px;resize:vertical;padding:10px 12px;border:1px solid #c8d1c4;border-radius:10px;background:#fffef9;color:#294139}
+.growth-reason textarea::placeholder{color:#788478}
+.growth-reason textarea:focus-visible{outline:3px solid #d99e38;outline-offset:2px}
+.growth-time{font-size:13px;color:#607065}
+.growth-time summary{cursor:pointer;min-height:30px}
+.growth-time label{display:grid;gap:6px;margin-top:8px}
+.growth-category-panel #award-submit{width:100%;min-height:48px}
+.growth-pending{border-top:1px solid #e0e4dd;padding-top:16px}
+.growth-pending h3{font-size:15px;margin:0 0 8px}
+.growth-pending>.note{margin:0}
+.growth-summary-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+.growth-summary-card{border:2px solid transparent;text-align:left;color:#294139;font:inherit;cursor:pointer}
+.growth-summary-card[aria-pressed=true]{border-color:#315843}
+.growth-summary-card p{font-size:12px}
+.growth-summary .panel-title{align-items:center}
+.growth-summary select{min-height:40px;border:1px solid #c8d1c4;border-radius:8px;padding:6px 10px;background:#fff;color:#294139}
+.growth-summary-footer{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.growth-summary-footer>.note{flex:1 1 300px;margin:0;font-size:12px}
+.growth-task-choice:focus-visible,.growth-summary-card:focus-visible{outline:3px solid #d99e38;outline-offset:3px}
+@media(max-width:900px){.growth-category-panel{grid-template-columns:minmax(0,1fr) minmax(300px,1fr);gap:18px}.growth-action-list{grid-template-columns:1fr}.growth-category-panel .growth-award-form{padding:18px}.growth-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.growth-award-panel .growth-category-choices{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0}.growth-category-panel{grid-template-columns:1fr;gap:20px}.growth-action-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.growth-task-choice{padding:12px;min-height:100px}.growth-task-choice strong{font-size:14px}.growth-category-panel .growth-award-form{padding:16px}.growth-award-panel>.panel-title{flex-wrap:wrap}.growth-summary{padding:18px}.growth-summary-grid{gap:8px}.growth-summary-card{padding:10px}.growth-summary .panel-title{flex-wrap:wrap}}

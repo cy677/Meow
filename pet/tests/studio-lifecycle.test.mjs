@@ -6,6 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { createApiClient } from '../ui/apiClient.js';
+import { createPetRuntime } from '../runtime/petRuntime.js';
+import { planMotion, canAutoPlay } from '../motionPrograms.mjs';
 
 class Target {
   listeners=new Map();children=[];dataset={};style={setProperty(){}};
@@ -38,19 +41,32 @@ function homeHarness(){
   const env=dom(),frames=new Map(),calls=[];let serial=0,locked=false;
   const initial={params:{},camera:{}};
   const runtime={};
-  for(const name of ['capture','clearKeys','stop','resetView','resetRoom','restore','applyModels','applyRoom','setAccess','playProgram','disposeModels','motionState','modelDiagnostics']){
+  for(const name of ['capture','clearKeys','stop','resetView','resetRoom','restore','applyModels','applyRoom','setAccess','playProgram','disposeModels','motionState','modelDiagnostics','update']){
     runtime[name]=()=>{if(locked)throw new Error('released runtime: '+name);calls.push(name);return name==='capture'?initial:name==='motionState'?{active:false}:{};};
   }
-  const context={...env,performance:{now:()=>0},Math,
+  const context={...env,performance:{now:()=>0},Math,structuredClone,
     requestAnimationFrame:fn=>{frames.set(++serial,fn);return serial;},cancelAnimationFrame:id=>frames.delete(id),
-    PARAM_FIELDS:{coat:[],shape:[],eyes:[],pose:[]},RUG_CHOICES:[],planMotion:()=>({}),canAutoPlay:()=>true,
+    PARAM_FIELDS:{coat:[],shape:[],eyes:[],pose:[]},RUG_CHOICES:[],planMotion,canAutoPlay,
     rugSeedForStyle:()=>0,containerSeed:()=>0};
   const code=stripImports(source('homeRuntime.js')).replace('export function mountHomeRuntime','function mountHomeRuntime');
   const mount=runInNewContext(code+'\nmountHomeRuntime;',context);
   const state={params:{},equipped:{},sceneParams:{bed:{kind:'none',placement:'beside'}},rewards:[],access:{actions:[]}};
   const home=mount(runtime,{state},initial);
-  return {...env,home,frames,calls,lock:()=>{locked=true;}};
+  return {...env,home,frames,calls,state,lock:()=>{locked=true;}};
 }
+
+test('home accepts parent-realm state and motion for random and manual playback',()=>{
+  const h=homeHarness();
+  const foreignMotion=runInNewContext('({duration:4,speed:1,intensity:1,transition:.25})');
+  assert.equal(canAutoPlay('walk',foreignMotion),false);
+  h.home.applyState({...h.state,access:{actions:[{action:'walk',motion:foreignMotion}]}});
+  const frame=[...h.frames.values()][0];
+  frame(3000);
+  assert.equal(h.calls.filter(x=>x==='playProgram').length,1,'random playback survives parent state synchronization');
+  h.home.play('walk',foreignMotion);
+  assert.equal(h.calls.filter(x=>x==='playProgram').length,2,'manual playback normalizes parent parameters');
+  h.home.dispose();
+});
 
 test('home disposal is idempotent before and after the shared controller is released',()=>{
   const h=homeHarness();assert.equal(h.frames.size,1);
@@ -59,6 +75,18 @@ test('home disposal is idempotent before and after the shared controller is rele
   assert.equal(h.calls.length,count);assert.equal(h.calls.filter(x=>x==='stop').length,1);
   assert.equal(h.calls.filter(x=>x==='disposeModels').length,1);assert.equal(h.frames.size,0);
   for(const listeners of h.window.listeners.values())assert.equal(listeners.size,0);
+});
+
+test('random script uses selected items, can hold a pose, and stays idle for an empty list',()=>{
+  const h=homeHarness();
+  h.home.applyState({...h.state,randomScript:[],access:{actions:[{id:'walk',action:'walk',motion:{duration:4}}]}});
+  const frame=[...h.frames.values()][0];frame(10000);
+  assert.equal(h.calls.filter(x=>x==='playProgram').length,0);
+  h.home.applyState({...h.state,randomScript:[{id:'pose',category:'pose',params:{pose:'banana'}}]});
+  const before=h.calls.filter(x=>x==='restore').length;frame(20000);
+  assert.equal(h.calls.filter(x=>x==='restore').length,before+1);
+  frame(21000);assert.equal(h.calls.filter(x=>x==='restore').length,before+1);
+  h.home.dispose();
 });
 
 test('detached photo, camera and animation callbacks cannot touch a disposed home',()=>{
@@ -81,9 +109,11 @@ function studioHarness({fetchOverride,rendererWait}={}){
     runtime[name]=()=>{if(locked)throw new Error('released runtime: '+name);calls.push(name);return {params:{},camera:{}};};
   }
   runtime.lock=()=>{calls.push('lock');locked=true;};
+  runtime.photo={open(){},close(){},capture(){},dispose(){calls.push('photo-dispose');}};
   const home={dispose(){calls.push('home-dispose');runtime.stop();},overlay(){runtime.stop();},applyState(){runtime.setAccess();}};
   env.window.parent.postMessage=message=>messages.push(message);
-  const context={...env,URLSearchParams,AbortController,DOMException,console,
+  const context={...env,URLSearchParams,AbortController,DOMException,console,createPetRuntime,
+    createApiClient:options=>createApiClient({...options,fetchImpl:context.fetch}),
     location:{search:'?embedded=1',origin:'http://localhost'},
     ResizeObserver:class {observe(){}disconnect(){calls.push('disconnect');}},
     setTimeout:fn=>{timers.set(++serial,fn);return serial;},clearTimeout:id=>timers.delete(id),
