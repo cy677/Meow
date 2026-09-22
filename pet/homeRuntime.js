@@ -8,7 +8,7 @@ export function mountHomeRuntime(runtime,data,defaults){
   let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+2500,activePlan=null,lastAction='';
   const initial=defaults||runtime.capture();
   let homeView=runtime.capture().camera;
-  const stop=()=>{activePlan=null;runtime.clearKeys();runtime.stop(true);nextAt=performance.now()+5000+Math.random()*4000;};
+  const stop=()=>{if(disposed)return;activePlan=null;runtime.clearKeys();runtime.stop(true);nextAt=performance.now()+5000+Math.random()*4000;};
   function applyState(next,first=false){
     if(disposed)return;
     runtime.applyModels(next.models||[]);
@@ -63,7 +63,7 @@ export function mountHomeRuntime(runtime,data,defaults){
       const chosen=choices[Math.floor(Math.random()*choices.length)];
       if(chosen)play(chosen.action,chosen.motion||{});else nextAt=now+5000;
     }
-    raf=requestAnimationFrame(tick);
+    if(!disposed)raf=requestAnimationFrame(tick);
   }
   // Keep the upstream tools directly on the stage; export tools belong to parents.
   const photo=document.getElementById('btn-export-png');
@@ -72,7 +72,8 @@ export function mountHomeRuntime(runtime,data,defaults){
   const together=document.getElementById('btn-photo-together');together.classList.add('child-photo');
   photoActions.append(photo,together);document.getElementById('viewport').append(photoActions);
   const resetView=document.createElement('button');resetView.type='button';resetView.id='child-reset-view';resetView.className='child-reset-view';resetView.textContent='还原视角';
-  resetView.addEventListener('click',()=>runtime.resetView(homeView));
+  const resetCamera=()=>{if(!disposed)runtime.resetView(homeView);};
+  resetView.addEventListener('click',resetCamera);
   photoActions.append(resetView);
   for(const id of ['btn-export-glb','btn-codex-pet'])document.getElementById(id)?.remove();
   photo.addEventListener('click',stop,true);
@@ -90,11 +91,21 @@ export function mountHomeRuntime(runtime,data,defaults){
   };
   window.addEventListener('keydown',keydown,true);
   raf=requestAnimationFrame(tick);
-  return {applyState,play,models:()=>runtime.modelDiagnostics(),overlay(open){paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
+  return {applyState,play,models:()=>runtime.modelDiagnostics(),overlay(open){if(disposed)return;paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
     if(disposed)return;
     if(name==='capture')photo.click();
     if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}
-  },dispose(){disposed=true;runtime.disposeModels();cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);together.removeEventListener('click',stop,true);photoActions.remove();}};
+  },dispose(){
+    if(disposed)return;
+    disposed=true;activePlan=null;cancelAnimationFrame(raf);
+    window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);
+    window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);
+    photo.removeEventListener('click',stop,true);together.removeEventListener('click',stop,true);
+    resetView.removeEventListener('click',resetCamera);pointers.clear();photoActions.remove();
+    // Cleanup can be requested both by the parent iframe and by pagehide.
+    // Stop while the underlying controller is live, and never touch it a second time.
+    runtime.clearKeys();runtime.stop(true);runtime.disposeModels();
+  }};
 }

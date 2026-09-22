@@ -13,16 +13,29 @@ const back=document.createElement('a');back.href=home;back.textContent=parent?'�
 const status=document.createElement('span');status.setAttribute('role','status');status.textContent='正在准备小猫…';bar.append(status);document.body.append(bar);
 const barSize=new ResizeObserver(()=>document.body.style.setProperty('--studio-toolbar-height',`${bar.getBoundingClientRect().height}px`));barSize.observe(bar);
 let csrf='',revision='0',dirty=false,stopped=false,playTimer,pollTimer,runtime;
-async function request(path,method='GET',data){
-  const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':csrf}:{},body:data?JSON.stringify(data):undefined});
-  const result=await response.json();if(!response.ok){const error=new Error(result.error);error.status=response.status;throw error;}return result;
+const requests=new AbortController();
+let removeVisibilityListener=()=>{};
+// Home callbacks must be detached before the shared animation controller is released.
+function stopStudio(){
+  if(stopped)return;
+  stopped=true;
+  clearTimeout(playTimer);clearTimeout(pollTimer);requests.abort();
+  removeVisibilityListener();barSize.disconnect();
+  delete document.body.dataset.studioReady;
+  try{window.meowHome?.dispose();}finally{runtime?.lock();}
 }
-function button(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',async()=>{if(stopped)return;b.disabled=true;try{await fn();}catch(e){status.textContent=e.message;if(e.status===401)expire();}finally{b.disabled=stopped;}});bar.append(b);return b;}
-function expire(){stopped=true;delete document.body.dataset.studioReady;document.body.dataset.studioStage='expired';document.body.dataset.studioError='登录已过期，请返回重新登录。';clearTimeout(playTimer);clearTimeout(pollTimer);window.meowHome?.dispose();runtime?.lock();document.body.classList.add('studio-loading');for(const control of bar.querySelectorAll('button,select'))control.disabled=true;status.textContent='登录已过期，请返回重新登录。';if(embedded)window.parent.postMessage({type:'meow:error',message:status.textContent},location.origin);}
+async function request(path,method='GET',data){
+  const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',signal:requests.signal,headers:data?{'Content-Type':'application/json','X-Meow-Client':'points-pet','X-CSRF-Token':csrf}:{},body:data?JSON.stringify(data):undefined});
+  const result=await response.json();if(stopped)throw new DOMException('页面已关闭','AbortError');if(!response.ok){const error=new Error(result.error);error.status=response.status;throw error;}return result;
+}
+function button(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',async()=>{if(stopped)return;b.disabled=true;try{await fn();}catch(e){if(!stopped){status.textContent=e.message;if(e.status===401)expire();}}finally{b.disabled=stopped;}});bar.append(b);return b;}
+function expire(){if(stopped)return;stopStudio();delete document.body.dataset.studioReady;document.body.dataset.studioStage='expired';document.body.dataset.studioError='登录已过期，请返回重新登录。';document.body.classList.add('studio-loading');for(const control of bar.querySelectorAll('button,select'))control.disabled=true;status.textContent='登录已过期，请返回重新登录。';if(embedded)window.parent.postMessage({type:'meow:error',message:status.textContent},location.origin);}
+async function startStudio(){
 try {
-  const session=await request(`/api/${parent?'parent':'child'}/session`);csrf=session.csrf;document.body.dataset.studioStage='configuration';
-  let data=await request(endpoint);revision=data.revision;document.body.dataset.studioStage='renderer';
+  const session=await request(`/api/${parent?'parent':'child'}/session`);if(stopped)return;csrf=session.csrf;document.body.dataset.studioStage='configuration';
+  let data=await request(endpoint);if(stopped)return;revision=data.revision;document.body.dataset.studioStage='renderer';
   const {petStudio}=await import('../src/main.js');
+  if(stopped){petStudio.lock();return;}
   runtime=petStudio;document.body.dataset.studioStage='preset';
   const initial=petStudio.capture();
   const defaults=()=>{petStudio.resetRoom();petStudio.restore(initial);petStudio.restore(Object.keys(data.preset).length?data.preset:{params:data.state.params});};
@@ -35,9 +48,10 @@ try {
     document.getElementById('panel').addEventListener('click',e=>{if(e.target.closest('.chip,.section-action,#btn-random'))edit();});
     for(const el of document.querySelectorAll('#weather-control,#light-orb,#disable-shadows')){el.addEventListener('input',edit);el.addEventListener('pointerup',edit);}
     const {createCreationEditor}=await import('./creationEditor.js');
+    if(stopped)return;
     const editor=createCreationEditor({runtime:petStudio,request,onSaved:reward=>{dirty=false;status.textContent=`已保存奖励「${reward.title}」：${reward.unlockAt} 成长分解锁，兑换 ${reward.cost} 积分`;},onError:e=>{if(e.status===401)expire();}});
     const query=new URLSearchParams(location.search);
-    if(query.get('reward')){await editor.load(query.get('reward'),query.get('copy')==='1');status.textContent='正在编辑家长作品，保存后更新奖励';}
+    if(query.get('reward')){await editor.load(query.get('reward'),query.get('copy')==='1');if(stopped)return;status.textContent='正在编辑家长作品，保存后更新奖励';}
     button('随机生成',()=>{document.getElementById('btn-random').click();edit();});
     button('保存为解锁奖励',()=>editor.open());
     button('另存为新奖励',()=>editor.open(true));
@@ -50,13 +64,44 @@ try {
   document.body.classList.remove('studio-loading');document.body.dataset.studioReady='true';document.body.dataset.studioStage='ready';document.body.dataset.studioFull='true';
   if(embedded)window.parent.postMessage({type:'meow:ready'},location.origin);
   // Keep authentication enforced in a page that can stay open longer than a parent session.
-  async function checkSession(){clearTimeout(pollTimer);if(stopped)return;try{const next=await request(endpoint);if(!parent){if(!embedded&&(next.revision!==revision||next.state.version!==data.state.version)){data=next;defaults();}window.meowHome?.applyState(next.state);petStudio.setAccess(next.access);data=next;revision=next.revision;}}catch(e){if(e.status===401){petStudio.stop();expire();return;}status.textContent='连接暂时中断，稍后自动重试';}pollTimer=setTimeout(checkSession,15000);}
+  let checkingSession=false;
+  async function checkSession(){
+    clearTimeout(pollTimer);
+    if(stopped||checkingSession)return;
+    checkingSession=true;
+    try{
+      const next=await request(endpoint);
+      if(stopped)return;
+      if(!parent){
+        if(!embedded&&(next.revision!==revision||next.state.version!==data.state.version)){data=next;defaults();}
+        window.meowHome?.applyState(next.state);petStudio.setAccess(next.access);data=next;revision=next.revision;
+      }
+    }catch(e){
+      if(stopped)return;
+      if(e.status===401){expire();return;}
+      status.textContent='连接暂时中断，稍后自动重试';
+    }finally{
+      checkingSession=false;
+      if(!stopped)pollTimer=setTimeout(checkSession,15000);
+    }
+  }
   pollTimer=setTimeout(checkSession,15000);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(playTimer);window.meowHome?.overlay(true);petStudio.clearKeys();petStudio.stop();}else {window.meowHome?.overlay(false);checkSession();}});
+  const visibilityChanged=()=>{
+    if(stopped)return;
+    if(document.hidden){clearTimeout(playTimer);window.meowHome?.overlay(true);petStudio.clearKeys();petStudio.stop();}
+    else{window.meowHome?.overlay(false);void checkSession();}
+  };
+  document.addEventListener('visibilitychange',visibilityChanged);
+  removeVisibilityListener=()=>document.removeEventListener('visibilitychange',visibilityChanged);
 } catch(e) {
+  if(stopped)return;
+  stopStudio();
   delete document.body.dataset.studioReady;document.body.dataset.studioStage='failed';document.body.dataset.studioError=e.message;
   status.textContent=e.status===401?'请先返回登录，再进入原版互动。':`原版互动未能载入：${e.message}`;
   document.getElementById('initial-loader')?.remove();
   if(embedded)window.parent.postMessage({type:'meow:error',message:status.textContent},location.origin);
 }
-window.addEventListener('pagehide',()=>{stopped=true;clearTimeout(playTimer);clearTimeout(pollTimer);barSize.disconnect();window.meowHome?.dispose();runtime?.lock();});
+}
+// Register before initialization awaits so a late fetch/import cannot reopen a closed stage.
+window.addEventListener('pagehide',stopStudio);
+void startStudio();
