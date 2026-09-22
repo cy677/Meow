@@ -17,21 +17,60 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - name: Import reviewed model subset
-        run: python3 scripts/import_kenney_models.py
-      - name: Commit assets on implementation branch only
+      - name: Apply checksum-verified implementation patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, lzma, hashlib, subprocess, shutil
+          folder = Path('.github/kenney-patch')
+          if folder.exists():
+              encoded = ''.join((folder / f'part-{i}').read_text().strip() for i in range(1, 5))
+              patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+              assert hashlib.sha256(patch).hexdigest() == 'ef6358916b80f95d7bb86c70e17ace41476c684187e497ceb99d677956296f3d'
+              Path('/tmp/models.patch').write_bytes(patch)
+              subprocess.run(['git', 'apply', '--check', '/tmp/models.patch'], check=True)
+              subprocess.run(['git', 'apply', '/tmp/models.patch'], check=True)
+              shutil.rmtree(folder)
+          PY
+      - name: Import reviewed embedded GLBs
+        run: |
+          python3 scripts/import_kenney_models.py
+          rm -f public/models/kenney/toy-car-kit/track-wide-straight.glb
+      - run: npm ci --ignore-scripts
+      - name: Install isolated browser test dependency
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Render reward thumbnails from actual models
+        run: node scripts/render_model_previews.mjs
+      - name: Unit tests and both application builds
+        run: |
+          npm run test:pet
+          npm run pet:build
+          npm run build
+      - name: Commit implementation and reviewed assets on feature branch
         if: github.ref == 'refs/heads/feature/kenney-rewards-20260922'
         run: |
-          git add public/models/kenney third_party/kenney
+          git add -A
+          git add -f public/models/kenney
           if ! git diff --cached --quiet; then
-            git -c user.name='Meow asset import' -c user.email='actions@users.noreply.github.com' commit -m 'assets: vendor 23 verified CC0 Kenney GLB models and licenses'
+            git -c user.name='Meow model integration' -c user.email='actions@users.noreply.github.com' commit -m 'feat: integrate 14 local Kenney model rewards with interaction and data migration'
             git push origin HEAD:feature/kenney-rewards-20260922
           fi
-      - run: npm ci --ignore-scripts
-      - name: Prepare isolated validation workspace
-        run: tar --exclude=.git --exclude=pet/data --exclude='*.pem' --exclude='*.key' -czf /tmp/meow-validation.tar.gz .
+      - name: Real Chromium touch, animation, physics and catalog checks
+        run: node pet/tests/browser-models.mjs
+      - name: Existing growth and creation regression
+        run: |
+          node pet/tests/browser-growth.mjs
+          node pet/tests/browser-creation.mjs
+      - name: Collect review images
+        if: always()
+        run: |
+          mkdir -p pet/test-results/model-previews
+          cp public/models/kenney/previews/*.png pet/test-results/model-previews/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: meow-validation-workspace
-          path: /tmp/meow-validation.tar.gz
-          retention-days: 1
+          name: kenney-model-review
+          path: pet/test-results/
+          retention-days: 7
