@@ -34,3 +34,9 @@ body.child-active:not(.house-open) .child-hud{top:auto;bottom:96px}
 
 body.child-photo-open .child-hud,body.child-photo-open .child-dock{display:none}
 body.child-together-open #pet-scene{width:100%;height:100%;z-index:10}
+
+/* Actual model thumbnails; no extra WebGL context per reward card. */
+.reward-art.art-model { position:relative; overflow:hidden; }
+.model-reward-thumbnail { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+.model-reward-thumbnail ~ span:not(.reward-tag) { visibility:hidden; }
+.art-model small, .art-model .reward-tag { position:relative; z-index:1; }

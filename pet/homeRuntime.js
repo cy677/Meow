@@ -11,6 +11,7 @@ export function mountHomeRuntime(runtime,data,defaults){
   const stop=()=>{activePlan=null;runtime.clearKeys();runtime.stop();nextAt=performance.now()+5000+Math.random()*4000;};
   function applyState(next,first=false){
     if(disposed)return;
+    runtime.applyModels(next.models||[]);
     if(next.creation){
       if(first||JSON.stringify(next.creation)!==JSON.stringify(state.creation)){
         stop();runtime.resetRoom();runtime.restore(initial);runtime.restore(next.creation.preset);
@@ -88,11 +89,11 @@ export function mountHomeRuntime(runtime,data,defaults){
   };
   window.addEventListener('keydown',keydown,true);
   raf=requestAnimationFrame(tick);
-  return {applyState,play,overlay(open){paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
+  return {applyState,play,models:()=>runtime.modelDiagnostics(),overlay(open){paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
     if(disposed)return;
     if(name==='capture')photo.click();
     if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}
-  },dispose(){disposed=true;cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);together.removeEventListener('click',stop,true);photoActions.remove();}};
+  },dispose(){disposed=true;runtime.disposeModels();cancelAnimationFrame(raf);stop();window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);photo.removeEventListener('click',stop,true);together.removeEventListener('click',stop,true);photoActions.remove();}};
 }

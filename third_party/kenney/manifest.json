@@ -194,21 +194,6 @@
       "animations": []
     },
     {
-      "pack": "toy-car-kit",
-      "file": "public/models/kenney/toy-car-kit/track-wide-straight.glb",
-      "sourceFile": "Models/GLB format/track-wide-straight.glb",
-      "sourceSha256": "339527094603d68e86cde469b2511bb85889586482df894a813a221c5f255356",
-      "embeddedResources": [
-        {
-          "file": "Models/GLB format/Textures/colormap.png",
-          "sha256": "0d4947d34ff32acf4a359c7f22ca784e057e7e72f622170a9a77b6fc88fdb70e"
-        }
-      ],
-      "sha256": "70a4d0493f474ec19c6c4024a7f10b61af20604b9c9e3bf6a7cfd811b3321ae7",
-      "bytes": 30868,
-      "animations": []
-    },
-    {
       "pack": "brick-kit",
       "file": "public/models/kenney/brick-kit/round-lq-brick-1x1.glb",
       "sourceFile": "Models/GLB format/round-lq-brick-1x1.glb",

@@ -14,7 +14,7 @@ const role=parent?'parent':'child';
 const $=selector=>document.querySelector(selector);
 const el=(tag,cls,content)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(content!==undefined)e.textContent=content;return e;};
 const labels=CATEGORY_LABELS;
-const icons={coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',creation:'✿',capability:'✧',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
+const icons={model:'✿',coat:'◒',shape:'☁',eyes:'◉',pose:'♧',trick:'✦',creation:'✿',capability:'✧',floor:'▤',rug:'▧',bed:'⌂',toy:'●',weather:'☂',lighting:'☀',camera:'◎',effect:'≋',theme:'✿'};
 const uid=()=>Array.from(crypto.getRandomValues(new Uint8Array(20)),n=>n.toString(16).padStart(2,'0')).join('');
 let growthUI=null,setupAge=null;
 let state=null,csrf='',scene=null,sceneLoading=null,category='all',view='shop',catalog=null,online=true,selectedReward=null,toastTimer,catalogRevision='',presetEditor=null,historyView=null,childOverlay=null,rewardPageIndex=0,rewardRenderKey='';
@@ -102,14 +102,19 @@ function renderRewards(){
   for(const reward of result.items){
     const card=el('article',`reward-card ${reward.owned?'is-owned':reward.eligible?'':'is-locked'}`);card.dataset.rewardId=reward.id;
     const art=el('div',`reward-art art-${reward.category}`);art.append(el('span','',icons[reward.category]),el('small','',labels[reward.category]));
+    if(reward.category==='model'){
+      const image=el('img','model-reward-thumbnail');image.src=`./models/kenney/previews/${reward.modelId}.png`;image.alt=reward.title;image.loading='lazy';
+      image.addEventListener('error',()=>image.remove(),{once:true});art.prepend(image);
+      art.querySelector('small').textContent=reward.modelGroup;
+    }
     art.append(el('span','reward-tag',reward.equipped?'使用中':reward.owned?'已收藏':reward.eligible?'可以兑换':'成长解锁'));
     const content=el('div','reward-content');content.append(el('h3','',reward.title),el('p','',reward.description));
     const foot=el('div','reward-foot');foot.append(el('strong','',reward.owned?'永久拥有':reward.cost===0?'成长礼物':`${reward.cost} 积分`));
     let b;
     if(reward.owned){
-      const canRemove=SCENE_SLOTS.includes(reward.category)&&reward.equipped&&!reward.starter;
+      const canRemove=(SCENE_SLOTS.includes(reward.category)||reward.category==='model')&&reward.equipped&&!reward.starter;
       b=button(canRemove?'卸下':reward.category==='trick'?'已加入随机脚本':reward.equipped?'正在使用':reward.category==='theme'?'应用整套':'换上它',canRemove?'unequip':reward.category==='trick'?'play':'equip','button small');
-      b.dataset.slot=reward.category;b.disabled=reward.category==='trick'||(!canRemove&&reward.equipped)||!online;
+      b.dataset.slot=reward.modelSlot||reward.category;b.disabled=reward.category==='trick'||(!canRemove&&reward.equipped)||!online;
     }
     else if(!reward.eligible){b=button(`还差 ${reward.unlockAt-state.lifetime} 成长分`,'purchase','button small');b.disabled=true;}
     else{b=button(reward.affordable?'兑换':'余额不足','purchase','button small');b.disabled=!reward.affordable||!online;}
@@ -154,7 +159,8 @@ function renderCatalog(){
     const tr=el('tr');tr.dataset.category=reward.category;tr.hidden=$('#catalog-filter').value!=='all'&&$('#catalog-filter').value!==reward.category;tr.append(el('td','',reward.title),el('td','',labels[reward.category]));
     for(const field of ['cost','unlockAt']){const td=el('td'),input=el('input');input.type='number';input.min='0';input.max='1000000';input.step='1';input.value=reward[field];input.dataset.rewardId=reward.id;input.dataset.field=field;input.setAttribute('aria-label',`${reward.title}的${field==='cost'?'价格':'解锁积分'}`);input.disabled=!!reward.starter||isFreeOriginal(reward);td.append(input);tr.append(td);}
     const td=el('td'),operations=el('div','catalog-operations');
-    for(const [action,label]of [['edit-preset','调参数'],['copy-preset','复制']]){const b=button(label,action,'button small');b.dataset.id=reward.id;operations.append(b);}
+    for(const [action,label]of (reward.category==='model'?[]:[['edit-preset','调参数'],['copy-preset','复制']])){const b=button(label,action,'button small');b.dataset.id=reward.id;operations.append(b);}
+    if(reward.category==='model')operations.append(el('span','subtle','本地模型 · 可在本表调整价格与门槛'));
     td.append(operations);tr.append(td);$('#catalog-body').append(tr);
   }
 }

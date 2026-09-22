@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { studioBuild } from './studioBuild.mjs';
 const root=fileURLToPath(new URL('.',import.meta.url));
 export default defineConfig({
-  root,base:'./',
+  root,base:'./',publicDir:fileURLToPath(new URL('../public',import.meta.url)),
   plugins:[studioBuild()],
   server:{fs:{allow:[fileURLToPath(new URL('..',import.meta.url))],deny:['**/.env','**/.env.*','**/*.{crt,pem,key,p12,pfx}','**/.git/**','**/pet/data/**','**/pet/certs/**','**/*.sqlite','**/*.sqlite-*']}},
   // Keep the reusable renderer independent of app.js's page initialization.

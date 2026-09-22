@@ -8,7 +8,7 @@ const select = (key, label, choices) => ({ key, label, type: 'select', choices }
 const number = (key, label, min, max, value, step = 0.01) => ({ key, label, type: 'number', min, max, value, step });
 const check = (key, label, value = false) => ({ key, label, type: 'checkbox', value });
 const color = (key, label, value) => ({ key, label, type: 'color', value });
-export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', creation:'家长作品', capability:'历史功能', ...SCENE_LABELS, theme:'场景套装' };
+export const CATEGORY_LABELS = { coat: '花色', shape: '体型', eyes: '眼睛', pose: '姿态', trick: '互动动作', creation:'家长作品', capability:'历史功能', ...SCENE_LABELS, theme:'场景套装', model:'模型礼物' };
 export const PARAM_FIELDS = {
   ...SCENE_FIELDS,
   capability: [select('capability','解锁功能', [...EDITORS.map(([id,title])=>[`editor-${id}`,title]),['complete','原版完整创作室'],['keyboard','键盘自由行动'],['capture','拍照与分享卡'],['export','GLB 与 Codex 导出'],['music','原版背景音乐']])],

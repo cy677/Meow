@@ -8,6 +8,7 @@ import { SCENE_CATALOG_ADDITIONS } from './environmentRewards.mjs';
 import { resolve } from 'node:path';
 import { missingUpstreamRewards, upstreamAccess, unlockOriginals, restoreSpecialPrices } from './upstreamRewards.mjs';
 import { validateStudio } from './studioSchema.mjs';
+import { MODEL_REWARDS, MODEL_SLOTS, modelDefinition, modelSlot, equippedModels } from './modelCatalog.mjs';
 import { isMenuOnly } from './editorRewards.mjs';
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
@@ -58,11 +59,12 @@ export function createStore(filename, initialCatalog) {
     const equipped=Object.fromEntries(db.prepare('SELECT slot,id FROM equipped').all().map(r=>[r.slot,r.id]));
     const config=catalog();
     const active=config.rewards.find(r=>r.category==='creation'&&r.id===equipped.creation&&owned.includes(r.id));
-    return { ...profile, growthProfile:growth.profile(), owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped),
+    return { ...profile, growthProfile:growth.profile(), owned, equipped, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped), models:equippedModels(config,equipped,owned),
       rewards:config.rewards.map(r => {
         const {params,action,motion,preset,...publicData}=r;
         return {...publicData, menuOnly:isMenuOnly(r), owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
-          affordable:profile.balance>=r.cost, equipped:equipped[r.category]===r.id&&(!active||r.category==='creation'),
+          affordable:profile.balance>=r.cost, equipped:equipped[modelSlot(r)]===r.id&&(!active||r.category==='creation'||r.category==='model'),
+          ...(r.category==='model'?{modelId:r.params.modelId,modelSlot:modelSlot(r),modelGroup:modelDefinition(r.params.modelId).group}:{}),
           ...(parent ? {params,action,...(motion ? {motion} : {}),...(preset?{preset}:{})} : {})};
       }),
       ...(parent ? {catalogRevision:catalogRevision()} : {}),
@@ -112,6 +114,20 @@ export function createStore(filename, initialCatalog) {
       });
       return this.studio(true);
     },
+    installModelRewards() {
+      if(getSetting('modelRewardsVersion')==='1')return;
+      tx(()=>{
+        const next=catalog();
+        for(const item of MODEL_REWARDS){
+          const old=next.rewards.find(r=>r.id===item.id);
+          if(old&&(old.category!=='model'||old.params?.modelId!==item.params.modelId))fail(409,'模型奖励 ID 与已有奖励冲突，未修改原数据');
+          if(!old)next.rewards.push(structuredClone(item));
+        }
+        setSetting('catalog',JSON.stringify(validateCatalog(next)));
+        grantMilestones();setSetting('modelRewardsVersion','1');bump();
+        log('catalog',0,'本地升级：加入14项模型奖励，保留原积分、价格、收藏和场景');
+      });
+    },
     installGrowthReward() {
       if(getSetting('growthRewardVersion')==='1')return;
       tx(()=>{
@@ -148,6 +164,10 @@ export function createStore(filename, initialCatalog) {
       });
     },
     unequip(slot) {
+      if(MODEL_SLOTS.includes(slot)){
+        tx(()=>{db.prepare('DELETE FROM equipped WHERE slot=?').run(slot);bump();});
+        return snapshot();
+      }
       if(!SCENE_SLOTS.includes(slot))fail(400,'仅支持卸下场景槽位');
       tx(()=>{
         const starter=catalog().rewards.find(r=>r.category===slot&&r.starter);
@@ -194,14 +214,14 @@ export function createStore(filename, initialCatalog) {
         if (!reward || !db.prepare('SELECT id FROM owned WHERE id=?').get(rewardId)) fail(403,'尚未拥有这个奖励');
         if (reward.category==='trick') fail(400,'互动动作请使用播放接口');
         if (reward.category==='capability') fail(400,'原版功能已默认开放，请使用功能菜单');
-        if(reward.category!=='creation')db.prepare("DELETE FROM equipped WHERE slot='creation'").run();
+        if(!['creation','model'].includes(reward.category))db.prepare("DELETE FROM equipped WHERE slot='creation'").run();
         if(reward.category==='theme'){
           for(const [slot,id]of Object.entries(reward.params.members)){
             if(!db.prepare('SELECT id FROM owned WHERE id=?').get(id))fail(409,'套装成员拥有权不完整');
             db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(slot,id);
           }
         } else if(SCENE_SLOTS.includes(reward.category))db.prepare("DELETE FROM equipped WHERE slot='theme'").run();
-        db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(reward.category,rewardId);
+        db.prepare('INSERT INTO equipped VALUES (?,?) ON CONFLICT(slot) DO UPDATE SET id=excluded.id').run(modelSlot(reward),rewardId);
         bump();
       }); return snapshot();
     },
