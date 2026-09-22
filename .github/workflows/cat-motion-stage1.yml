@@ -22,12 +22,16 @@ jobs:
       - run: npm run test:pet
       - run: npm run test:motion
       - run: npm run pet:build && npm run build
-      - name: Source snapshot
+      - name: Reproducible source and dependencies
         if: always()
-        run: git archive --format=tar.gz HEAD -o meow-source.tar.gz
+        run: |
+          git archive --format=tar.gz HEAD -o meow-source.tar.gz
+          tar -czf meow-dependencies.tar.gz node_modules
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cat-motion-stage1-source
-          path: meow-source.tar.gz
+          path: |
+            meow-source.tar.gz
+            meow-dependencies.tar.gz
           retention-days: 7
