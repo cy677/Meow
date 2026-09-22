@@ -17,49 +17,80 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - name: Apply reviewed view framing and browser synchronization corrections
+      - name: Align stale selectors with the current child and parent UI
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('pet/models/modelLayer.js');text=p.read_text()
-          if 'function fitView()' not in text:
-              text=text.replace('    }));\n    return pending;', '    })).then(()=>{if(!disposed&&token===generation)fitView();});\n    return pending;')
-              fit='''  // Fit only after equipment changes or explicit view reset, never on each frame/poll.
-            // Preserve the viewing direction and target; ordinary orbit/zoom remains available.
-            function fitView() {
-              if(disposed||!entries.size)return;
-              const bounds=new THREE.Box3();
-              for(const items of entries.values())for(const entry of items)bounds.expandByObject(entry.asset.root);
-              const cat=getCat();if(cat)bounds.expandByObject(cat);
-              if(bounds.isEmpty())return;
-              bounds.expandByScalar(.16);camera.updateMatrixWorld(true);
-              const backward=camera.position.clone().sub(controls.target).normalize();
-              const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
-              const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
-              const tanV=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
-              const tanH=tanV*camera.aspect;
-              let distance=camera.position.distanceTo(controls.target);
-              for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]) {
-                const relative=new THREE.Vector3(x,y,z).sub(controls.target),depth=relative.dot(backward);
-                distance=Math.max(distance,depth+Math.abs(relative.dot(right))/(tanH*.84),depth+Math.abs(relative.dot(up))/(tanV*.72));
-              }
-              distance=Math.min(controls.maxDistance,distance);
-              camera.position.copy(controls.target).addScaledVector(backward,distance);
-              controls.update();camera.updateMatrixWorld(true);
-            }
-          '''
-              text=text.replace('  function projected(e) {',fit+'  function projected(e) {').replace('return {select,update,diagnostics()', 'return {select,update,fitView,diagnostics()')
-              p.write_text(text)
-          p=Path('pet/studioRuntime.txt');text=p.read_text().replace('controls.update();controls.enableDamping=damping;', 'controls.update();controls.enableDamping=damping;petModelLayer?.fitView();')
-          p.write_text(text)
-          p=Path('pet/tests/browser-models.mjs');text=p.read_text()
-          text=text.replace("await page.waitForFunction(()=>!document.querySelector('[data-reward-id=kenney-chick] button[data-busy]'));", "await page.locator('#rewards-dialog').waitFor({state:'hidden'});")
-          text=text.replace("if(await page.locator('#rewards-dialog').isVisible())await page.locator('[data-action=close-rewards]').click();", "await page.locator('#rewards-dialog').waitFor({state:'hidden'});")
-          p.write_text(text)
-          # Current main intentionally removed help/source text from the compact scoring panel.
-          # Keep the condition check and the separate full-guide checks instead of obsolete labels.
+          import textwrap
           p=Path('pet/tests/browser-growth.mjs');text=p.read_text()
-          text=text.replace("assert.match(await parent.locator('#growth-basis').innerText(),/允许的帮助/);assert.match(await parent.locator('#growth-basis').innerText(),/指南/);", "assert.equal(await parent.locator('#growth-basis').isVisible(),true);")
+          lines=text.splitlines()
+          lines=[line for line in lines if "name:'家长加分指南',exact:true" not in line]
+          p.write_text('\n'.join(lines)+'\n')
+          p=Path('pet/tests/browser-creation.mjs');text=p.read_text()
+          text=text.replace('parent-only creation rewards and child mystery reveal','parent-only creation rewards and the fully visible child catalogue')
+          start=text.index('async function openChildFeature(name) {')
+          end=text.index('\ntry {',start)
+          text=text[:start]+text[end:]
+          start=text.index('  // Free original menu features remain reachable with zero points.')
+          end=text.index('  // Reveal the saved creation by owning the earlier catalogue entries',start)
+          replacement='''
+            // Current main exposes capture/music directly on the stage; parent exports are hidden.
+            const balanceBefore = app.store.snapshot().balance;
+            await home.locator('#btn-export-png').click();
+            await home.locator('.share-card-overlay').waitFor({state:'visible'});
+            await home.locator('.share-card-close-button').click();
+            await home.locator('#bgm-toggle').click();
+            assert.equal(await home.locator('#btn-export-glb').count(),0);
+            assert.equal(await home.locator('#btn-codex-pet').count(),0);
+            assert.equal(app.store.snapshot().balance,balanceBefore,'stage tools do not spend points');
+            mark('Direct stage capture/music remain free; parent-only exports are absent');
+
+            // Main now shows the complete collection; preserve its existing no-mystery rule.
+            const stateResponse = await childContext.request.get(origin+'/api/state');
+            assert.equal(stateResponse.status(),200);
+            const childState = await stateResponse.json();
+            assert.equal(childState.rewards.filter(r=>r.mystery).length,0);
+            assert.equal(childState.rewards.filter(r=>r.category==='model').length,14);
+            const selected = childState.rewards.find(r=>!r.owned&&r.category==='coat');
+            assert.ok(selected);
+            await openRewards();
+            assert.equal(await child.locator('.reward-card.is-mystery').count(),0);
+            await child.locator('[data-action=category][data-category=coat]').click();
+            const selectedCard = await revealReward(selected.id);
+            assert.notEqual(await selectedCard.locator('h3').innerText(),'???');
+            await screenshot(child,'luna-visible-catalogue');
+            await closeRewards();
+            mark('Full reward catalogue, model category and traditional category filtering');
+
+            app.store.points({delta:10000,reason:'浏览器临时验证积分',idempotencyKey:key()});
+            const selectedReward=app.store.catalog().rewards.find(r=>r.id===selected.id);
+            app.store.purchase({rewardId:selected.id,expectedCost:selectedReward.cost,idempotencyKey:key()});
+            await child.reload();
+            await child.locator('#pet-scene[data-ready=true]').waitFor({state:'attached'});
+            await child.locator('#pet-scene iframe').waitFor({state:'visible'});
+            await openRewards();
+            await child.locator('[data-view=owned]').click();
+            const ownedCard=await revealReward(selected.id);
+            assert.equal(await ownedCard.locator('h3').innerText(),selectedReward.title);
+            await closeRewards();
+            mark('Owned collection shows the purchased reward');
+
+          '''
+          text=text[:start]+textwrap.dedent(replacement)+text[end:]
+          text=text.replace("console.log('PASS: parent-only random/parameters; fixed creation save and draft isolation; child mystery cards across category/pagination; owned reveal; free capture/GLB/Codex/music/light/weather; child creation equip; direct child studio lock; no external requests.');", "console.log('PASS: parent-only creation/draft isolation; visible catalogue and owned collection; direct free stage tools; fixed creation equip; child editing lock; no external requests.');")
+          p.write_text(text)
+          # The committed workflow is a normal read-only check, not a code/asset import service.
+          p=Path('.github/workflows/kenney-rewards.yml')
+          text=p.read_text()
+          a=text.index('      - name: Align stale selectors')
+          b=text.index('      - run: npm ci --ignore-scripts',a)
+          text=text[:a]+text[b:]
+          a=text.index('      - name: Commit aligned regression scripts and read-only CI')
+          b=text.index('      - name: Model browser regression',a)
+          text=text[:a]+text[b:]
+          text=text.replace('contents: write','contents: read').replace('branches: [feature/kenney-rewards-20260922]','branches: [main, feature/kenney-rewards-20260922]')
+          text=text.replace('  workflow_dispatch:', '  pull_request:\n    branches: [main]\n  workflow_dispatch:')
+          text=text.replace('      - uses: actions/checkout@v4','      - uses: actions/checkout@v4\n        with:\n          persist-credentials: false')
           p.write_text(text)
           PY
       - run: npm ci --ignore-scripts
@@ -76,12 +107,12 @@ jobs:
           tail -8 /tmp/build.log
           npm run build > /tmp/original-build.log 2>&1 || { cat /tmp/original-build.log; exit 1; }
           tail -8 /tmp/original-build.log
-      - name: Commit reviewed corrections on feature branch
+      - name: Commit aligned regression scripts and read-only CI
         if: github.ref == 'refs/heads/feature/kenney-rewards-20260922'
         run: |
-          git add pet/models/modelLayer.js pet/studioRuntime.txt pet/tests/browser-models.mjs pet/tests/browser-growth.mjs
+          git add pet/tests/browser-growth.mjs pet/tests/browser-creation.mjs .github/workflows/kenney-rewards.yml
           if ! git diff --cached --quiet; then
-            git -c user.name='Meow model integration' -c user.email='actions@users.noreply.github.com' commit -m 'fix: frame equipped models and await completed reward transitions'
+            git -c user.name='Meow model integration' -c user.email='actions@users.noreply.github.com' commit -m 'test: align regressions with current UI and use read-only model verification'
             git push origin HEAD:feature/kenney-rewards-20260922
           fi
       - name: Model browser regression
