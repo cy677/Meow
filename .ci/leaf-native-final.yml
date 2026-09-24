@@ -1,0 +1,51 @@
+name: Native cat leaf appearance
+on:
+  push:
+    branches: [feature/leaf-cat-native-components-20260924]
+  pull_request:
+    paths:
+      - 'src/catAppearance/**'
+      - 'src/catBuilder.js'
+      - 'src/main.js'
+      - 'pet/**'
+      - 'scripts/runtimeFiles.mjs'
+      - 'scripts/apply_ubuntu_update.mjs'
+      - '.github/workflows/leaf-native.yml'
+permissions:
+  contents: read
+concurrency:
+  group: leaf-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - name: Tests and both production builds
+        run: |
+          mkdir -p pet/test-results/leaf-native
+          npm run test:pet 2>&1 | tee pet/test-results/leaf-native/unit-tests.txt
+          npm run test:motion
+          npm run test:poke
+          npm run build
+          npm run pet:build
+      - name: Browser tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Original geometry, skeleton, all actions and editor
+        run: node pet/tests/browser-leaf-native.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: leaf-native-verification
+          path: pet/test-results/leaf-native
+          retention-days: 14
