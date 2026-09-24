@@ -9,7 +9,7 @@ export function replaceChecked(code,needle,replacement,expected=1) {
 const anchors = [
   [
     "    motionMachine.translate(contactShift.x, contactShift.z);",
-    "    if (petStudio.childMotion) { petStudio.worldPose.x += contactShift.x; petStudio.worldPose.z += contactShift.z; }\n    else motionMachine.translate(contactShift.x, contactShift.z);",
+    "    if (petStudio.childMotion) { petStudio.worldPose.x += contactShift.x; petStudio.worldPose.z += contactShift.z; petStudio.avoidObstacle(contactShift); }\n    else motionMachine.translate(contactShift.x, contactShift.z);",
     1
   ],
   [
@@ -43,8 +43,8 @@ const anchors = [
     1
   ],
   [
-    "const i18n =",
-    "const petControlSyncs = [];\nconst i18n =",
+    "const bgm =",
+    "const petControlSyncs = [];\nconst bgm =",
     1
   ],
   [

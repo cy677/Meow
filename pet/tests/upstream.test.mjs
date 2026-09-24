@@ -8,7 +8,7 @@ import { createStore } from '../store.mjs';
 import { createPetServer } from '../server.mjs';
 import { COATS, EYE_COLORS, POSES } from '../../src/coats.js';
 import { CLIPS } from '../motionPrograms.mjs';
-import { missingUpstreamRewards, isFreeOriginal } from '../upstreamRewards.mjs';
+import { missingUpstreamRewards, isFreeOriginal, BASIC_ACTIONS } from '../upstreamRewards.mjs';
 import { STUDIO_FIELDS, validateStudio } from '../studioSchema.mjs';
 
 const base = JSON.parse(readFileSync(new URL('../rewards.json', import.meta.url), 'utf8'));
@@ -62,7 +62,7 @@ test('原版奖励迁移幂等，保留旧自定义奖励、进度和已装备�
   assert.ok(twice.owned.includes(custom.id));
   assert.deepEqual(store.catalog().rewards.find(reward => reward.id === custom.id), custom);
   assert.deepEqual(store.exportData().ledger.slice(0, beforeLedger.length), beforeLedger);
-  assert.equal(store.getSetting('upstreamRewardsVersion'), '3');
+  assert.equal(store.getSetting('upstreamRewardsVersion'), '4');
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'coat').length, COATS.length);
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'pose').length, POSES.length - 1);
   assert.equal(store.catalog().rewards.filter(reward => reward.category === 'eyes').length, EYE_COLORS.length);
@@ -154,10 +154,11 @@ test('零积分基础动作免费，特殊动作需拥有；家长草稿隔离�
   assert.equal(limited.data.access.full, true);
   assert.deepEqual(limited.data.access.editors, []);
   assert.equal(limited.data.state.balance,0);
-  const basic = new Set(['idle','idle-alert','walk','run','sneak']);
+  const basic = new Set(BASIC_ACTIONS);
   assert.deepEqual(new Set(limited.data.access.actions.map(action => action.action)), basic);
+  const parentCatalog=(await request('/api/parent/presets',{role:'parent'})).data.catalog;
   for(const clip of CLIPS){
-    const rewardId=`original-motion-${clip.id}`;
+    const rewardId=parentCatalog.rewards.find(r=>r.category==='trick'&&r.action===clip.id).id;
     const status=(await request('/api/play',{role:'child',method:'POST',data:{rewardId}})).status;
     assert.equal(status,basic.has(clip.id)?200:403,clip.id);
   }
@@ -204,6 +205,37 @@ test('零积分基础动作免费，特殊动作需拥有；家长草稿隔离�
   assert.ok(!applied.state.rewards.find(r=>r.id===reward.id).mystery);
   await request('/api/equip',{role:'child',method:'POST',data:{rewardId:'coat-orange'}});
   assert.deepEqual((await request('/api/studio',{role:'child'})).data.preset,{});
+});
+
+test('version 3 upgrade frees all basics, preserves selections and paid history, and installs new rewards once',t=>{
+  const store=fresh(t);
+  const old=structuredClone(base);
+  old.rewards.push(...missingUpstreamRewards(old).filter(r=>!['wave','bow','head-tilt','celebrate'].includes(r.action)));
+  for(const r of old.rewards)if(r.category==='trick'&&!['idle','idle-alert','walk','run','sneak'].includes(r.action)){r.cost=25;r.unlockAt=40;}
+  store.saveCatalog(old);store.setSetting('upstreamRewardsVersion','3');
+  store.points(grant(200));store.purchase({rewardId:'trick-jump',expectedCost:25,idempotencyKey:key()});
+  store.setRandomScript('trick-jump',false);
+  const before=store.exportData();store.installUpstreamRewards();
+  const after=store.snapshot(),config=store.catalog();
+  assert.equal(after.balance,before.profile.balance);assert.equal(after.lifetime,before.profile.lifetime);
+  assert.deepEqual(store.exportData().ledger.slice(0,before.ledger.length),before.ledger);
+  assert.equal(after.rewards.find(r=>r.id==='trick-jump').inRandomScript,false);
+  for(const action of BASIC_ACTIONS){
+    const reward=config.rewards.find(r=>r.action===action);
+    assert.equal(reward.cost,0,action);assert.equal(reward.unlockAt,0,action);
+    assert.equal(store.play(reward.id).action,action);
+    assert.equal(after.rewards.find(r=>r.id===reward.id).basicAction,true);
+  }
+  for(const action of ['wave','bow','head-tilt','celebrate']){
+    const reward=config.rewards.find(r=>r.action===action);
+    assert.ok(reward.cost>0&&reward.unlockAt>0);
+    assert.throws(()=>store.play(reward.id),failStatus(403));
+    store.purchase({rewardId:reward.id,expectedCost:reward.cost,idempotencyKey:key()});
+    assert.equal(store.play(reward.id).action,action);
+    assert.equal(store.snapshot().rewards.find(r=>r.id===reward.id).inRandomScript,false);
+    store.setRandomScript(reward.id,true);
+  }
+  const once=store.snapshot();store.installUpstreamRewards();assert.deepEqual(store.snapshot(),once);
 });
 
 test('旧库升级只开放免费能力，保留模型价格、旧流水与余额，导入不能重新锁动作',t=>{

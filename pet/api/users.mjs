@@ -8,6 +8,7 @@ export function userRoutes(service) {
     ['GET','/api/parent/state','parent',c=>service.state(c.user)],
     ['GET','/api/history','child',history],['GET','/api/parent/history','parent',history],
     ['POST','/api/parent/points','parent',c=>service.points(c.user,c.data),['delta','reason','idempotencyKey']],
+    ['POST','/api/appearance','child',c=>service.appearance(c.user,c.data),['appearance']],
     ['PUT','/api/parent/profile','parent',c=>service.profile(c.user,c.data),['childName','petName']],
     ['GET','/api/parent/storage','parent',c=>service.storage(c.user)],
     ['GET','/api/parent/export','parent',c=>{c.res.setHeader('Content-Disposition','attachment; filename="meow-progress.json"');return service.export(c.user);}],

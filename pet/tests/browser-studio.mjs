@@ -1,4 +1,4 @@
-/** Full original studio: saved hatch controls, exports, locale, random, motion and touch. */
+/** Full original studio: saved hatch controls, exports, random, motion and touch. */
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -258,7 +258,7 @@ try {
 
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
-  console.log('PASS: parent hatch uniform/UI save-reload; full studio canvas and six touch controls; Chinese/Japanese/English locale; random rebuild; all 14 native motions; touch poke; share-card skin and PNG; GLB; Codex contact-sheet, JSON and PNG handoff downloads; no external requests.');
+  console.log('PASS: parent hatch uniform/UI save-reload; full studio canvas and six touch controls; random rebuild; all 14 native motions; touch poke; share-card skin and PNG; GLB; Codex contact-sheet, JSON and PNG handoff downloads; no external requests.');
 } catch (error) {
   await screenshot(parent, 'studio-parent-failure').catch(() => {});
   await screenshot(child, 'studio-child-failure').catch(() => {});

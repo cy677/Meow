@@ -117,7 +117,7 @@ test('maintenance: valid update installs nested server modules without overwriti
   const f=patchFixture(t),file='pet/services/extra.mjs',value='export const marker=1;';
   fs.mkdirSync(path.join(f.patch,'payload/pet/services'),{recursive:true});fs.writeFileSync(path.join(f.patch,'payload',file),value);
   f.files[file]=createHash('sha256').update(value).digest('hex');
-  const shared=['src/catMotion/motionScript.js','src/catMotion/clipCatalog.js'];
+  const shared=['src/catMotion/motionScript.js','src/catMotion/clipCatalog.js','src/catMotion/expression.js'];
   for(const module of shared){
     const content=fs.readFileSync(path.join(root,module));
     fs.mkdirSync(path.dirname(path.join(f.patch,'payload',module)),{recursive:true});

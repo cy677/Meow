@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import {createDeviceCameraProvider, cameraErrorMessage} from '../../src/camera/deviceCamera.js';
 import {createPhotoSession} from '../../src/camera/photoSession.js';
 import {videoUvTransform} from '../../src/camera/framing.js';
-import {drawCardDecor, getShareCardDescriptor, getShareCardFilename, localeCopy} from '../../src/camera/cardArtwork.js';
+import {drawCardDecor, getShareCardDescriptor, getShareCardFilename, CARD_COPY} from '../../src/camera/cardArtwork.js';
 import {cameraPermissionsPolicy} from '../api/cameraPolicy.mjs';
 
 class Track extends EventTarget {
@@ -154,7 +154,7 @@ test('photo: cover crop centers in the card window; mirroring changes only video
 test('photo: link bar is absent in card DOM and exported drawing, while descriptor identity stays stable',()=>{
   const text=[];const ctx=new Proxy({}, {get(target,key){if(key==='fillText')return value=>text.push(value);if(key==='createLinearGradient')return()=>({addColorStop(){}});return target[key]??(()=>{});},set(target,key,value){target[key]=value;return true;}});
   const descriptor=getShareCardDescriptor(42,{base:'#f6dfbd',primary:'#e6913f',secondary:'#ad5d22',accent:'#d99a2b'});
-  drawCardDecor(ctx,{cardX:30,cardY:30,cardWidth:1140,cardHeight:1540,windowX:120,windowY:200,windowWidth:950,windowHeight:1000,descriptor,copy:localeCopy('zh-CN')});
+  drawCardDecor(ctx,{cardX:30,cardY:30,cardWidth:1140,cardHeight:1540,windowX:120,windowY:200,windowWidth:950,windowHeight:1000,descriptor,copy:CARD_COPY});
   assert.ok(text.includes('MEOW CARD'));assert.ok(!text.some(s=>/github|ringhyacinth|https?:|↗/i.test(s)));
   assert.equal(getShareCardDescriptor(0).serial,'0052');assert.equal(getShareCardFilename(-42),'meow_card_42.png');
   const source=readFileSync(new URL('../../src/shareCard.js',import.meta.url),'utf8');assert.doesNotMatch(source,/getRepositoryMarkup|share-card-repo/);

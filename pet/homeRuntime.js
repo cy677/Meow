@@ -5,18 +5,19 @@ import { containerSeed } from './environment/containerAdapter.js';
 import { RUG_CHOICES } from './environmentSchema.mjs';
 
 export function mountHomeRuntime(runtime,data,defaults){
-  let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+2500,activePlan=null,lastAction='';
+  let state=data.state,disposed=false,paused=false,pointerHeld=false,raf=0,nextAt=performance.now()+1500,activePlan=null,lastAction='';
   const initial=defaults||runtime.capture();
   let homeView=runtime.capture().camera;
-  let poseUntil=0,lastRandomId='';
-  const stop=()=>{if(disposed)return;activePlan=null;runtime.clearKeys();runtime.stop(true);nextAt=performance.now()+5000+Math.random()*4000;};
+  let poseUntil=0,lastRandomId='',interactionQueued=false,preferActionNext=false,randomBag=[];
+  const rest=now=>{activePlan=null;nextAt=now+650+Math.random()*650;};
+  const stop=(immediate=false)=>{if(disposed)return;preferActionNext=false;runtime.clearKeys();runtime.stop(immediate===true);rest(performance.now());};
   function applyState(next,first=false){
     if(disposed)return;
     // The parent page calls this bridge directly across an iframe realm.
     // Normalize inputs here so motion validation sees local plain objects.
     next=structuredClone(next);
     if(JSON.stringify(next.randomScript)!==JSON.stringify(state.randomScript)){
-      stop();poseUntil=0;
+      stop();poseUntil=0;randomBag=[];nextAt=performance.now()+350;
       const removedPose=state.randomScript?.find(r=>r.id===lastRandomId&&r.category==='pose');
       if(removedPose&&!next.randomScript?.some(r=>r.id===lastRandomId))runtime.restore({params:Object.fromEntries(PARAM_FIELDS.pose.map(f=>[f.key,next.params[f.key]??initial.params[f.key]]).filter(([,v])=>v!==undefined))});
     }
@@ -53,11 +54,12 @@ export function mountHomeRuntime(runtime,data,defaults){
   }
   applyState(state,true);
   function play(action,motion={}){
-    if(disposed||paused||document.hidden)return;
+    if(disposed||paused||document.hidden)return false;
     motion=structuredClone(motion);
-    if(!state.access.actions.some(a=>a.action===action&&JSON.stringify(a.motion||{})===JSON.stringify(motion)))return;
+    if(!state.access.actions.some(a=>a.action===action&&JSON.stringify(a.motion||{})===JSON.stringify(motion)))return false;
     activePlan=planMotion(action,motion,motion.script);
     lastAction=action;runtime.clearKeys();runtime.playProgram(activePlan);
+    return true;
   }
   // One render clock drives the program. A background tab never catches up by
   // firing a queue of expired segment timers. Rest restores the selected pose.
@@ -67,18 +69,30 @@ export function mountHomeRuntime(runtime,data,defaults){
     const delta=Math.max(0,Math.min(.1,(now-previousTick)/1000));previousTick=now;
     runtime.update(delta);
     const blocked=paused||pointerHeld||document.hidden||document.querySelector('#viewport[data-share-card-open="true"]');
-    if(blocked){if(activePlan)stop();nextAt=now+2500;}
+    if(blocked){if(activePlan||runtime.motionState().interaction?.active)stop();nextAt=now+1500;}
     else if(poseUntil>now){ /* Hold a chosen static pose before the next script item. */ }
-    else if(activePlan||runtime.motionState().active){if(!runtime.motionState().active)stop();}
+    // The controller already blends back to idle. Keep that rig alive between
+    // programs instead of cancelling, rebuilding and snapping to a static pose.
+    else if(activePlan||runtime.motionState().active){if(!runtime.motionState().active)rest(now);}
+    else if(now>=nextAt&&!preferActionNext&&['idle-alert','walk','paw'].every(action=>(state.randomScript??state.access.actions).some(item=>item.action===action))&&runtime.interactWithNearbyToy?.()){poseUntil=0;}
     else if(now>=nextAt){
-      const available=(state.randomScript??state.access.actions).filter(a=>a.category==='pose'||canAutoPlay(a.action,a.motion||{}));
-      const pool=available.filter(a=>(a.id||a.action)!==lastRandomId);
-      const choices=pool.length?pool:available;
-      const chosen=choices[Math.floor(Math.random()*choices.length)];
+      const available=(state.randomScript??state.access.actions).filter(a=>a.category==='pose'||canAutoPlay(a.action,a.motion||{},{allowPractice:!!state.randomScript}));
+      const actionChoices=preferActionNext?available.filter(a=>a.category!=='pose'):[];
+      const eligible=actionChoices.length?actionChoices:available;
+      randomBag=randomBag.filter(id=>available.some(a=>(a.id||a.action)===id));
+      if(!randomBag.length){
+        randomBag=available.map(a=>a.id||a.action);
+        for(let i=randomBag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[randomBag[i],randomBag[j]]=[randomBag[j],randomBag[i]];}
+      }
+      const pool=randomBag.map(id=>eligible.find(a=>(a.id||a.action)===id)).filter(Boolean);
+      const choices=pool.length?pool:eligible;
+      const chosen=choices.find(a=>(a.id||a.action)!==lastRandomId)||choices[0];
+      if(chosen)randomBag=randomBag.filter(id=>id!==(chosen.id||chosen.action));
+      preferActionNext=false;
       if(chosen){
         lastRandomId=chosen.id||chosen.action;
-        if(chosen.category==='pose'){stop();runtime.restore({params:chosen.params});poseUntil=now+4500;nextAt=poseUntil;}
-        else {poseUntil=0;play(chosen.action,chosen.motion||{});}
+        if(chosen.category==='pose'){stop();runtime.restore({params:chosen.params});poseUntil=now+3000;nextAt=poseUntil;}
+        else {poseUntil=0;if(!play(chosen.action,chosen.motion||{}))nextAt=now+1000;}
       }else nextAt=now+5000;
     }
     if(!disposed)raf=requestAnimationFrame(tick);
@@ -94,15 +108,27 @@ export function mountHomeRuntime(runtime,data,defaults){
   resetView.addEventListener('click',resetCamera);
   photoActions.append(resetView);
   for(const id of ['btn-export-glb','btn-codex-pet'])document.getElementById(id)?.remove();
-  photo.addEventListener('click',stop,true);
-  together.addEventListener('click',stop,true);
+  const stopForPhoto=()=>stop(true);
+  photo.addEventListener('click',stopForPhoto,true);
+  together.addEventListener('click',stopForPhoto,true);
   const canvas=document.getElementById('scene');canvas.tabIndex=0;
   const pointers=new Set();
-  const down=e=>{pointers.add(e.pointerId);pointerHeld=true;if(activePlan)stop();};
-  const up=e=>{if(e.type==='blur')pointers.clear();else pointers.delete(e.pointerId);pointerHeld=pointers.size>0;nextAt=performance.now()+4000;};
-  // Restore the selected pose before upstream picking captures mesh references.
-  canvas.addEventListener('pointerdown',down,true);
+  const down=e=>{if(e.target!==canvas)return;pointers.add(e.pointerId);pointerHeld=true;if(activePlan||runtime.motionState().interaction?.active)stop();};
+  const up=e=>{
+    if(e.type==='blur')pointers.clear();else pointers.delete(e.pointerId);
+    pointerHeld=pointers.size>0;
+    if(!pointerHeld)nextAt=performance.now()+(e.type==='pointerup'&&interactionQueued?250:1500);
+    if(!pointerHeld||e.type!=='pointerup')interactionQueued=false;
+  };
+  const interaction=e=>{
+    if(disposed||paused||document.hidden||document.querySelector('#viewport[data-share-card-open="true"]'))return;
+    if(!['poke','cheek','butt','lift','toy','container'].includes(e.detail?.kind))return;
+    poseUntil=0;preferActionNext=true;interactionQueued=pointerHeld;nextAt=performance.now()+250;
+  };
+  // The stage handles cat touches in capture phase; pause motion before it picks a mesh.
+  window.addEventListener('pointerdown',down,true);
   window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);window.addEventListener('blur',up);
+  window.addEventListener('meow:scene-interaction',interaction);
   const keydown=e=>{
     if(e.target?.closest?.('input,select,textarea,button'))return;
     if(/^(Key[WASDQEFHGKCZX]|Arrow(Up|Down|Left|Right)|Space|ShiftLeft|ControlLeft)$/.test(e.code)){e.preventDefault();e.stopImmediatePropagation();}
@@ -111,16 +137,17 @@ export function mountHomeRuntime(runtime,data,defaults){
   raf=requestAnimationFrame(tick);
   return {applyState,play,models:()=>runtime.modelDiagnostics(),overlay(open){if(disposed)return;paused=open;if(open)stop();else nextAt=performance.now()+2500;},feature(name){
     if(disposed)return;
-    if(name==='capture'){stop();runtime.camera.start();}
+    if(name==='capture'){stop(true);runtime.camera.start();}
     if(name==='music')document.getElementById('bgm-toggle').click();
     if(name==='speech')window.dispatchEvent(new CustomEvent('meow:speech',{detail:{role:'cat'}}));
     if(name==='reset'){stop();runtime.resetRoom();runtime.restore(initial);runtime.restore({params:state.params});applyState(state,true);}
   },dispose(){
     if(disposed)return;
     disposed=true;activePlan=null;cancelAnimationFrame(raf);
-    window.removeEventListener('keydown',keydown,true);canvas.removeEventListener('pointerdown',down,true);
+    window.removeEventListener('keydown',keydown,true);window.removeEventListener('pointerdown',down,true);
     window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);window.removeEventListener('blur',up);
-    photo.removeEventListener('click',stop,true);together.removeEventListener('click',stop,true);
+    window.removeEventListener('meow:scene-interaction',interaction);
+    photo.removeEventListener('click',stopForPhoto,true);together.removeEventListener('click',stopForPhoto,true);
     resetView.removeEventListener('click',resetCamera);pointers.clear();photoActions.remove();
     // Cleanup can be requested both by the parent iframe and by pagehide.
     // Stop while the underlying controller is live, and never touch it a second time.

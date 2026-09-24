@@ -12,8 +12,8 @@ import { planMotion as petPlanMotion } from '../src/catMotion/motionScript.js';
 import { timelineLayers as petTimelineLayers } from '../pet/motionPrograms.mjs';
 import { SPEECH_BUBBLE_COPY as petSpeechCopy } from '../src/speechBubbles.js';
 import { CAT_DIALOGUE as petCatDialogue, TOY_DIALOGUE as petToyDialogue } from '../pet/catDialogue.js';
-petSpeechCopy['zh-CN'].cat.push(...petCatDialogue);
-for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy['zh-CN'][role].push(...lines);
+petSpeechCopy.cat.push(...petCatDialogue);
+for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy[role].push(...lines);
 let petActivePlan=null,petMotion=null,petPosePlayer=null,petMotionRig=null,petMotionClock=0,petProgramEnabled=false,petAccess=null;
 const petMotionEvents=petCreateMotionEvents();
 function petEnsureMotion() {

@@ -1,4 +1,5 @@
 import { CLIPS, CLIP_BY_ID } from './clipCatalog.js';
+import { smooth01 } from './expression.js';
 export { CLIPS, CLIP_BY_ID } from './clipCatalog.js';
 const freeze=value=>{if(value&&typeof value==='object'){for(const item of Object.values(value))freeze(item);Object.freeze(value);}return value;};
 const step=(clip,cycles=1,speed=1)=>({clip,cycles,speed});
@@ -8,6 +9,7 @@ export const PROGRAMS = freeze({
   pounce:{name:'发现与扑接',steps:[step('idle-alert'),step('sneak'),step('fetch'),step('sit')]},
   'paw-practice':{name:'挥爪练习',steps:[step('idle-alert'),step('paw'),step('idle')]},
   'climb-practice':{name:'攀爬片段练习（无物体）',steps:[step('climb-up',2),step('mantle'),step('climb-down',2)]},
+  celebrate:{name:'欢乐庆祝',steps:[step('wave'),step('jump',1,1.1),step('bow')]},
 });
 export const ACTION_CHOICES = [...CLIPS.map(c=>[c.id,c.name]),['spin','迈步转圈'],...Object.entries(PROGRAMS).map(([id,p])=>[id,p.name]),['sequence','自定义动作脚本']];
 export const ACTION_IDS = ACTION_CHOICES.map(c=>c[0]);
@@ -56,7 +58,7 @@ export function planMotion(action,motion={},script) {
   for(const s of items){
     const c=CLIP_BY_ID.get(s.clip),duration=c.duration/(s.speed*speed);
     for(let i=0;i<s.cycles;i++){
-      const previous=segments.at(-1),overlap=previous?Math.min(transition,previous.duration*0.3,duration*0.3):0;
+      const previous=segments.at(-1),overlap=previous&&previous.clip!==s.clip?Math.min(transition,previous.duration*0.3,duration*0.3):0;
       const start=end-overlap;end=start+duration;
       segments.push({clip:s.clip,start,end,duration,overlap});
     }
@@ -66,15 +68,18 @@ export function planMotion(action,motion={},script) {
 }
 export function timelineLayers(plan,time) {
   const t=Math.min(plan.duration,Math.max(0,time));
-  const active=plan.segments.filter(s=>t>=s.start-1e-9&&t<=s.end+1e-9).slice(-2);
+  let active=plan.segments.filter(s=>t>=s.start-1e-9&&t<=s.end+1e-9).slice(-2);
+  // Adjacent cycles of the same clip meet without overlap. At the exact seam
+  // choose the next cycle rather than dividing by a zero crossfade duration.
+  if(active.length===2&&active[1].overlap<=1e-9)active=active.slice(-1);
   return active.map((s,i)=>{
     let weight=1;
-    if(active.length===2){const b=active[1],x=Math.max(0,Math.min(1,(t-b.start)/b.overlap));const smooth=x*x*(3-2*x);weight=i===0?1-smooth:smooth;}
+    if(active.length===2){const b=active[1],smooth=smooth01((t-b.start)/b.overlap);weight=i===0?1-smooth:smooth;}
     return {clip:s.clip,progress:Math.min(1,Math.max(0,(t-s.start)/s.duration)),weight};
   });
 }
 
 /** Whether a script is appropriate for idle ground activity before target/IK support. */
-export function canAutoPlay(action,motion={}) {
-  try{return planMotion(action,motion,motion.script).segments.every(s=>!CLIP_BY_ID.get(s.clip).requiresTarget);}catch{return false;}
+export function canAutoPlay(action,motion={}, {allowPractice=false}={}) {
+  try{return planMotion(action,motion,motion.script).segments.every(s=>allowPractice||!CLIP_BY_ID.get(s.clip).requiresTarget);}catch{return false;}
 }

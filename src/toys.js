@@ -589,6 +589,7 @@ export function createToyWorld(scene) {
   let catBody = null;
   let catColliderSource = [];
   let contactCooldown = 0, contactCount = 0, lastContact = null, contactHandler = null;
+  let pawTouchCount=0,lastPawTouch=null;
   function reportContact(body, point, speed) {
     if (contactCooldown > 0 || speed < .12) return;
     contactCooldown = 1.5;
@@ -653,6 +654,25 @@ export function createToyWorld(scene) {
       }
     }
     return shift;
+  }
+
+  function catMoveBlocked(x,z,yaw) {
+    if(!catBody)return false;
+    const c=Math.cos(yaw),s=Math.sin(yaw);
+    const spheres=catColliderSource.map(p=>({x:x+p.x*c+p.z*s,y:catBody.position.y+p.y,z:z-p.x*s+p.z*c,r:p.r}));
+    return !!resolveCatObstacles(spheres,world.bodies,catBody).body;
+  }
+  function tapToy(toy,point,heading) {
+    if(!toys.includes(toy)||!toy.mesh.visible||constraint||toy.body.mass<=0||!toy.body.collisionFilterMask)return false;
+    const body=toy.body,dx=body.position.x-point.x,dy=body.position.y-point.y,dz=body.position.z-point.z;
+    if(Math.hypot(dx,dy,dz)>toy.radius+.18)return false;
+    const distance=Math.hypot(dx,dz),nx=distance>.02?dx/distance:Math.sin(heading),nz=distance>.02?dz/distance:Math.cos(heading);
+    const impulse=new CANNON.Vec3(nx*body.mass*.65,body.mass*.06,nz*body.mass*.65);
+    const offset=new CANNON.Vec3(point.x-body.position.x,point.y-body.position.y,point.z-body.position.z);
+    if(offset.length()>toy.radius)offset.scale(toy.radius/offset.length(),offset);
+    body.wakeUp();body.applyImpulse(impulse,offset);
+    pawTouchCount++;lastPawTouch={kind:toy.kind,point:{x:point.x,y:point.y,z:point.z},impulse:{x:impulse.x,y:impulse.y,z:impulse.z}};
+    reportContact(body,point,.65);return true;
   }
 
   // ---- 石头碰撞体（静态球组，随环境重建更新）------------------------------
@@ -908,9 +928,9 @@ export function createToyWorld(scene) {
   }
 
   return {
-    group, toys, world, step, setCatColliders, setCatTransform, setRockColliders, syncCat,
+    group, toys, world, step, setCatColliders, setCatTransform, setRockColliders, syncCat, catMoveBlocked, tapToy,
     onCatContact(handler) { contactHandler = handler; },
-    catDiagnostics() { return { spheres: currentCatColliders, contactCount, lastContact }; },
+    catDiagnostics() { return { spheres: currentCatColliders, contactCount, lastContact, pawTouchCount, lastPawTouch }; },
     grabToy, moveGrab, releaseGrab, scatterAroundRug, updateFishPupils,
     get dragging() { return !!constraint; },
   };

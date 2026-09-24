@@ -8,7 +8,7 @@ const target=fs.realpathSync(process.argv[2]);
 const inside=(parent,child)=>child===parent||child.startsWith(parent+path.sep);
 if(inside(target,patch)||inside(patch,target))throw new Error('请把补丁解压到安装目录之外。');
 const manifest=JSON.parse(fs.readFileSync(path.join(patch,'manifest.json'),'utf8'));
-const allowed=p=>['BUILD.json','Meow','pet-settings.example.json','src/coats.js','src/catMotion/motionScript.js','src/catMotion/clipCatalog.js'].includes(p)
+const allowed=p=>['BUILD.json','Meow','pet-settings.example.json','src/coats.js','src/catAppearance/catalog.js','src/catMotion/motionScript.js','src/catMotion/clipCatalog.js','src/catMotion/expression.js'].includes(p)
   ||/^pet\/(?:api|services|repositories|contracts|config)\/[\w/-]+\.mjs$/.test(p)
   ||/^pet\/[\w-]+\.mjs$/.test(p)||/^pet\/dist\/[\w./-]+$/.test(p);
 const stat=p=>fs.lstatSync(p,{throwIfNoEntry:false});

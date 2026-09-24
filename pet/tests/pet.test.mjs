@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { createStore } from '../store.mjs';
 import { createPetServer } from '../server.mjs';
 import { validateCatalog, composeParams, DEFAULT_PARAMS } from '../catalog.mjs';
+import { BASIC_ACTIONS } from '../upstreamRewards.mjs';
 const base=JSON.parse(readFileSync(new URL('../rewards.json',import.meta.url),'utf8'));
 const key=()=>randomUUID();
 const buy=(id,cost)=>({rewardId:id,expectedCost:cost,idempotencyKey:key()});
@@ -16,6 +17,38 @@ const fresh=t=>{const s=createStore(':memory:',base);t.after(()=>s.close());retu
 const throws=(fn,status)=>assert.throws(fn,e=>e.status===status);
 
 test('初始四个槽位免费，参数从原生成器默认值组合',t=>{const s=fresh(t),p=s.snapshot();assert.equal(p.balance,0);assert.equal(p.lifetime,0);assert.equal(p.owned.length,4);assert.deepEqual(p.params,DEFAULT_PARAMS);assert.equal(p.rewards.length,20);});
+test('叶猫外观达到累计 50 成长分自动解锁，孩子选择后重启保留',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'meow-appearance-'));
+  try{
+    const path=join(dir,'pet.sqlite');
+    let s=createStore(path,base);
+    assert.deepEqual(s.snapshot().appearance,{selected:'native',unlockAt:50,unlocked:false});
+    throws(()=>s.setAppearance('leaf'),403);
+    const premature=s.catalog();premature.rewards.find(r=>r.id==='shape-original').params.catAppearance='leaf';
+    s.saveCatalog(premature);
+    assert.equal(s.snapshot().params.catAppearance,'native');
+    s.points(grant(49));
+    assert.equal(s.snapshot().appearance.unlocked,false);
+    s.points(grant(1));
+    assert.equal(s.snapshot().appearance.unlocked,true);
+    s.setAppearance('leaf');
+    assert.equal(s.snapshot().params.catAppearance,'leaf');
+    s.close();
+    s=createStore(path,base);
+    assert.equal(s.snapshot().params.catAppearance,'leaf');
+    assert.equal(s.snapshot().appearance.selected,'leaf');
+    assert.equal(s.snapshot().params.catAppearance,'leaf');
+    const catalog=s.catalog();catalog.rewards.find(r=>r.id==='shape-original').params.catAppearance='native';
+    s.saveCatalog(catalog);
+    assert.equal(s.snapshot().params.catAppearance,'leaf');
+    s.points(grant(-10));
+    assert.equal(s.snapshot().appearance.unlocked,true);
+    throws(()=>s.setAppearance('unknown'),400);
+    s.setAppearance('native');
+    assert.equal(s.snapshot().params.catAppearance,'native');
+    s.close();
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
 test('加分、自动成长礼物、兑换余额与累计成长分分离',t=>{const s=fresh(t);s.points(grant(50));assert.ok(s.snapshot().owned.includes('coat-cream'));s.purchase(buy('coat-grey',25));assert.equal(s.snapshot().balance,25);assert.equal(s.snapshot().lifetime,50);s.equip('coat-grey');assert.equal(s.snapshot().params.coatId,'greyTabby');});
 test('相同加分请求重放只执行一次，ID 用于不同内容会被拒绝',t=>{const s=fresh(t),g=grant(10);s.points(g);s.points(g);assert.equal(s.snapshot().balance,10);throws(()=>s.points({...g,delta:20}),409);assert.equal(s.snapshot().balance,10);});
 test('购买重放和不同请求 ID 重复购买均不重复扣款',t=>{const s=fresh(t);s.points(grant(60));const b=buy('coat-grey',25);s.purchase(b);s.purchase(b);s.purchase(buy('coat-grey',25));assert.equal(s.snapshot().balance,35);assert.equal(s.exportData().ledger.filter(r=>r.kind==='purchase').length,1);});
@@ -56,10 +89,22 @@ async function fixture(t) {
 }
 test('HTTP：未登录与孩子会话均不能加分或读取家长导出',async t=>{const {request}=await fixture(t);for(const role of ['none','child']){assert.equal((await request('/api/parent/points',{role,method:'POST',data:grant(100)})).status,401);assert.equal((await request('/api/parent/export',{role})).status,401);}assert.equal((await request('/api/state',{role:'child'})).data.balance,0);});
 test('HTTP：家长/孩子会话隔离，需正确 CSRF 才能执行写操作',async t=>{const {request}=await fixture(t);assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant(),csrf:'wrong'})).status,403);assert.equal((await request('/api/purchase',{role:'parent',method:'POST',data:buy('pose-stretch',10)})).status,401);assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant(30)})).status,200);const state=await request('/api/state',{role:'child'});assert.equal(state.data.balance,30);assert.ok(!('params' in state.data.rewards[0]));});
-test('HTTP：完整加分、购买、装扮、动作、查询配置链路',async t=>{const {request}=await fixture(t);await request('/api/parent/points',{role:'parent',method:'POST',data:grant(100)});for(const [rewardId,expectedCost]of [['coat-calico',40],['trick-jump',15]])assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:{rewardId,expectedCost,idempotencyKey:key()}})).status,200);assert.equal((await request('/api/equip',{role:'child',method:'POST',data:{rewardId:'coat-calico'}})).status,200);assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:'trick-jump'}})).data.action,'jump');const c=(await request('/api/pet/config',{role:'child'})).data;assert.equal(c.params.coatId,'calico');assert.equal(c.actions.length,6);assert.ok(c.actions.some(a=>a.action==='jump'));assert.ok(c.actions.some(a=>a.action==='idle'));});
+test('HTTP：家长设置无外观项，孩子在 50 分后切换外观',async t=>{
+  const {request}=await fixture(t);
+  const profile={childName:'测试小朋友',petName:'小橘'};
+  assert.equal((await request('/api/parent/profile',{role:'parent',method:'PUT',data:{...profile,initialAppearance:'leaf'}})).status,400);
+  assert.equal((await request('/api/appearance',{role:'parent',method:'POST',data:{appearance:'leaf'}})).status,401);
+  assert.equal((await request('/api/appearance',{role:'child',method:'POST',data:{appearance:'leaf'}})).status,403);
+  assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant(50)})).status,200);
+  assert.equal((await request('/api/state',{role:'child'})).data.appearance.unlocked,true);
+  assert.equal((await request('/api/appearance',{role:'child',method:'POST',data:{appearance:'leaf'}})).status,200);
+  assert.equal((await request('/api/state',{role:'child'})).data.params.catAppearance,'leaf');
+  assert.equal((await request('/api/pet/config',{role:'child'})).data.params.catAppearance,'leaf');
+});
+test('HTTP：完整加分、购买、装扮、免费基础动作与新增奖励链路',async t=>{const {request}=await fixture(t);await request('/api/parent/points',{role:'parent',method:'POST',data:grant(100)});for(const [rewardId,expectedCost]of [['coat-calico',40],['motion-wave',15]])assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:{rewardId,expectedCost,idempotencyKey:key()}})).status,200);assert.equal((await request('/api/equip',{role:'child',method:'POST',data:{rewardId:'coat-calico'}})).status,200);assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:'trick-jump'}})).data.action,'jump');assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:'motion-wave'}})).data.action,'wave');const c=(await request('/api/pet/config',{role:'child'})).data;assert.equal(c.params.coatId,'calico');assert.equal(c.actions.length,BASIC_ACTIONS.length+1);for(const action of [...BASIC_ACTIONS,'wave'])assert.ok(c.actions.some(a=>a.action===action));});
 test('HTTP：并发购买不会造成透支，重复请求只扣一次',async t=>{const {request}=await fixture(t);await request('/api/parent/points',{role:'parent',method:'POST',data:grant(80)});await request('/api/parent/points',{role:'parent',method:'POST',data:grant(-30)});const results=await Promise.all([request('/api/purchase',{role:'child',method:'POST',data:buy('coat-grey',25)}),request('/api/purchase',{role:'child',method:'POST',data:buy('coat-calico',40)})]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);const p=(await request('/api/state',{role:'child'})).data;assert.ok(p.balance===25||p.balance===10);assert.equal(p.lifetime,80);const g=grant(5);const parallel=await Promise.all(Array.from({length:8},()=>request('/api/parent/points',{role:'parent',method:'POST',data:g})));assert.ok(parallel.every(r=>r.status===200));assert.equal((await request('/api/state',{role:'child'})).data.balance,p.balance+5);});
 test('HTTP：拒绝跨来源请求、伪造 Host、非 JSON 与多余字段',async t=>{const {request}=await fixture(t);assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant(),headers:{Origin:'https://evil.example'}})).status,403);assert.equal((await request('/api/status',{headers:{Host:'evil.example:8792'}})).status,403);assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant(),headers:{'Content-Type':'text/plain'}})).status,415);assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant(),headers:{'X-Meow-Client':''}})).status,403);assert.equal((await request('/api/purchase',{role:'child',method:'POST',data:{...buy('coat-grey',25),cost:0,balance:100000}})).status,400);});
-test('HTTP：未拥有的奖励不能通过接口直接装备/播放',async t=>{const {request}=await fixture(t);assert.equal((await request('/api/equip',{role:'child',method:'POST',data:{rewardId:'coat-white'}})).status,403);assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:'trick-spin'}})).status,403);});
+test('HTTP：未拥有的奖励不能通过接口直接装备/播放',async t=>{const {request}=await fixture(t);assert.equal((await request('/api/equip',{role:'child',method:'POST',data:{rewardId:'coat-white'}})).status,403);assert.equal((await request('/api/play',{role:'child',method:'POST',data:{rewardId:'motion-celebrate'}})).status,403);});
 test('HTTP：错误密码限速；Cookie 采用 HttpOnly/SameSite',async t=>{const {request}=await fixture(t);for(let i=0;i<5;i++)assert.equal((await request('/api/parent/login',{method:'POST',data:{code:'000000'}})).status,401);assert.equal((await request('/api/parent/login',{method:'POST',data:{code:'864209'}})).status,429);const login=await request('/api/child/login',{method:'POST',data:{code:'2468'}});assert.match(login.headers.get('set-cookie'),/HttpOnly/);assert.match(login.headers.get('set-cookie'),/SameSite=Strict/);});
 test('HTTP：退出及 15 分钟过期会真正吊销会话',async t=>{const {app,request}=await fixture(t);await request('/api/child/logout',{role:'child',method:'POST',data:{}});assert.equal((await request('/api/state',{role:'child'})).status,401);app.store.db.prepare("UPDATE sessions SET expires=0 WHERE role='parent'").run();assert.equal((await request('/api/parent/points',{role:'parent',method:'POST',data:grant()})).status,401);});
 test('HTTP：修改孩子进入码吊销已有孩子会话，密码不以明文储存',async t=>{const {app,request}=await fixture(t);assert.equal((await request('/api/parent/credentials',{role:'parent',method:'PUT',data:{currentPin:'864209',childCode:'3579'}})).status,200);assert.equal((await request('/api/state',{role:'child'})).status,401);assert.equal((await request('/api/child/login',{method:'POST',data:{code:'2468'}})).status,401);assert.equal((await request('/api/child/login',{method:'POST',data:{code:'3579'}})).status,200);for(const c of app.store.db.prepare('SELECT * FROM credentials').all()){assert.equal(c.hash.length,128);assert.equal(c.salt.length,32);assert.ok(!c.hash.includes('864209'));}});

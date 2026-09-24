@@ -12,14 +12,15 @@ import { planMotion as petPlanMotion } from '../../src/catMotion/motionScript.js
 import { timelineLayers as petTimelineLayers } from '../motionPrograms.mjs';
 import { SPEECH_BUBBLE_COPY as petSpeechCopy } from '../../src/speechBubbles.js';
 import { CAT_DIALOGUE as petCatDialogue, TOY_DIALOGUE as petToyDialogue } from '../catDialogue.js';
+import { createToyInteraction } from './toyInteraction.js';
 
 let dialogueInstalled=false;
 /** All access to the upstream renderer passes through this explicit port. */
 export function createStudioAdapter(host) {
 const {THREE,params,key,ambient,camera,scene,controls,motionCameraOffset,floorParams,rugState,lightAngles,weatherAmounts,pokeUniforms,pokeFeel,hatchUniforms,sketchShadowMat,blockShadowMat,refreshers,petControlSyncs,ground,toyWorld,rugLayer,motionMachine,bgm,weatherAudio,renderer,resetMotionWorld,drawWoodFloor,syncRugPlacement,updateKeyLight,syncLightOrb,setThunder,setWeather,setWeatherAmount}=host;
 let locked=false;
-if(!dialogueInstalled){petSpeechCopy['zh-CN'].cat.push(...petCatDialogue);
-for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy['zh-CN'][role].push(...lines);dialogueInstalled=true;}
+if(!dialogueInstalled){petSpeechCopy.cat.push(...petCatDialogue);
+for(const [role,lines] of Object.entries(petToyDialogue))petSpeechCopy[role].push(...lines);dialogueInstalled=true;}
 let petActivePlan=null,petMotion=null,petPosePlayer=null,petMotionRig=null,petMotionClock=0,petProgramEnabled=false,petAccess=null;
 const petMotionEvents=petCreateMotionEvents();
 function petEnsureMotion() {
@@ -28,6 +29,7 @@ function petEnsureMotion() {
     petMotion?.dispose();petMotionRig=host.motionRig;
     petPosePlayer=petCreateClipPlayer(host.motionRig,host.cat,{applyRoot:false});
     petMotion=petCreateMotionController(petPosePlayer);
+    petMotion.on('paw_contact',()=>petToyInteraction.contact());
     petMotion.on('*',event=>petMotionEvents.emit(event.type,event));
   }
   return petMotion;
@@ -62,13 +64,41 @@ function petSampleMotion(elapsed,options) {
   if(!petProgramEnabled)return host.motionRig.update(elapsed,options);
   const controller=petEnsureMotion(),dt=Math.max(0,Math.min(.1,elapsed-petMotionClock));
   petMotionClock=elapsed;controller.update(dt);
+  if(!controller.getState().paused)petToyInteraction.update(dt);
   const state=petPosePlayer.getState(),running=controller.getState().current;
   petActivePlan=controller.getPlan();
-  if(petActivePlan&&running)petAdvanceWander(petActivePlan,running.elapsed);
+  if(petActivePlan&&running&&!petToyInteraction.active)petAdvanceWander(petActivePlan,running.elapsed);
   else petLastElapsed=0;
   params.motionAction=state.actionId||'idle';
   return state;
 }
+function petPlayProgram(plan,options={}) {
+  petValidateMotionAccess(plan.action,plan.motionInput||plan.motion);
+  host.setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});
+  petMotionClock=0;petLastElapsed=0;petProgramEnabled=true;
+  const result=petEnsureMotion().playPlan(plan,options);petActivePlan=petMotion.getPlan();return result;
+}
+const petToyInteraction=createToyInteraction({
+  getToys:()=>toyWorld.toys,getPose:()=>petWander,dragging:()=>toyWorld.dragging,
+  getReach:()=>{
+    const point=new THREE.Vector3();let bone=host.motionRig?.skeleton.bones.find(b=>b.name==='m2m_frontLFoot');
+    if(!bone)return {forward:.48,side:.2};
+    while(bone?.isBone){point.add(bone.position);bone=bone.parent;}
+    return {forward:point.z,side:point.x};
+  },
+  blocked:(x,z,heading)=>toyWorld.catMoveBlocked(x,z,heading),
+  play:action=>{
+    const item=petAccess?.actions.find(a=>a.action===action);
+    if(!item)return 0;
+    return petPlayProgram(petPlanMotion(item.action,item.motion||{},item.motion?.script)).duration;
+  },
+  tap:toy=>{
+    const bone=host.motionRig?.skeleton.bones.find(b=>b.name==='m2m_frontLFoot');
+    if(!bone||!host.cat)return false;
+    host.cat.updateMatrixWorld(true);const point=bone.getWorldPosition(new THREE.Vector3());
+    return toyWorld.tapToy(toy,point,petWander.heading);
+  },
+});
 let petRoomBed=null,petRoomBedBody=null;
 const petOriginalRoom={keyColor:key.color.clone(),keyIntensity:key.intensity,ambientColor:ambient.color.clone(),ambientIntensity:ambient.intensity,fov:camera.fov,fog:scene.fog.clone()};
 const petPick = (fields, source) => Object.fromEntries(fields.filter(f=>source[f.key]!==undefined).map(f=>[f.key,source[f.key]]));
@@ -102,6 +132,7 @@ const petStudio = {
     };
   },
   restore(value) {
+    petToyInteraction.cancel();
     petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
     resetMotionWorld();
     if(value.rug)Object.assign(rugState,value.rug);
@@ -130,13 +161,21 @@ const petStudio = {
   },
   playProgram(plan,options={}) {
     petValidateMotionAccess(plan.action,plan.motionInput||plan.motion);
+    petToyInteraction.cancel();
     // Enabling animation may rebuild a static pose. Bind the controller AFTER it.
-    host.setAnimation({enabled:true,stateMachine:false,action:plan.segments[0].clip,speed:1,intensity:plan.motion.intensity});
-    petMotionClock=0;petLastElapsed=0;petProgramEnabled=true;
-    const result=petEnsureMotion().playPlan(plan,options);petActivePlan=petMotion.getPlan();
-    return result;
+    return petPlayProgram(plan,options);
   },
-  motionState(){return petMotion?.getState()||{active:false,status:'idle',targetsApplied:false};},
+  interactWithNearbyToy(){
+    if(!petChildMotion||!['idle-alert','walk','paw'].every(id=>petAccess?.actions.some(a=>a.action===id)))return false;
+    return petToyInteraction.start();
+  },
+  avoidObstacle(shift){
+    if(!shift.body)return;
+    petToyInteraction.cancel();
+    const length=Math.hypot(shift.x,shift.z);
+    if(length>.0001){petWander.targetX=petWander.x+shift.x/length*.7;petWander.targetZ=petWander.z+shift.z/length*.7;}
+  },
+  motionState(){const state=petMotion?.getState()||{active:false,status:'idle',targetsApplied:false};return {...state,active:state.active||petToyInteraction.active,interaction:petToyInteraction.getState()};},
   motion:{
     play(action,motion={},options={}){return petStudio.playProgram(petPlanMotion(action,motion,motion.script),options);},
     playScript(script,motion={},options={}){return typeof script==='string'?this.play(script,motion,options):this.play('sequence',{...motion,script},options);},
@@ -149,6 +188,7 @@ const petStudio = {
     getState(){return petStudio.motionState();},
   },
   stop(immediate=false){
+    petToyInteraction.cancel();
     if(!immediate&&petProgramEnabled&&petMotion?.active){petMotion.stop();return;}
     petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
     host.setAnimation({enabled:false,stateMachine:false});
@@ -156,6 +196,7 @@ const petStudio = {
   },
   clearKeys(){motionMachine.clearKeys();},
   resetRoom(){
+    petToyInteraction.cancel();
     petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
     Object.assign(petWander,{x:0,z:0,heading:0,targetX:0,targetZ:.8});petLastElapsed=0;
     if(petRoomBed){petDisposeObjects([petRoomBed]);petRoomBed=null;}

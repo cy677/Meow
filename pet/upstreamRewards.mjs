@@ -1,7 +1,7 @@
 import { COATS, POSES, EYE_COLORS } from '../src/coats.js';
 import { MOTION_REWARDS, defaultDuration } from './motionPrograms.mjs';
-import { SOURCE_CLIPS as CLIPS } from '../src/catMotion/clipCatalog.js';
-export const BASIC_ACTIONS = ['idle','idle-alert','walk','run','sneak'];
+import { SOURCE_CLIPS as CLIPS, BASIC_ACTIONS } from '../src/catMotion/clipCatalog.js';
+export { BASIC_ACTIONS } from '../src/catMotion/clipCatalog.js';
 
 
 const slug = value => value.replace(/[A-Z]/g, c => '-'+c.toLowerCase());

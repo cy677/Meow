@@ -25,7 +25,14 @@ const authoredClips = [
   {id:'climb-down', name:'向下攀爬（原地练习）', duration:2.1, loop:true, family:'climb'},
   {id:'mantle', name:'扒边翻上（原地练习）', duration:2.6, loop:false, family:'transition'},
   {id:'stretch', name:'舒展身体', duration:2.8, loop:false, family:'gesture'},
+  {id:'wave', name:'招爪问好', duration:2.8, loop:false, family:'gesture'},
+  {id:'bow', name:'礼貌鞠躬', duration:3.2, loop:false, family:'gesture'},
+  {id:'head-tilt', name:'歪头卖萌', duration:3.4, loop:false, family:'gesture'},
 ];
+// Keep the free set explicit: adding a new reward clip must not grant it for free.
+export const BASIC_ACTIONS = Object.freeze([
+  ...sourceClips.map(c=>c.id), 'scratch','paw','climb-up','climb-down','mantle','stretch','spin',
+]);
 const cues = {
   jump:[{phase:.18,event:'takeoff'},{phase:.55,event:'apex'},{phase:.88,event:'landing'}],
   fall:[{phase:.85,event:'landing'}],
@@ -37,7 +44,7 @@ const cues = {
   'climb-down':[{phase:.2,event:'climb_grab',bone:'frontRFoot'},{phase:.7,event:'climb_grab',bone:'frontLFoot'}],
   mantle:[{phase:.25,event:'climb_grab',bone:'frontLFoot'},{phase:.25,event:'climb_grab',bone:'frontRFoot'},{phase:.85,event:'mantle_complete'}],
 };
-const requiresTarget = new Set(['scratch','paw','climb-up','climb-down','mantle']);
+const requiresTarget = new Set(['scratch','climb-up','climb-down','mantle']);
 function freezeClip(clip, source) {
   return Object.freeze({...clip, source, rootMode:'in-place',
     interruptible:!['jump','fall','mantle'].includes(clip.id),

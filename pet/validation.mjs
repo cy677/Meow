@@ -1,3 +1,5 @@
+import { LEGACY_MOUTH_VALUES } from '../src/catAppearance/catalog.js';
+
 export class AppError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -16,6 +18,11 @@ export function integer(value, name, min=0, max=1000000) {
   return value;
 }
 export function validateFields(params, fields) {
+  if (params && Object.hasOwn(params, 'mouthMode') && fields.some(f => f.key === 'catAppearance')) {
+    if (!LEGACY_MOUTH_VALUES.includes(params.mouthMode)) fail(400, '历史口型参数无效');
+    const { mouthMode: ignored, ...current } = params;
+    params = current;
+  }
   object(params, fields.map(f => f.key));
   if (!Object.keys(params).length) fail(400,'奖励参数不能为空');
   for (const [key, value] of Object.entries(params)) {

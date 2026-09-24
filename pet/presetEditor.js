@@ -1,5 +1,6 @@
 import { createMotionScriptEditor, installMotionSamples } from './motionScriptEditor.js';
 import { defaultDuration } from './motionPrograms.mjs';
+import { isFreeOriginal } from './upstreamRewards.mjs';
 import { DEFAULT_SCENE, SCENE_SLOTS, SCENE_LABELS } from './environmentSchema.mjs';
 import { DEFAULT_PARAMS, validateFields, validateCatalog } from './catalog.mjs';
 import { PARAM_FIELDS, ACTION_FIELD, MOTION_FIELDS, CATEGORY_LABELS, defaultsFor, fieldVisible } from './presetSchema.mjs';
@@ -64,8 +65,13 @@ export function createPresetEditor({ api, onSaved }) {
     for (const [key, wrapper] of wrappers) wrapper.hidden = !fieldVisible(category(), key, v);
     find('#preset-play').hidden = category() !== 'trick';
     find('#preset-script').hidden=category()!=='trick'||v.action!=='sequence';
+    const free=isFreeOriginal({category:category(),action:v.action,params:v});
+    for(const key of ['cost','unlockAt']){
+      form.elements[key].disabled=!!original?.starter||free;
+      if(form.elements[key].disabled)form.elements[key].value=0;
+    }
     const cost = form.elements.cost.value, at = form.elements.unlockAt.value;
-    find('#preset-rule').textContent = original?.starter ? '初始配置免费拥有，价格和门槛固定为 0。' : Number(cost) === 0 ? `累计达到 ${at || '0'} 分后，自动解锁，不扣积分。` : `累计达到 ${at || '0'} 分后开放兑换，孩子确认时消耗 ${cost || '0'} 分。`;
+    find('#preset-rule').textContent = free ? (category()==='trick'?'基础动作默认可用，无需积分或兑换。':'此功能默认可用，无需积分或兑换。') : original?.starter ? '初始配置免费拥有，价格和门槛固定为 0。' : Number(cost) === 0 ? `累计达到 ${at || '0'} 分后，自动解锁，不扣积分。` : `累计达到 ${at || '0'} 分后开放兑换，孩子确认时消耗 ${cost || '0'} 分。`;
   }
   function schedulePreview() {
     clearTimeout(previewTimer); previewSequence++;

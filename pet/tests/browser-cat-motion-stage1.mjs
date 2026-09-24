@@ -8,6 +8,8 @@ import { createPetServer } from '../server.mjs';
 import { DEFAULT_PARAMS } from '../catalog.mjs';
 import { AUTHORED_CLIPS } from '../../src/catMotion/clipCatalog.js';
 import { MOTION_REWARDS } from '../motionPrograms.mjs';
+import { BASIC_ACTIONS } from '../upstreamRewards.mjs';
+import { revealReward } from './ui-helpers.mjs';
 const app=await createPetServer({dbPath:':memory:'});
 await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${app.server.address().port}`,out=new URL('../test-results/',import.meta.url);
@@ -19,6 +21,11 @@ page.on('pageerror',e=>errors.push(e.message));
 const mark=x=>{checks.push(x);console.log('PASS',x);};
 const shot=(name)=>page.screenshot({path:fileURLToPath(new URL(name+'.png',out))});
 try {
+ const zero=app.store.snapshot();assert.equal(zero.balance,0);
+ assert.deepEqual(new Set(zero.access.actions.map(a=>a.action)),new Set(BASIC_ACTIONS));
+ assert.ok(zero.rewards.filter(r=>r.basicAction).every(r=>r.owned&&r.cost===0&&r.unlockAt===0));
+ for(const action of ['wave','bow','head-tilt','celebrate'])assert.throws(()=>app.store.play(`motion-${action}`),e=>e.status===403);
+ mark('all 21 basic actions work at zero points; new reward actions remain locked');
  await page.goto(origin+'/parent.html');
  for(const [name,value]of Object.entries({setupToken:app.setupToken,pin:'864209',childCode:'2468',childName:'动作测试',petName:'小橘'}))await page.locator(`#setup-form [name=${name}]`).fill(value);
  await page.locator('#setup-form [name=age]').selectOption('6');await page.locator('#setup-form [name=mode]').selectOption('school_basic');
@@ -27,16 +34,21 @@ try {
  await page.waitForFunction(()=>/已添加|示例动作奖励已存在/.test(document.querySelector('#panel-catalog [role=status]')?.textContent||''));
  await page.locator('[data-action=new-preset]').click();await page.locator('#preset-form [name=category]').selectOption('trick');
  for(const clip of AUTHORED_CLIPS)assert.equal(await page.locator(`#preset-param-action option[value="${clip.id}"]`).count(),1);
+ await page.locator('#preset-param-action').selectOption('paw');
+ assert.equal(await page.locator('#preset-form [name=cost]').isDisabled(),true);
+ assert.equal(await page.locator('#preset-form [name=unlockAt]').inputValue(),'0');
+ await page.locator('#preset-param-action').selectOption('wave');
+ assert.equal(await page.locator('#preset-form [name=cost]').isDisabled(),false);
  await page.locator('#preset-param-action').selectOption('paw');await page.locator('#preset-play').click();
  await page.locator('#preset-preview[data-motion-playing=true]').waitFor();
  const preview=await page.locator('#preset-preview').evaluate(e=>e.getMotionDiagnostics());assert.equal(preview.bones,19);
- await shot('motion-stage1-parent');mark('parent action picker exposes six new clips and plays the existing 19-bone cat');
+ await shot('motion-stage1-parent');mark('parent action picker exposes new gestures, fixes basic prices at zero and plays the 19-bone cat');
  // Leave the unsaved draft page; all account assertions use the same local test store.
  const sceneFile=readdirSync(new URL('../dist/assets/',import.meta.url)).find(n=>/^scene-.*\.js$/.test(n));assert.ok(sceneFile);
  await page.route('**/cat-motion-lab',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>body{margin:0;background:#f3edde;font:18px system-ui;color:#294139}#label{position:absolute;left:24px;top:20px;z-index:5}#lab{height:768px;position:relative}canvas{width:100%;height:100%}.motion-bar,.tablet-controls,.room-tools{display:none}</style><div id="label">Meow 骨骼动作一阶段 · 原地练习</div><div id="lab"></div><script type="module">import{createPetScene}from'/assets/${sceneFile}';window.scene=createPetScene(document.querySelector('#lab'));scene.setParams(${JSON.stringify({...DEFAULT_PARAMS,pose:'standing'})});window.testParams=${JSON.stringify(DEFAULT_PARAMS)};window.ready=true;</script></html>`}));
  await page.goto(origin+'/cat-motion-lab');await page.waitForFunction(()=>window.ready);
  const initial=await page.evaluate(()=>scene.getMotionDiagnostics());assert.equal(initial.bones,19);
- for(const clip of [{id:'walk',name:'行走'},{id:'jump',name:'跳跃'},{id:'sit',name:'坐下'},...AUTHORED_CLIPS]) {
+ for(const clip of [{id:'walk',name:'行走'},{id:'jump',name:'跳跃'},{id:'sit',name:'坐下'},...AUTHORED_CLIPS,{id:'celebrate',name:'欢乐庆祝'}]) {
    const sample=await page.evaluate(c=>{
      document.querySelector('#label').textContent=`${c.name} · 骨骼动作练习（未接物体）`;
      scene.stop(true);scene.play(c.id,{duration:2.4,transition:.2,intensity:1});
@@ -55,7 +67,7 @@ try {
    reports.push({clip:clip.id,changedBones:changed,boneLengthError:sample.b.boneLengthError,source:sample.b.source,geometryId:sample.b.geometryId});
    await page.waitForTimeout(120);await shot('motion-stage1-'+clip.id);
  }
- mark('six new and three original clips deform real bones without remeshing or changing vertex buffers');
+ mark('all authored gestures and celebration deform real bones without remeshing or changing vertex buffers');
  const scheduling=await page.evaluate(()=>{
    scene.stop(true);scene.play('walk',{duration:4});const m=scene.getMotionRuntime();m.resume();
    for(let i=0;i<40;i++)m.update(.02);const before=m.getState().current.elapsed;
@@ -90,13 +102,29 @@ try {
  const home=await frame.evaluate(r=>{
    let contacts=0;const off=meowMotion.on('paw_contact',()=>contacts++);
    meowMotion.play(r.action,r.motion);window.__step(80,.02);off();
-   let denied=false;try{meowMotion.play('climb-up',{});}catch{denied=true;}
+   let denied=false;try{meowMotion.play('wave',{});}catch{denied=true;}
    return {scheduler:meowMotion.getState(),source:window.__getAnimation().state?.source,contacts,denied,
      bones:Number(document.querySelector('#viewport').dataset.motionSkinBones)};
  },reward);
  assert.equal(home.bones,19);assert.equal(home.contacts,1);assert.equal(home.denied,true);
  assert.equal(app.store.snapshot().balance,balance);mark('production home uses the shared runtime and keeps locked actions and family balances intact');
  await shot('motion-stage1-home');
+ const basicCard=await revealReward(page,'trick-jump');
+ assert.match(await basicCard.innerText(),/基础动作 · 默认可用/);
+ assert.equal(await basicCard.locator('[data-action=purchase]').count(),0);
+ await shot('motion-basic-free');
+ const waveCard=await revealReward(page,'motion-wave');
+ await waveCard.locator('[data-action=purchase]').click();await page.locator('#purchase-confirm').click();
+ await page.locator('#purchase-dialog').waitFor({state:'hidden'});
+ await waveCard.getByRole('button',{name:'加入随机脚本',exact:true}).click();
+ await waveCard.getByRole('button',{name:'从脚本中删除',exact:true}).waitFor();
+ assert.equal(app.store.snapshot().balance,balance-15);
+ assert.ok(app.store.snapshot().randomScript.some(r=>r.action==='wave'));
+ await page.screenshot({path:fileURLToPath(new URL('motion-new-rewards.png',out))});
+ await page.reload();await page.locator('#pet-scene[data-ready=true]').waitFor();
+ const ownedWave=await revealReward(page,'motion-wave','owned');
+ assert.equal(await ownedWave.getByRole('button',{name:'从脚本中删除',exact:true}).count(),1);
+ mark('child UI labels free basics, purchases wave once and persists random-script membership on reload');
  assert.deepEqual(errors,[]);
  writeFileSync(new URL('motion-stage1-report.json',out),JSON.stringify({checks,reports,scheduling,home,errors,notes:'Chromium software WebGL. Authored in-place pose clips, not physics/IK or physical-iPad validation.'},null,2));
 } catch(error) {

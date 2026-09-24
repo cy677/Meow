@@ -1,3 +1,4 @@
+import { CAT_APPEARANCES } from './catAppearance/catalog.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildCat, EYE_SPACING_RANGE } from './catBuilder.js';
@@ -12,7 +13,6 @@ import { createToyWorld } from './toys.js';
 import { createRugLayer } from './rug.js';
 import { createContainer, getContainerDescriptor } from './container.js';
 import { createRandomBgm } from '#bgm';
-import { initI18n } from './i18n.js';
 import { createShareCardCapture } from './shareCard.js';
 import { createSpeechBubbleController } from './speechBubbles.js';
 import { createCodexPetPreview } from '#codex-pet-preview';
@@ -36,7 +36,6 @@ import {
   isMotionControlCode,
 } from './catMotionStateMachine.js';
 
-const i18n = initI18n();
 const bgm = createRandomBgm(document.getElementById('bgm-toggle'));
 
 // Initial canned-cat loading animation. The overlay is present in index.html,
@@ -176,6 +175,7 @@ const RANDOM_SLIDERS = [
 ];
 
 const params = {
+  catAppearance: 'native',
   seed: randomSeed(),
   pose: 'stretch',
   containerSeed: randomSeed(),
@@ -696,6 +696,7 @@ function rebuild(quality = 'full') {
   viewportEl.dataset.lastRebuildMs = (performance.now() - rebuildStartedAt).toFixed(1);
   viewportEl.dataset.lastRebuildQuality = quality;
   viewportEl.dataset.lastRebuildMotion = String(!!params.motionDebug);
+  viewportEl.dataset.catAppearance = cat.userData.catAppearance;
   viewportEl.dataset.catPose = params.pose;
   viewportEl.dataset.catCoat = params.coatId;
   const rebuiltFurGeometry = cat.getObjectByName('fur')?.geometry;
@@ -756,7 +757,6 @@ const speechBubbles = createSpeechBubbleController({
   camera,
   getCat: () => cat,
   getToys: () => toyWorld.toys,
-  getLocale: () => i18n.locale,
   getWeather: () => {
     const viewportEl = document.getElementById('viewport');
     return {
@@ -772,9 +772,7 @@ toyWorld.onCatContact(({ kind, point, speed }) => {
   const local = cat.worldToLocal(new THREE.Vector3(point.x, point.y, point.z));
   const inward = cat.userData.headC.clone().sub(local).normalize();
   pulsePoke(local, inward, Math.min(.65, .2 + speed * .12));
-  const messages = i18n.locale === 'zh-CN'
-    ? { ball: '小球，滚起来！', yarn: '毛线团，别跑呀～', fish: '抓到小鱼啦！', duck: '小鸭，来一起玩！', object: '哎呀，前面有东西～', bed: '软乎乎，蹭一下～' }
-    : i18n.locale === 'ja-JP' ? { object: 'あれ、何かにぶつかった！' } : { object: 'Oh! Something to play with!' };
+  const messages = { ball: '小球，滚起来！', yarn: '毛线团，别跑呀～', fish: '抓到小鱼啦！', duck: '小鸭，来一起玩！', object: '哎呀，前面有东西～', bed: '软乎乎，蹭一下～' };
   speechBubbles.showNow('cat', messages[kind] || messages.object);
 });
 window.addEventListener('meow:speech', (event) => {
@@ -1295,7 +1293,11 @@ function finishCanvasPointer(e) {
   if (e.pointerType === 'touch') activeCanvasTouches.delete(e.pointerId);
   if (pendingToyPointer?.pointerId === e.pointerId) pendingToyPointer = null;
   if (grab.pointerId === e.pointerId || (e.pointerType !== 'touch' && grab.mode !== null)) {
+    const completedKind = e.type === 'pointerup' && grab.pointerId === e.pointerId ? grab.mode : null;
     releaseGrab();
+    if (completedKind) {
+      window.dispatchEvent(new CustomEvent('meow:scene-interaction', { detail: { kind: completedKind } }));
+    }
   }
 }
 
@@ -1362,6 +1364,7 @@ function stepSim(dt) {
     }
     motionElapsed += dt;
     motionState = motionRig.update(motionElapsed, {
+      delta: dt,
       actionId: activeMotionAction,
       speed: params.motionSpeed,
       intensity: params.motionIntensity,
@@ -1490,6 +1493,7 @@ renderer.setAnimationLoop(() => {
   staticIdleViewport.dataset.staticIdleRightEarAngle = (
     staticIdleSample?.rightEarAngle ?? 0
   ).toFixed(5);
+  cat?.userData.updateMouthAnimation?.(clock.elapsedTime);
   eyeGazeCurrent.lerp(eyeGazeTarget, 1 - Math.exp(-dt * 12));
   cat?.userData.updateEyeAnimation?.(
     clock.elapsedTime,
@@ -1702,6 +1706,20 @@ const motionSec = section('Motion', {
   collapsed: true,
   badge: 'Experimental',
 });
+
+const appearanceControls = controlGroup(bodySec, '外观', { open: true });
+const appearanceSelect = selectRow(appearanceControls, '小猫外观', CAT_APPEARANCES, {
+  get: () => params.catAppearance,
+  set: value => { params.catAppearance = value; rebuild('full'); refreshers.forEach(fn => fn()); },
+});
+const appearanceHint = document.createElement('p'); appearanceHint.className = 'container-status';
+appearanceHint.textContent = '叶猫仅叠加外观；身体、尾巴、姿势与骨骼动作沿用原版。口型随动作与姿势自动变化。切回原版保留原花色与眼色。';
+appearanceControls.appendChild(appearanceHint);
+refreshers.push(() => {
+  appearanceSelect.sync();
+  appearanceHint.hidden = params.catAppearance !== 'leaf';
+});
+appearanceHint.hidden = params.catAppearance !== 'leaf';
 
 const poseControls = controlGroup(bodySec, '姿势', { open: true });
 const staticPoseControls = document.createElement('div');
@@ -2720,7 +2738,6 @@ const shareCardCapture = createShareCardCapture({
     secondary: params.dynamicCoatB,
     accent: params.eyeColor,
   }),
-  getLocale: () => i18n.locale,
   downloadBlob: saveBlob,
 });
 
@@ -2737,7 +2754,7 @@ document.getElementById('btn-export-png').addEventListener('click', () => {
 
 const togetherButton = document.createElement('button');
 togetherButton.id = 'btn-photo-together'; togetherButton.type = 'button'; togetherButton.className = 'btn';
-togetherButton.textContent = '与我合影'; togetherButton.setAttribute('data-i18n-ignore', '');
+togetherButton.textContent = '与我合影';
 document.getElementById('btn-export-png').after(togetherButton);
 togetherButton.addEventListener('click', () => void shareCardCapture.openTogether());
 
@@ -2777,32 +2794,14 @@ const mobilePanelResize = {
 };
 
 const MOBILE_PANEL_COPY = {
-  'zh-CN': {
-    expanded: '收起参数',
-    collapsed: '展开参数',
-    expandedAria: '收起参数面板',
-    collapsedAria: '展开参数面板',
-  },
-  'ja-JP': {
-    expanded: '閉じる',
-    collapsed: '開く',
-    expandedAria: 'パラメータパネルを閉じる',
-    collapsedAria: 'パラメータパネルを開く',
-  },
-  en: {
-    expanded: 'Collapse',
-    collapsed: 'Controls',
-    expandedAria: 'Collapse parameter panel',
-    collapsedAria: 'Expand parameter panel',
-  },
+  expanded: '收起参数',
+  collapsed: '展开参数',
+  expandedAria: '收起参数面板',
+  collapsedAria: '展开参数面板',
 };
 
-function activeInterfaceLocale() {
-  return document.querySelector('.locale-switcher button.active')?.dataset.locale ?? 'zh-CN';
-}
-
 function updateMobilePanelToggle() {
-  const copy = MOBILE_PANEL_COPY[activeInterfaceLocale()] ?? MOBILE_PANEL_COPY['zh-CN'];
+  const copy = MOBILE_PANEL_COPY;
   const label = mobilePanelCollapsed ? copy.collapsed : copy.expanded;
   const ariaLabel = mobilePanelCollapsed ? copy.collapsedAria : copy.expandedAria;
   if (mobilePanelToggleLabel) mobilePanelToggleLabel.textContent = label;
@@ -2918,13 +2917,6 @@ mobilePanelMedia.addEventListener('change', () => {
   selectMobileSection(activeMobileSection, { scroll: false });
 });
 
-window.addEventListener('meow:localechange', () => {
-  [...mobileSectionNav.children].forEach((button, index) => {
-    button.textContent = mobileSectionTitle(mobileSections[index]);
-  });
-  updateMobilePanelToggle();
-  speechBubbles.refreshLocale();
-});
 setMobilePanelCollapsed(mobilePanelMedia.matches);
 
 // ---------------------------------------------------------------- 启动
@@ -2955,6 +2947,7 @@ window.__shot = (w = 1280, h = 800, cam = null) => {
 };
 window.__setParams = (patch, quality = 'full') => {
   Object.assign(params, patch);
+  delete params.mouthMode; // Read old presets without restoring a manual expression channel.
   if (params.motionDebug) params.pose = 'standing';
   if (
     patch.coatId &&

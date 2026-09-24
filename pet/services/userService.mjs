@@ -9,6 +9,7 @@ export function createUserService(store) {
     state(context) { requireContext(context); return store.snapshot(context.role==='parent'); },
     history(context,query) { requireContext(context); return store.history(query); },
     profile(context,data) { requireContext(context,['parent']); return store.profile(data); },
+    appearance(context,data) { requireContext(context,['child']); return store.setAppearance(data.appearance); },
     points(context,data) { requireContext(context,['parent']); return store.points(data); },
     storage(context) { requireContext(context,['parent']); return store.storageInfo(); },
     export(context) { requireContext(context,['parent']); return store.exportData(); },

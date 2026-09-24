@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {createCameraOverlay} from './camera/cameraOverlay.js';
 import {createDevicePhotoMode} from './camera/photoMode.js';
-import {CARD_LAYOUT, localeCopy, roundedRect, drawCardDecor, getShareCardDescriptor, getShareCardFilename} from './camera/cardArtwork.js';
+import {CARD_LAYOUT, CARD_COPY, roundedRect, drawCardDecor, getShareCardDescriptor, getShareCardFilename} from './camera/cardArtwork.js';
 export {getShareCardDescriptor, getShareCardFilename, SHARE_CARD_REPOSITORY} from './camera/cardArtwork.js';
 
 const bounds = new THREE.Box3(), center = new THREE.Vector3(), subjectView = new THREE.Vector3();
@@ -32,9 +32,9 @@ function captureCanvasRegion(canvas, source, ctx, target) {
   ctx.drawImage(canvas, sx, sy, sw, sh, target.x, target.y, target.width, target.height);
 }
 
-export function createShareCardCapture({viewport, renderer, scene, camera, controls, sceneCanvas, getSubject, getSeed, getPalette, getLocale, downloadBlob, poseControl}) {
+export function createShareCardCapture({viewport, renderer, scene, camera, controls, sceneCanvas, getSubject, getSeed, getPalette, downloadBlob, poseControl}) {
   const overlay = document.createElement('div'); overlay.className = 'share-card-overlay'; overlay.hidden = true;
-  overlay.setAttribute('aria-hidden', 'true'); overlay.setAttribute('data-i18n-ignore', '');
+  overlay.setAttribute('aria-hidden', 'true');
   overlay.innerHTML = `<div class="share-card-shell" role="dialog" aria-modal="false">
     <div class="share-card-live-frame">
       <span class="share-card-paper share-card-paper--top"></span><span class="share-card-paper share-card-paper--right"></span>
@@ -66,7 +66,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
     skinButton.disabled = !active || capturing;
     skinButton.hidden = Boolean(device?.enabled);
     poseButton.disabled = !active || capturing || (poseControl?.options()?.length ?? 0) < 2;
-    hintEl.textContent = device?.enabled ? '单指移动小猫，双指调整大小；仅真人画面镜像' : localeCopy(getLocale()).hint;
+    hintEl.textContent = device?.enabled ? '单指移动小猫，双指调整大小；仅真人画面镜像' : CARD_COPY.hint;
   }
   device = createDevicePhotoMode({overlay, viewport, scene, camera, controls, sceneCanvas, frame: windowEl, getSubject, statusEl,
     isOpen: () => active && !disposed, beforeStart: () => cancelAnimationFrame(cameraPanFrame), onChange: syncControls});
@@ -89,9 +89,9 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
     cameraPanFrame = requestAnimationFrame(tick);
   }
   function syncCopy() {
-    const copy = localeCopy(getLocale());
+    const copy = CARD_COPY;
     skinButton.textContent = `🎨 ${copy.skin}`; captureButton.textContent = `📸 ${copy.camera}`; closeButton.textContent = `× ${copy.close}`;
-    poseButton.textContent = getLocale()==='zh-CN'?'切换姿势':getLocale()==='ja-JP'?'ポーズを変更':'Change pose';
+    poseButton.textContent = '切换姿势';
     subtitleEl.textContent = copy.title; serialEl.textContent = copy.cardNumber(descriptor.serial); shell.setAttribute('aria-label', copy.title); syncControls();
   }
   function applyDescriptor() {
@@ -99,7 +99,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
     const {theme, rarity} = descriptor;
     frame.dataset.theme = theme.name; frame.dataset.pattern = theme.pattern; frame.dataset.rarity = rarity;
     for (const name of ['paper', 'primary', 'secondary', 'accent', 'ink']) frame.style.setProperty(`--share-${name}`, theme[name]);
-    serialEl.textContent = localeCopy(getLocale()).cardNumber(descriptor.serial); rarityEl.textContent = `${rarity} ✦`;
+    serialEl.textContent = CARD_COPY.cardNumber(descriptor.serial); rarityEl.textContent = `${rarity} ✦`;
     viewport.dataset.shareCardSkin = theme.name; viewport.dataset.shareCardRarity = rarity;
   }
   function randomizeSkin() {
@@ -148,7 +148,7 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
         ctx.save(); roundedRect(ctx, target.x, target.y, target.width, target.height, 40); ctx.clip();
         captureCanvasRegion(sceneCanvas, source, ctx, target); ctx.restore();
         drawCardDecor(ctx, {cardX, cardY, cardWidth, cardHeight, windowX: target.x, windowY: target.y,
-          windowWidth: target.width, windowHeight: target.height, descriptor, copy: localeCopy(getLocale())});
+          windowWidth: target.width, windowHeight: target.height, descriptor, copy: CARD_COPY});
       }
       const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('PNG 编码失败');
@@ -156,11 +156,11 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
       const value = {blob, devicePhoto: together, filename: together ? `meow_together_${Date.now()}.png` : getShareCardFilename(getSeed())};
       if (download) await downloadBlob(blob, value.filename);
       if (request !== generation || disposed) return null;
-      statusEl.textContent = download ? '照片已生成，已开始保存。' : localeCopy(getLocale()).saved;
+      statusEl.textContent = download ? '照片已生成，已开始保存。' : CARD_COPY.saved;
       viewport.dataset.shareCardCaptured = 'true'; return value;
     } catch (error) {
       if (request === generation && !disposed) {
-        console.warn('Share card capture failed', error); statusEl.textContent = error.message || localeCopy(getLocale()).saveFailed;
+        console.warn('Share card capture failed', error); statusEl.textContent = error.message || CARD_COPY.saveFailed;
         viewport.dataset.shareCardCaptured = 'false';
       }
       return null;
@@ -180,9 +180,9 @@ export function createShareCardCapture({viewport, renderer, scene, camera, contr
   });
   skinButton.addEventListener('click', randomizeSkin); captureButton.addEventListener('click', () => void capture()); closeButton.addEventListener('click', close);
   const onKey = event => { if (event.key === 'Escape' && active) close(); };
-  window.addEventListener('keydown', onKey); window.addEventListener('meow:localechange', syncCopy);
+  window.addEventListener('keydown', onKey);
   return {open, setPoseControl(value) { poseControl=value;syncControls(); }, openTogether() { open(); return device.start(); }, close, capture, get active() { return active; }, dispose() {
     if (disposed) return; close(); disposed = true; device.dispose();
-    window.removeEventListener('keydown', onKey); window.removeEventListener('meow:localechange', syncCopy); overlayController.dispose();
+    window.removeEventListener('keydown', onKey); overlayController.dispose();
   }};
 }

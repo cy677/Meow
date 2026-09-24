@@ -1,0 +1,84 @@
+name: Native cat motion refinement
+on:
+  push:
+    branches: [feature/cat-motion-refinement-20260924]
+  pull_request:
+    paths:
+      - 'src/catMotion/**'
+      - 'src/catAppearance/**'
+      - 'src/catBuilder.js'
+      - 'src/mesh2motionSkinRig.js'
+      - 'src/main.js'
+      - 'pet/**'
+      - 'docs/motion-refinement.md'
+      - '.github/workflows/cat-motion-refinement.yml'
+permissions:
+  contents: read
+concurrency:
+  group: motion-refinement-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - name: Original source clips and construction primitives remain unchanged
+        run: |
+          git diff --exit-code 9fd0729bddee1825de0a184f850cdb956ea52747 -- src/sdf.js src/coats.js src/mesh2motionSource.js src/mesh2motionClips.json src/staticIdle.js src/softPoke.js
+          test ! -d src/models/leafCat
+          test ! -f .ci/motion-refine0.bin
+      - run: npm ci
+      - name: Numerical tests and production builds
+        run: |
+          mkdir -p pet/test-results/motion-refinement
+          npm run test:pet 2>&1 | tee pet/test-results/motion-refinement/unit-tests.txt
+          npm run test:motion 2>&1 | tee pet/test-results/motion-refinement/source-rig-tests.txt
+          npm run test:poke 2>&1 | tee pet/test-results/motion-refinement/poke-tests.txt
+          npm run build 2>&1 | tee pet/test-results/motion-refinement/build-editor.txt
+          npm run pet:build 2>&1 | tee pet/test-results/motion-refinement/build-pet.txt
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/meow-browser" --no-package-lock playwright@1.55.0
+          ln -s "$RUNNER_TEMP/meow-browser/node_modules/playwright" node_modules/playwright
+          ln -s "$RUNNER_TEMP/meow-browser/node_modules/playwright-core" node_modules/playwright-core
+          "$RUNNER_TEMP/meow-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Native anatomy and automatic mouth in real editor
+        run: node pet/tests/browser-leaf-native.mjs 2>&1 | tee pet/test-results/motion-refinement/browser-leaf.txt
+      - name: Production script, preview and account regressions
+        run: node pet/tests/browser-cat-motion-stage1.mjs 2>&1 | tee pet/test-results/motion-refinement/browser-stage1.txt
+      - name: Package reproducible source and incremental patches
+        if: success()
+        run: |
+          mkdir -p /tmp/meow-motion-delivery
+          git archive --format=tar.gz --output=/tmp/meow-motion-delivery/source-code.tar.gz HEAD
+          git diff --binary 9fd0729bddee1825de0a184f850cdb956ea52747 HEAD > /tmp/meow-motion-delivery/from-main.patch
+          git diff --binary a46ce84d39879b89169d16ebe71f0e14d550b98e HEAD > /tmp/meow-motion-delivery/from-native-v2.patch
+          git rev-parse HEAD > /tmp/meow-motion-delivery/COMMIT.txt
+          git status --short > /tmp/meow-motion-delivery/WORKTREE.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motion-refinement-verification
+          path: |
+            pet/test-results/motion-refinement
+            pet/test-results/leaf-native/*.json
+            pet/test-results/*report*.json
+            pet/test-results/*stage1*.json
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: meow-motion-source
+          path: /tmp/meow-motion-delivery
+          retention-days: 14

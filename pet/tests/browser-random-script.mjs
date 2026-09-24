@@ -12,7 +12,7 @@ try {
   const setup=await fetch(origin+'/api/parent/setup',{method:'POST',headers:{'Content-Type':'application/json','X-Meow-Client':'points-pet'},body:JSON.stringify({setupToken:app.setupToken,age:6,mode:'school_basic',timeZone:'UTC',pin:'864209',childCode:'2468',childName:'测试',petName:'小橘'})});
   assert.equal(setup.status,200);
   app.store.points({delta:500,reason:'测试',idempotencyKey:randomUUID()});
-  for(const id of ['pose-banana','trick-jump']){
+  for(const id of ['pose-banana','motion-wave']){
     const r=app.store.catalog().rewards.find(r=>r.id===id);
     app.store.purchase({rewardId:id,expectedCost:r.cost,idempotencyKey:randomUUID()});
   }
@@ -23,7 +23,7 @@ try {
   page.setDefaultTimeout(45000);page.on('pageerror',e=>errors.push(e.message));
   await page.goto(origin);await page.locator('#code').fill('2468');await page.locator('#login-form button').click();
   await page.locator('#workspace').waitFor({state:'visible'});
-  for(const id of ['pose-banana','trick-jump']){
+  for(const id of ['pose-banana','motion-wave']){
     const card=await revealReward(page,id,'owned');
     await card.getByRole('button',{name:'加入随机脚本',exact:true}).click();
     await card.getByRole('button',{name:'从脚本中删除',exact:true}).waitFor();

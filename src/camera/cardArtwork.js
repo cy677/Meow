@@ -10,12 +10,7 @@ const CARD_THEMES = Object.freeze([
   {name: 'lime', pattern: 'confetti', paper: '#f8f4d9', primary: '#a6d84d', secondary: '#65c7dc', accent: '#ff9d4f', ink: '#33412d'},
   {name: 'orange', pattern: 'waves', paper: '#fff3d5', primary: '#f3a34b', secondary: '#ef718e', accent: '#70b7c8', ink: '#51352b'},
 ]);
-const COPY = Object.freeze({
-  'zh-CN': {camera: '拍照', close: '取消', saved: '已生成照片', saveFailed: '照片生成失败，请重试', hint: '拖动画面调整角度', title: '猫猫纪念卡', skin: '换一个皮肤', cardNumber: serial => `第 ${serial} 张 / ${CARD_TOTAL}`},
-  'ja-JP': {camera: '撮影', close: '閉じる', saved: '写真を作成しました', saveFailed: '写真を作成できませんでした。再試行してください', hint: 'ドラッグして角度を調整', title: 'ねこ記念カード', skin: 'スキンを変更', cardNumber: serial => `${serial} / ${CARD_TOTAL} 枚目`},
-  en: {camera: 'Capture', close: 'Close', saved: 'Photo created', saveFailed: 'Could not create photo. Please retry.', hint: 'Drag the scene to adjust the angle', title: 'Meow keepsake card', skin: 'New skin', cardNumber: serial => `CARD ${serial} / ${CARD_TOTAL}`},
-});
-export const localeCopy = locale => COPY[locale] ?? COPY['zh-CN'];
+export const CARD_COPY = Object.freeze({camera: '拍照', close: '取消', saved: '已生成照片', saveFailed: '照片生成失败，请重试', hint: '拖动画面调整角度', title: '猫猫纪念卡', skin: '换一个皮肤', cardNumber: serial => `第 ${serial} 张 / ${CARD_TOTAL}`});
 const positiveSeed = seed => Number.isFinite(Number(seed)) ? Math.abs(Math.trunc(Number(seed))) : 0;
 export const getShareCardFilename = seed => `meow_card_${positiveSeed(seed)}.png`;
 const clampChannel = value => Math.max(0, Math.min(255, Math.round(value)));

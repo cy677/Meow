@@ -17,15 +17,15 @@ function mock() {
 }
 function advance(m,seconds) {for(let i=0;i<Math.ceil(seconds/.02);i++)m.update(.02);}
 
-test('one immutable catalog has 14 unchanged sources and 6 separately attributed authored clips',()=>{
- assert.equal(CLIPS.length,20);assert.equal(SOURCE_CLIPS.length,14);assert.equal(AUTHORED_CLIPS.length,6);
- assert.equal(new Set(CLIPS.map(c=>c.id)).size,20);
+test('one immutable catalog has 14 unchanged sources and 9 separately attributed authored clips',()=>{
+ assert.equal(CLIPS.length,23);assert.equal(SOURCE_CLIPS.length,14);assert.equal(AUTHORED_CLIPS.length,9);
+ assert.equal(new Set(CLIPS.map(c=>c.id)).size,23);
  assert.deepEqual(SOURCE_CLIPS.map(c=>c.id).sort(),data.clips.map(c=>c.id).sort());
  assert.deepEqual(BONE_NAMES,data.boneOrder);
  for(const c of CLIPS){assert.ok(c.duration>0);assert.ok(Object.isFrozen(c));assert.ok(Object.isFrozen(c.markers));}
  assert.equal(CLIP_BY_ID.set,undefined);
 });
-test('all six authored clips move multiple joints; one-shots and loops have continuous seams',()=>{
+test('all authored clips move multiple joints; one-shots and loops have continuous seams',()=>{
  const signatures=new Set();
  for(const c of AUTHORED_CLIPS) {
   const first=authoredGlobalQuaternions(sampleAuthoredPose(c.id,.18)),second=authoredGlobalQuaternions(sampleAuthoredPose(c.id,.53));
@@ -38,7 +38,7 @@ test('all six authored clips move multiple joints; one-shots and loops have cont
   for(const [name,q] of start)assert.ok(q.angleTo(end.get(name))<1e-7,`${c.id} seam ${name}`);
   for(const q of authoredGlobalQuaternions(sampleAuthoredPose(c.id,.5,0)).values())assert.ok(q.angleTo(new THREE.Quaternion())<1e-7);
  }
- assert.equal(signatures.size,6);
+ assert.equal(signatures.size,AUTHORED_CLIPS.length);
 });
 test('script plans copy and freeze caller settings and are independent of the account layer',()=>{
  const settings={script:[{clip:'paw',cycles:1}],intensity:1};

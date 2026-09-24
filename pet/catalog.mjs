@@ -9,7 +9,7 @@ import {validateModelReward} from './modelCatalog.mjs';
 export const CAT_SLOTS = ['coat', 'shape', 'eyes', 'pose'];
 export const SLOTS = [...CAT_SLOTS,...SCENE_SLOTS];
 export const ACTIONS = ACTION_IDS;
-export const DEFAULT_PARAMS = Object.freeze({ seed:20260916, pose:'standing', coatId:'orange', eyeColor:'#d99a2b', oddEyes:false, eyeColorRight:'#5b8fd4', headSize:1.08, chubbiness:1.15, legLength:0.85, earSize:1, eyeSize:1.05, eyeSpacing:1, irisScale:0.65, irisHighlightScale:1, wateryEyes:false, wateryEyeShape:1.1, tailLength:0.95, tailCurl:0.35, fluffy:false, furFluff:0.9, outlineJitter:0.25, dynamicCoat:false, motionDebug:false });
+export const DEFAULT_PARAMS = Object.freeze({ catAppearance:'native', seed:20260916, pose:'standing', coatId:'orange', eyeColor:'#d99a2b', oddEyes:false, eyeColorRight:'#5b8fd4', headSize:1.08, chubbiness:1.15, legLength:0.85, earSize:1, eyeSize:1.05, eyeSpacing:1, irisScale:0.65, irisHighlightScale:1, wateryEyes:false, wateryEyeShape:1.1, tailLength:0.95, tailCurl:0.35, fluffy:false, furFluff:0.9, outlineJitter:0.25, dynamicCoat:false, motionDebug:false });
 export function validateCatalog(input) {
   object(input,['schemaVersion','rewards']);
   if (input.schemaVersion !== 1 || !Array.isArray(input.rewards) || input.rewards.length > 512) fail(400,'奖励配置版本或数量不正确');
@@ -70,8 +70,8 @@ export function validateCatalog(input) {
   }
   return structuredClone(input);
 }
-export function composeParams(catalog, equipped) {
-  const params = {...DEFAULT_PARAMS};
+export function composeParams(catalog, equipped, defaults = {}) {
+  const params = {...DEFAULT_PARAMS, ...defaults};
   for (const slot of CAT_SLOTS) {
     const reward = catalog.rewards.find(r => r.id === equipped[slot] && r.category === slot);
     if (reward) Object.assign(params,reward.params);

@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { BONE_NAMES, BONE_PARENT } from './skeleton.js';
+import { smooth01 as smooth } from './expression.js';
 
 /** Meow-authored local joint curves, not renamed Mesh2Motion clips.
  * Coordinates: +Y up, +Z forward. Angles are local XYZ radians.
  * These are in-place pose exercises; no climbing height or contact is inferred.
  * SkinRig still enforces its existing proportion-aware joint limits.
  */
-const smooth = x => {const t=Math.max(0,Math.min(1,x));return t*t*(3-2*t);};
 const zero = () => ({angles:{},root:{rootX:0,rootZ:0,rootLift:0,rootPitch:0,rootYaw:0,rootRoll:0}});
 const set = (pose,bone,x=0,y=0,z=0) => {pose.angles[bone]=[x,y,z];};
 function keyframes(frames,phase) {
@@ -45,11 +45,38 @@ const STRETCH=[
   [.7,{hips:[.12],spineLow:[.14],spineHigh:[.2],head:[-.18],frontLUpper:[-.45],frontRUpper:[-.45],frontLLower:[.2],frontRLower:[.2],tailBase:[-.1]}],
   [1,{}],
 ];
+const BOW=[
+  [0,{}],
+  [.24,{head:[.1],spineHigh:[.06],tailBase:[-.12]}],
+  [.48,{hips:[-.04],spineLow:[.12],spineHigh:[.19],head:[.26],frontLUpper:[-.32],frontRUpper:[-.32],frontLLower:[.36],frontRLower:[.36],frontLFoot:[-.08],frontRFoot:[-.08],tailBase:[-.18],tailMid:[-.1]}],
+  [.65,{hips:[-.04],spineLow:[.12],spineHigh:[.19],head:[.28],frontLUpper:[-.32],frontRUpper:[-.32],frontLLower:[.36],frontRLower:[.36],tailBase:[-.18],tailMid:[-.1]}],
+  [.86,{head:[-.1],spineHigh:[-.025],tailBase:[0,.08]}],
+  [1,{}],
+];
+const HEAD_TILT=[
+  [0,{}],
+  [.22,{head:[-.08,.12,.26],spineHigh:[0,.03,.025],tailBase:[-.08,.16],tailMid:[0,.1]}],
+  [.4,{head:[-.1,.1,.28],spineHigh:[0,.03,.025],tailBase:[-.08,-.1],tailMid:[0,-.08]}],
+  [.65,{head:[-.06,-.14,-.26],spineHigh:[0,-.03,-.025],tailBase:[-.08,.16],tailMid:[0,.1]}],
+  [.8,{head:[-.08,-.1,-.24],spineHigh:[0,-.03,-.025],tailBase:[-.08,-.08],tailMid:[0,-.06]}],
+  [1,{}],
+];
 export function sampleAuthoredPose(id,phase,intensity=1) {
   if(!Number.isFinite(phase)||!Number.isFinite(intensity))throw new TypeError('动作采样参数必须为有限数');
   const p=Math.max(0,Math.min(1,phase)),amount=Math.max(0,Math.min(1.6,intensity));
   const pose=zero(),wave=Math.sin(p*Math.PI*2);
   if(id==='paw')pose.angles=keyframes(PAW,p);
+  else if(id==='wave') {
+    const hold=smooth(p/.24)*(1-smooth((p-.76)/.24));
+    const swing=Math.sin(smooth((p-.22)/.56)*Math.PI*4)*hold;
+    set(pose,'frontLUpper',-.8*hold,0,(.17+.07*swing)*hold);
+    set(pose,'frontLLower',-.58*hold,0,.14*swing);
+    set(pose,'frontLFoot',.28*hold,0,.22*swing);
+    set(pose,'spineLow',0,0,-.03*hold);set(pose,'spineHigh',0,-.035*hold,-.025*hold);
+    set(pose,'head',-.1*hold,.12*hold,.05*swing);
+    set(pose,'tailBase',-.08*hold,.16*swing);set(pose,'tailMid',0,.1*swing);
+  } else if(id==='bow')pose.angles=keyframes(BOW,p);
+  else if(id==='head-tilt')pose.angles=keyframes(HEAD_TILT,p);
   else if(id==='mantle') {
     pose.angles=keyframes(MANTLE,p);
     pose.root.rootPitch=-.18*Math.sin(p*Math.PI);

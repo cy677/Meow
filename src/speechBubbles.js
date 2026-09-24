@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 
 const COPY = {
-  'zh-CN': {
     cat: [
       '这块地毯归我了。',
       '别催，我在长猫。',
@@ -54,115 +53,6 @@ const COPY = {
         rain: ['终于有点池塘气氛了。', '雨来了，鸭也精神了。'],
       },
     },
-  },
-  'ja-JP': {
-    cat: [
-      'このラグ、いただき。',
-      '急かさないで、猫育ち中。',
-      'なでるなら魚一匹。',
-      '太ったんじゃない、毛です。',
-      '今見てたの、だれ？',
-      '猫生は短い。まず寝よう。',
-      'しっぽには考えがある。',
-      'この寝床、まあ合格。',
-      'カメラ、左顔からね。',
-      'ランダムでも可愛くして。',
-      '今日も可愛さが忙しい。',
-      'もう一回だけ、なでて。',
-    ],
-    fish: [
-      '見ないで、玩具のふり中。',
-      '今だけ泳げないんです。',
-      '海はどこへ行った？',
-      'あの猫、お腹すいてそう。',
-      '静かに。画面を見張ってる。',
-      'しっぽは板、コーンじゃない。',
-      '今日も一口を逃れた。',
-      '猫との距離は命の距離。',
-      '目は強気、体は弱気。',
-      '水へ戻してください。',
-    ],
-    duck: [
-      'ガー？池じゃないの？',
-      '丸いけど衝突します。',
-      '蹴らないで、転がるよ。',
-      '今日は平静のふり担当。',
-      'あの魚、ちょっと怪しい。',
-      '猫が大きいので道を譲る。',
-      'ガーで空気が整います。',
-      '黄色でも怖がりじゃない。',
-      'さっきの雷、私じゃない。',
-      '寝床が満員。床で寝る。',
-    ],
-    weather: {
-      cat: {
-        thunder: ['だれが逆毛スイッチ押した？', '雷はいいけど寝床は揺らすな。'],
-        rain: ['魚が降る？目が覚めた。', 'この雨、ちょっと新鮮。'],
-      },
-      fish: {
-        thunder: ['落とさないで、布製です！'],
-        rain: ['空から仲間が降ってきた！', 'これが魚の出世コース？'],
-      },
-      duck: {
-        thunder: ['ガー！何もしてない！'],
-        rain: ['やっと池っぽくなってきた。', '雨だ。アヒルも元気。'],
-      },
-    },
-  },
-  en: {
-    cat: [
-      'This rug is mine now.',
-      'Do not rush me. I am catting.',
-      'One pet costs one fish.',
-      'Not chubby. Just extra fluffy.',
-      'Who was staring at me?',
-      'Life is short. Nap first.',
-      'My tail has its own plans.',
-      'This nest barely passes.',
-      'Camera, get my left side.',
-      'Random is fine. Ugly is not.',
-      'Too busy being cute today.',
-      'One more pet. Just one.',
-    ],
-    fish: [
-      'Do not look. I am a toy.',
-      'I am temporarily unable to swim.',
-      'Who moved the ocean?',
-      'That cat looks hungry.',
-      'Quiet. I am watching the screen.',
-      'Flat tail. Not a cone.',
-      'Survived another snack time.',
-      'Distance from cat equals survival.',
-      'Bold eyes, uncertain body.',
-      'Please return me to water.',
-    ],
-    duck: [
-      'Quack? This is not a pond?',
-      'Round, but collision-enabled.',
-      'Do not kick me. I roll.',
-      'Pretending to be calm today.',
-      'That fish looks suspicious.',
-      'Big cat. I will make room.',
-      'One quack fixes the mood.',
-      'Yellow does not mean timid.',
-      'That thunder was not me.',
-      'Nest full. Floor it is.',
-    ],
-    weather: {
-      cat: {
-        thunder: ['Who pressed the fluff switch?', 'Thunder is fine. Leave my nest.'],
-        rain: ['Raining fish? I am awake.', 'This rain smells suspiciously fresh.'],
-      },
-      fish: {
-        thunder: ['Do not zap me. I am fabric!'],
-        rain: ['It is raining coworkers!', 'Is this upward mobility for fish?'],
-      },
-      duck: {
-        thunder: ['Quack! I did nothing!'],
-        rain: ['Finally, some pond atmosphere.', 'Rain! Duck energy restored.'],
-      },
-    },
-  },
 };
 
 const ROLE_WEIGHTS = [
@@ -195,10 +85,6 @@ function weightedRole(availableRoles) {
   return choices.at(-1)?.[0] ?? 'cat';
 }
 
-function localizedCopy(locale) {
-  return COPY[locale] ?? COPY['zh-CN'];
-}
-
 function actorAnchor(actor, role) {
   if (role === 'cat') {
     actor.updateWorldMatrix(true, false);
@@ -219,7 +105,6 @@ export function createSpeechBubbleController({
   camera,
   getCat,
   getToys,
-  getLocale,
   getWeather,
 }) {
   let elapsed = 0;
@@ -248,14 +133,13 @@ export function createSpeechBubbleController({
   }
 
   function messageFor(role) {
-    const localeCopy = localizedCopy(getLocale());
     const weather = getWeather();
     const contexts = [];
     if (weather.thunder) contexts.push('thunder');
     if (weather.mode === 'fishRain') contexts.push('rain');
-    const contextual = contexts.flatMap((key) => localeCopy.weather[role]?.[key] ?? []);
+    const contextual = contexts.flatMap((key) => COPY.weather[role]?.[key] ?? []);
     const useContext = contextual.length > 0 && Math.random() < 0.58;
-    return pickRandom(useContext ? contextual : localeCopy[role], lastText);
+    return pickRandom(useContext ? contextual : COPY[role], lastText);
   }
 
   function positionActive() {
@@ -329,22 +213,11 @@ export function createSpeechBubbleController({
     }
   }
 
-  function refreshLocale() {
-    if (!active) return;
-    const text = messageFor(active.role);
-    lastText = text;
-    element.textContent = text;
-    bubbleWidth = Math.max(120, element.offsetWidth);
-    positionActive();
-    setDiagnostics(true, active.role, text);
-  }
-
   setDiagnostics(false);
   return {
     update,
     showNow,
     hide,
-    refreshLocale,
     get activeRole() { return active?.role ?? ''; },
     get activeText() { return active ? element.textContent : ''; },
   };

@@ -19,11 +19,20 @@ try{
   for(const [name,value]of Object.entries({setupToken:app.setupToken,pin:'864209',childCode:'2468',childName:'小朋友',petName:'小橘'}))await parent.locator(`#setup-form [name="${name}"]`).fill(value);
   await parent.locator('#setup-form button[type=submit]').click();
   await parent.locator('#workspace').waitFor({state:'visible'});
+  await parent.locator('[data-parent-tab=settings]').click();
+  assert.equal(await parent.locator('#initial-appearance').count(),0);
+  await parent.locator('[data-parent-tab=award]').click();
   await parent.locator('#reason').fill('独立完成今天的阅读');await parent.locator('#delta').fill('80');await parent.locator('#award-submit').click();
   await parent.waitForFunction(()=>document.querySelector('#balance').textContent==='80');
   await child.goto(origin+'/');await child.locator('#code').fill('2468');await child.locator('#login-form button').click();
   await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.locator('[data-view=history]').click();
+  await child.locator('#appearance-milestone [data-unlocked=true]').waitFor();
+  await child.locator('#appearance-milestone [data-appearance=leaf]').click();
+  await child.frame({url:/studio\.html\?embedded=1/}).locator('#viewport[data-cat-appearance=leaf]').waitFor();
   assert.ok(await child.locator('#pet-scene canvas').evaluate(c=>c.width>100&&c.height>100));
+  await child.reload();await child.locator('#pet-scene[data-ready=true]').waitFor();
+  await child.frame({url:/studio\.html\?embedded=1/}).locator('#viewport[data-cat-appearance=leaf]').waitFor();
   async function purchase(id){await revealReward(child,id);await child.locator(`.reward-card[data-reward-id="${id}"] button`).click();await child.locator('#purchase-confirm').click();await child.locator('#purchase-dialog').waitFor({state:'hidden'});}
   await purchase('coat-grey');await child.locator('.reward-card[data-reward-id="coat-grey"] button').click();
   await child.locator('#pet-scene[data-coat=greyTabby]').waitFor();

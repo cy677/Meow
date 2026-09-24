@@ -39,9 +39,9 @@ function render({state,view,category,online,page,overlayOpen}){
       image.addEventListener('error',()=>image.remove(),{once:true});art.prepend(image);
       art.querySelector('small').textContent=reward.modelGroup;
     }
-    art.append(el('span','reward-tag',scriptReward&&reward.owned?(reward.inRandomScript?'已加入脚本':'已兑换'):reward.equipped?'使用中':reward.owned?'已收藏':reward.eligible?'可以兑换':'成长解锁'));
+    art.append(el('span','reward-tag',reward.basicAction?'基础动作 · 默认可用':scriptReward&&reward.owned?(reward.inRandomScript?'已加入脚本':'已兑换'):reward.equipped?'使用中':reward.owned?'已收藏':reward.eligible?'可以兑换':'成长解锁'));
     const content=el('div','reward-content');content.append(el('h3','',reward.title),el('p','',reward.description));
-    const foot=el('div','reward-foot');foot.append(el('strong','',reward.owned?'永久拥有':reward.cost===0?'成长礼物':`${reward.cost} 积分`));
+    const foot=el('div','reward-foot');foot.append(el('strong','',reward.basicAction?'无需解锁':reward.owned?'永久拥有':reward.cost===0?'成长礼物':`${reward.cost} 积分`));
     let b;
     if(reward.owned){
       const canRemove=(SCENE_SLOTS.includes(reward.category)||reward.category==='model')&&reward.equipped&&!reward.starter;

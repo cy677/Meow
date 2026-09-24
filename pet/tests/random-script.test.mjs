@@ -15,7 +15,7 @@ test('script membership persists independently of purchase, balance, outfit and 
   for(const id of ['pose-banana','trick-jump']){
     const reward=store.catalog().rewards.find(r=>r.id===id);
     store.purchase({rewardId:id,expectedCost:reward.cost,idempotencyKey:randomUUID()});
-    assert.equal(store.snapshot().rewards.find(r=>r.id===id).inRandomScript,false);
+    assert.equal(store.snapshot().rewards.find(r=>r.id===id).inRandomScript,id==='trick-jump');
     const before=store.snapshot();
     store.setRandomScript(id,true);store.setRandomScript(id,true);
     assert.ok(store.snapshot().randomScript.some(r=>r.id===id));

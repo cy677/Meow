@@ -22,6 +22,7 @@ export function createPetRuntime(native,{modelId='meow-procedural',registry=crea
     clearKeys:invoke('clearKeys'),resetView:invoke('resetView'),pauseAudio:invoke('pauseAudio'),
     animationState:invoke('animationState'),lock:invoke('lock'),
     motion:native.motion,motionState:invoke('motionState'),
+    interactWithNearbyToy:invoke('interactWithNearbyToy'),
     applyModels:invoke('applyModels'),disposeModels:invoke('disposeModels'),modelDiagnostics:invoke('modelDiagnostics'),
     dispose(){if(disposed)return;disposed=true;try{camera.dispose();}finally{model.dispose();}},
   };

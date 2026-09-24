@@ -38,13 +38,13 @@ const source=name=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const stripImports=text=>text.replace(/^import .*;\r?\n/gm,'');
 
 function homeHarness(){
-  const env=dom(),frames=new Map(),calls=[];let serial=0,locked=false;
+  const env=dom(),frames=new Map(),calls=[],programs=[];let serial=0,locked=false,now=0;
   const initial={params:{},camera:{}};
   const runtime={};
   for(const name of ['capture','clearKeys','stop','resetView','resetRoom','restore','applyModels','applyRoom','setAccess','playProgram','disposeModels','motionState','modelDiagnostics','update']){
-    runtime[name]=()=>{if(locked)throw new Error('released runtime: '+name);calls.push(name);return name==='capture'?initial:name==='motionState'?{active:false}:{};};
+    runtime[name]=(...args)=>{if(locked)throw new Error('released runtime: '+name);calls.push(name);if(name==='playProgram')programs.push(args[0]);return name==='capture'?initial:name==='motionState'?{active:false}:{};};
   }
-  const context={...env,performance:{now:()=>0},Math,structuredClone,
+  const context={...env,performance:{now:()=>now},Math,structuredClone,
     requestAnimationFrame:fn=>{frames.set(++serial,fn);return serial;},cancelAnimationFrame:id=>frames.delete(id),
     PARAM_FIELDS:{coat:[],shape:[],eyes:[],pose:[]},RUG_CHOICES:[],planMotion,canAutoPlay,
     rugSeedForStyle:()=>0,containerSeed:()=>0};
@@ -52,7 +52,8 @@ function homeHarness(){
   const mount=runInNewContext(code+'\nmountHomeRuntime;',context);
   const state={params:{},equipped:{},sceneParams:{bed:{kind:'none',placement:'beside'}},rewards:[],access:{actions:[]}};
   const home=mount(runtime,{state},initial);
-  return {...env,home,frames,calls,state,lock:()=>{locked=true;}};
+  const frame=[...frames.values()][0];
+  return {...env,home,runtime,frames,calls,programs,state,step:time=>{now=time;frame(time);},lock:()=>{locked=true;}};
 }
 
 test('home accepts parent-realm state and motion for random and manual playback',()=>{
@@ -86,6 +87,64 @@ test('random script uses selected items, can hold a pose, and stays idle for an 
   const before=h.calls.filter(x=>x==='restore').length;frame(20000);
   assert.equal(h.calls.filter(x=>x==='restore').length,before+1);
   frame(21000);assert.equal(h.calls.filter(x=>x==='restore').length,before+1);
+  h.home.dispose();
+});
+
+test('a completed cat interaction promptly picks a selected action over a pose',()=>{
+  const h=homeHarness(),greet={id:'greet',action:'greet',motion:{}};
+  h.home.applyState({...h.state,randomScript:[{id:'pose',category:'pose',params:{pose:'sit'}},greet],access:{actions:[greet]}});
+  h.step(100);
+  h.window.dispatchEvent({type:'pointerdown',target:h.elements.get('scene'),pointerId:1});
+  h.window.dispatchEvent({type:'meow:scene-interaction',detail:{kind:'poke'}});
+  h.window.dispatchEvent({type:'pointerup',pointerId:1});
+  h.step(349);assert.equal(h.programs.length,0);
+  h.step(350);assert.equal(h.programs.length,1);assert.equal(h.programs[0].action,'greet');
+  h.home.dispose();
+});
+
+test('idle action scripts repeat within the shorter rest interval',()=>{
+  const h=homeHarness(),greet={id:'greet',action:'greet',motion:{}};
+  h.home.applyState({...h.state,randomScript:[greet],access:{actions:[greet]}});
+  h.step(3600);assert.equal(h.programs.length,1);
+  h.step(3610); // The mocked program has finished.
+  h.step(7210);assert.equal(h.programs.length,2);
+  h.home.dispose();
+});
+
+test('completed programs retain the live rig and selected actions all get a turn, including practice clips',()=>{
+  const h=homeHarness();
+  const actions=['paw','climb-up','wave','bow'].map(action=>({id:action,action,motion:{}}));
+  h.home.applyState({...h.state,randomScript:actions,access:{actions}});
+  const stops=h.calls.filter(x=>x==='stop').length;
+  for(let i=0;i<actions.length;i++){h.step(2000+i*2000);h.step(2010+i*2000);}
+  assert.deepEqual(new Set(h.programs.map(p=>p.action)),new Set(actions.map(a=>a.action)));
+  assert.equal(h.calls.filter(x=>x==='stop').length,stops,'natural completion never cancels/rebuilds the cat');
+  h.home.dispose();
+});
+
+test('autonomous toy play respects removal of its basic actions from the random script',()=>{
+  const h=homeHarness(),actions=['idle-alert','walk','paw'].map(action=>({id:action,action,motion:{}}));
+  let attempts=0;h.runtime.interactWithNearbyToy=()=>{attempts++;return true;};
+  h.home.applyState({...h.state,randomScript:[],access:{actions}});h.step(10000);assert.equal(attempts,0);
+  h.home.applyState({...h.state,randomScript:actions.slice(0,2),access:{actions}});h.step(20000);assert.equal(attempts,0);
+  h.home.applyState({...h.state,randomScript:actions,access:{actions}});h.step(30000);assert.equal(attempts,1);
+  h.home.dispose();
+});
+
+test('canvas navigation, cancelled touches and overlays do not trigger a pet response',()=>{
+  const h=homeHarness(),greet={id:'greet',action:'greet',motion:{}};
+  h.home.applyState({...h.state,randomScript:[greet],access:{actions:[greet]}});
+  h.window.dispatchEvent({type:'pointerdown',target:h.elements.get('scene'),pointerId:1});
+  h.step(100);
+  h.window.dispatchEvent({type:'pointerup',pointerId:1});
+  h.step(350);assert.equal(h.programs.length,0);
+  h.window.dispatchEvent({type:'pointerdown',target:h.elements.get('scene'),pointerId:2});
+  h.window.dispatchEvent({type:'pointercancel',pointerId:2});
+  h.window.dispatchEvent({type:'meow:scene-interaction',detail:{kind:'unknown'}});
+  h.step(600);assert.equal(h.programs.length,0);
+  h.home.overlay(true);
+  h.window.dispatchEvent({type:'meow:scene-interaction',detail:{kind:'cheek'}});
+  h.step(5000);assert.equal(h.programs.length,0);
   h.home.dispose();
 });
 

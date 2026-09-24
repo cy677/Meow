@@ -1,3 +1,4 @@
+import { CAT_APPEARANCES } from '../src/catAppearance/catalog.js';
 import { SCENE_FIELDS, SCENE_LABELS, sceneDefaults, sceneFieldVisible } from './environmentSchema.mjs';
 import { ACTION_CHOICES, PROGRAMS } from './motionPrograms.mjs';
 import { COATS, POSES } from '../src/coats.js';
@@ -28,6 +29,7 @@ export const PARAM_FIELDS = {
     number('dynamicCoatHeadIrregularity', '头部条纹不规则度', 0, 4, 0.28),
   ],
   shape: [
+    select('catAppearance', '小猫外观', CAT_APPEARANCES.map(item => [item.id, item.name])),
     number('headSize', '头部大小', 0.35, 2.8, 1.08), number('chubbiness', '圆润程度', 0.3, 4.5, 1.15),
     number('legLength', '腿长', 0.05, 5, 0.85), number('earSize', '耳朵大小', 0.1, 4.5, 1),
     number('tailLength', '尾巴长度', 0.05, 4.5, 0.95), number('tailCurl', '尾巴卷曲', -0.75, 2.25, 0.35),
@@ -66,7 +68,9 @@ export function defaultsFor(category, params = {}) {
       dynamicCoatHeadIrregularity: s.head?.irregularity ?? 0.28,
     });
   }
-  return { ...defaults, ...params };
+  const values = { ...defaults, ...params };
+  delete values.mouthMode;
+  return values;
 }
 export function fieldVisible(category, key, params) {
   if(SCENE_FIELDS[category])return sceneFieldVisible(category,key,params);
@@ -76,6 +80,7 @@ export function fieldVisible(category, key, params) {
     if (/Body|Head/.test(key)) return kind === 'tabby';
     if (/Count|Scale|Irregularity/.test(key)) return kind !== 'tabby' && kind !== 'solid';
   }
+  if (key === 'mouthMode') return false; // legacy snapshots only
   if (key === 'eyeColorRight') return !!params.oddEyes;
   if (key === 'furFluff') return !!params.fluffy;
   if (key === 'wateryEyeShape') return !!params.wateryEyes;

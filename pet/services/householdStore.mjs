@@ -11,6 +11,9 @@ import { resolve } from 'node:path';
 import { missingUpstreamRewards, upstreamAccess, unlockOriginals, restoreSpecialPrices, BASIC_ACTIONS } from '../upstreamRewards.mjs';
 import { validateStudio } from '../studioSchema.mjs';
 import { isMenuOnly } from '../editorRewards.mjs';
+import { CAT_APPEARANCES } from '../../src/catAppearance/catalog.js';
+
+const APPEARANCE_UNLOCK_AT = 50;
 
 /** All balance/ownership/ledger changes are committed in ONE SQLite transaction. */
 export function createStore(filename, initialCatalog) {
@@ -18,6 +21,11 @@ export function createStore(filename, initialCatalog) {
   const repo = createHouseholdRepository(db);
   const getSetting = key => repo.setting(key)?.value;
   const setSetting = (key,value) => repo.setSetting(key,value);
+  const selectedAppearance = lifetime => {
+    if(lifetime<APPEARANCE_UNLOCK_AT)return 'native';
+    const saved=getSetting('selectedAppearance')??getSetting('initialAppearance');
+    return CAT_APPEARANCES.some(item=>item.id===saved)?saved:'native';
+  };
   if (!getSetting('catalog')) setSetting('catalog',JSON.stringify(validateCatalog(initialCatalog)));
   const catalog = () => validateCatalog(JSON.parse(getSetting('catalog')));
   const bump = () => repo.bump();
@@ -52,10 +60,13 @@ export function createStore(filename, initialCatalog) {
     const inScript=r=>owned.includes(r.id)&&['pose','trick'].includes(r.category)&&(scriptSelection[r.id]??(r.category==='trick'&&BASIC_ACTIONS.includes(r.action)));
     const randomScript=config.rewards.filter(inScript).map(r=>({id:r.id,title:r.title,category:r.category,...(r.category==='pose'?{params:r.params}:{action:r.action,motion:r.motion})}));
     const active=config.rewards.find(r=>r.category==='creation'&&r.id===equipped.creation&&owned.includes(r.id));
-    return { ...profile, growthProfile:growth.profile(), owned, equipped, randomScript, creation:active?{id:active.id,preset:active.preset}:null, access:upstreamAccess(config,owned), params:composeParams(config,equipped), sceneParams:composeScene(config,equipped), models:equippedModels(config,equipped,owned),
+    const selected=selectedAppearance(profile.lifetime);
+    const appearance={selected,unlockAt:APPEARANCE_UNLOCK_AT,unlocked:profile.lifetime>=APPEARANCE_UNLOCK_AT};
+    const creation=active?{id:active.id,preset:{...active.preset,params:{...active.preset.params,catAppearance:selected}}}:null;
+    return { ...profile, appearance, growthProfile:growth.profile(), owned, equipped, randomScript, creation, access:upstreamAccess(config,owned), params:{...composeParams(config,equipped),catAppearance:selected}, sceneParams:composeScene(config,equipped), models:equippedModels(config,equipped,owned),
       rewards:config.rewards.map(r => {
         const {params,action,motion,preset,...publicData}=r;
-        return {...publicData, inRandomScript:!!inScript(r), menuOnly:isMenuOnly(r), owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
+        return {...publicData, basicAction:r.category==='trick'&&BASIC_ACTIONS.includes(r.action), inRandomScript:!!inScript(r), menuOnly:isMenuOnly(r), owned:owned.includes(r.id), eligible:profile.lifetime>=r.unlockAt,
           affordable:profile.balance>=r.cost, equipped:equipped[modelSlot(r)]===r.id&&(!active||r.category==='creation'||r.category==='model'),
           ...(r.category==='model'?{modelId:r.params.modelId,modelSlot:modelSlot(r),modelGroup:modelDefinition(r.params.modelId).group}:{}),
           ...(parent ? {params,action,...(motion ? {motion} : {}),...(preset?{preset}:{})} : {})};
@@ -76,7 +87,7 @@ export function createStore(filename, initialCatalog) {
   }
   function saveCatalog(input, expectedRevision) {
     const validated = validateCatalog(input);
-    const next = ['2','3'].includes(getSetting('upstreamRewardsVersion'))?unlockOriginals(validated):validated;
+    const next = ['2','3','4'].includes(getSetting('upstreamRewardsVersion'))?unlockOriginals(validated):validated;
     tx(() => {
       if (expectedRevision !== undefined && expectedRevision !== catalogRevision()) fail(409,'奖励目录已在其他页面修改。请保留当前草稿，重新读取目录后再保存。');
       for (const old of catalog().rewards) {
@@ -133,11 +144,11 @@ export function createStore(filename, initialCatalog) {
       });
     },
     installUpstreamRewards() {
-      if(getSetting('upstreamRewardsVersion')==='3')return;
+      if(getSetting('upstreamRewardsVersion')==='4')return;
       tx(()=>{
         const next=catalog();next.rewards.push(...missingUpstreamRewards(next));
         setSetting('catalog',JSON.stringify(validateCatalog(unlockOriginals(restoreSpecialPrices(next)))));grantMilestones();
-        setSetting('upstreamRewardsVersion','3');bump();log('catalog',0,'本地升级：收藏全部可见，基础动作自动播放，特殊动作按积分解锁；保留已有收藏');
+        setSetting('upstreamRewardsVersion','4');bump();log('catalog',0,'本地升级：全部基础动作默认可用，加入招爪、鞠躬、歪头和庆祝奖励；保留积分、收藏与脚本选择');
       });
     },
     history: ledger.history,
@@ -234,6 +245,12 @@ export function createStore(filename, initialCatalog) {
       const reward=catalog().rewards.find(r=>r.id===rewardId);
       if (!reward || reward.category!=='trick' || !repo.hasOwned(rewardId)) fail(403,'尚未拥有这个互动动作');
       return {action:reward.action,...(reward.motion ? {motion:reward.motion} : {}),rewardId,playId:randomUUID()};
+    },
+    setAppearance(appearance) {
+      if(!CAT_APPEARANCES.some(item=>item.id===appearance))fail(400,'未知外观');
+      if(appearance==='leaf'&&repo.profile().lifetime<APPEARANCE_UNLOCK_AT)fail(403,'累计成长分达到 50 后解锁叶猫外观');
+      tx(()=>{setSetting('selectedAppearance',appearance);bump();});
+      return snapshot();
     },
     profile({childName,petName}) {
       childName=text(childName,'孩子昵称',20); petName=text(petName,'小猫名字',20);

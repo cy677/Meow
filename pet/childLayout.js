@@ -25,7 +25,7 @@ export function childMarkup() {
       <div id="reward-grid" class="reward-grid" aria-label="本页奖励"></div>
       <footer class="reward-pagination" aria-label="奖励翻页"><button type="button" id="reward-prev" class="button" data-action="reward-prev">‹ 上一页</button><p id="reward-page-status" role="status" aria-live="polite"></p><button type="button" id="reward-next" class="button" data-action="reward-next">下一页 ›</button></footer>
     </section>
-    <section id="history-panel" role="tabpanel" aria-labelledby="tab-history" hidden><div id="ledger"></div></section>
+    <section id="history-panel" role="tabpanel" aria-labelledby="tab-history" hidden><div id="appearance-milestone"></div><div id="ledger"></div></section>
     <p id="rewards-message" class="child-dialog-message" role="status" hidden></p>
   </dialog>
   <dialog id="purchase-dialog" class="child-purchase" aria-labelledby="purchase-title"><form method="dialog"><button class="dialog-close" aria-label="取消兑换，返回奖励列表">×</button></form><span class="eyebrow">一份新的小惊喜</span><h2 id="purchase-title"></h2><p id="purchase-description"></p><p id="purchase-balance" class="purchase-balance"></p><p class="note">兑换后永久拥有，累计成长积分不会减少。</p><p id="purchase-error" role="alert" hidden></p><button id="purchase-confirm" class="button primary" type="button" data-action="confirm-purchase">确认兑换</button></dialog>`;
