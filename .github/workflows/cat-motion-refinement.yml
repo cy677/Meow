@@ -2,8 +2,18 @@ name: Native cat motion refinement
 on:
   push:
     branches: [feature/cat-motion-refinement-20260924]
+  pull_request:
+    paths:
+      - 'src/catMotion/**'
+      - 'src/catAppearance/**'
+      - 'src/catBuilder.js'
+      - 'src/mesh2motionSkinRig.js'
+      - 'src/main.js'
+      - 'pet/**'
+      - 'docs/motion-refinement.md'
+      - '.github/workflows/cat-motion-refinement.yml'
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: motion-refinement-${{ github.ref }}
   cancel-in-progress: true
@@ -12,28 +22,22 @@ defaults:
     shell: bash
 jobs:
   verify:
-    if: github.ref == 'refs/heads/feature/cat-motion-refinement-20260924'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
           cache: npm
-      - name: Apply hash-verified implementation
-        if: hashFiles('.ci/motion-refine0.bin') != ''
+      - name: Original source clips and construction primitives remain unchanged
         run: |
-          python3 - <<'PY'
-          import hashlib,lzma,pathlib
-          patch=lzma.decompress(b''.join(pathlib.Path(f'.ci/motion-refine{i}.bin').read_bytes() for i in range(2)))
-          assert hashlib.sha256(patch).hexdigest()=='ca0b390e6ddbb502c64fb1a1835c25d9d0303bdb374e8e1618118fc8e2f36558'
-          pathlib.Path('/tmp/motion-refinement.patch').write_bytes(patch)
-          PY
-          git apply --check /tmp/motion-refinement.patch
-          git apply /tmp/motion-refinement.patch
+          git diff --exit-code 9fd0729bddee1825de0a184f850cdb956ea52747 -- src/sdf.js src/coats.js src/mesh2motionSource.js src/mesh2motionClips.json src/staticIdle.js src/softPoke.js
+          test ! -d src/models/leafCat
+          test ! -f .ci/motion-refine0.bin
       - run: npm ci
       - name: Numerical tests and production builds
         run: |
@@ -53,16 +57,15 @@ jobs:
         run: node pet/tests/browser-leaf-native.mjs 2>&1 | tee pet/test-results/motion-refinement/browser-leaf.txt
       - name: Production script, preview and account regressions
         run: node pet/tests/browser-cat-motion-stage1.mjs 2>&1 | tee pet/test-results/motion-refinement/browser-stage1.txt
-      - name: Publish tested source on this feature branch only
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/feature/cat-motion-refinement-20260924' && hashFiles('.ci/motion-refine0.bin') != ''
+      - name: Package reproducible source and incremental patches
+        if: success()
         run: |
-          mapfile -t paths < <(git apply --numstat /tmp/motion-refinement.patch | cut -f3)
-          git add -- "${paths[@]}"
-          git rm .ci/motion-refine0.bin .ci/motion-refine1.bin
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat: refine native cat phase and contact, bind mouth to actions and poses'
-          git push origin HEAD:refs/heads/feature/cat-motion-refinement-20260924
+          mkdir -p /tmp/meow-motion-delivery
+          git archive --format=tar.gz --output=/tmp/meow-motion-delivery/source-code.tar.gz HEAD
+          git diff --binary 9fd0729bddee1825de0a184f850cdb956ea52747 HEAD > /tmp/meow-motion-delivery/from-main.patch
+          git diff --binary a46ce84d39879b89169d16ebe71f0e14d550b98e HEAD > /tmp/meow-motion-delivery/from-native-v2.patch
+          git rev-parse HEAD > /tmp/meow-motion-delivery/COMMIT.txt
+          git status --short > /tmp/meow-motion-delivery/WORKTREE.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -72,4 +75,10 @@ jobs:
             pet/test-results/leaf-native/*.json
             pet/test-results/*report*.json
             pet/test-results/*stage1*.json
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: meow-motion-source
+          path: /tmp/meow-motion-delivery
           retention-days: 14
