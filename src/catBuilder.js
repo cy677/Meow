@@ -1,3 +1,5 @@
+import { isLeafCat, LEAF_COAT, LEAF_PALETTE } from './catAppearance/catalog.js';
+import { decorateLeafCat } from './catAppearance/leaf.js';
 import * as THREE from 'three';
 import { createRng } from './rng.js';
 import { COATS, EYE_COLORS } from './coats.js';
@@ -1030,7 +1032,7 @@ function makeEarSurfacePatch(prims, ear, segments = 14) {
   return geometry;
 }
 
-function makeInnerEarDecal(prims, ear, staticIdleState = null) {
+function makeInnerEarDecal(prims, ear, staticIdleState = null, innerColor = null) {
   const texture = makeDecalTexture((ctx) => {
     ctx.clearRect(0, 0, 256, 256);
     const path = new Path2D();
@@ -1052,13 +1054,13 @@ function makeInnerEarDecal(prims, ear, staticIdleState = null) {
     // 先铺大范围晕染，再补一层低透明主体；保留圆角三角轮廓但不出现硬描边。
     ctx.save();
     ctx.filter = 'blur(14px)';
-    ctx.fillStyle = wash;
+    ctx.fillStyle = innerColor ?? wash;
     ctx.fill(path);
     ctx.restore();
     ctx.save();
     ctx.globalAlpha = 0.42;
     ctx.filter = 'blur(5px)';
-    ctx.fillStyle = wash;
+    ctx.fillStyle = innerColor ?? wash;
     ctx.fill(path);
     ctx.restore();
   });
@@ -1238,10 +1240,11 @@ export function buildCat(params, quality = 'full') {
   // this explicit prevents every random click from paying the animation-rig
   // setup cost while preserving the lightweight tail/ear idle attributes.
   const needsMotionRig = params.motionDebug === true;
-  const coat = COATS.find((c) => c.id === params.coatId) ?? COATS[0];
+  const leafAppearance = isLeafCat(params);
+  const coat = leafAppearance ? LEAF_COAT : (COATS.find((c) => c.id === params.coatId) ?? COATS[0]);
   const legacyEye = EYE_COLORS.find((e) => e.id === params.eyeColorId) ?? EYE_COLORS[0];
-  const leftEyeColor = params.eyeColor ?? (legacyEye.color === 'odd' ? '#5b8fd4' : legacyEye.color);
-  const rightEyeColor = params.oddEyes
+  const leftEyeColor = leafAppearance ? LEAF_PALETTE.eye : (params.eyeColor ?? (legacyEye.color === 'odd' ? '#5b8fd4' : legacyEye.color));
+  const rightEyeColor = !leafAppearance && params.oddEyes
     ? (params.eyeColorRight ?? '#d99a2b')
     : leftEyeColor;
 
@@ -2177,7 +2180,7 @@ export function buildCat(params, quality = 'full') {
     hr
   );
   const dynamicCoatState = createDynamicCoatState(
-    params,
+    leafAppearance ? { ...params, dynamicCoat: false } : params,
     geo,
     dynamicCandidates,
     dynamicCoreCandidates,
@@ -2229,7 +2232,9 @@ export function buildCat(params, quality = 'full') {
     headC,
     hr
   );
-  cat.userData.updateDynamicCoat = (nextParams) => dynamicCoatState.apply(nextParams);
+  cat.userData.updateDynamicCoat = (nextParams) => dynamicCoatState.apply(
+    leafAppearance ? { ...nextParams, dynamicCoat: false } : nextParams
+  );
   cat.userData.dynamicCoatState = dynamicCoatState;
   cat.userData.prepareDynamicCoatExport = () => dynamicCoatState.prepareExport();
   cat.userData.staticIdleState = staticIdleState;
@@ -2289,6 +2294,7 @@ export function buildCat(params, quality = 'full') {
   const nose = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.085, 14, 10), noseMat);
   nose.geometry.scale(1.3, 0.75, 0.6);
   nose.position.set(muzzle.x, muzzle.y + hr * 0.12, muzzle.z + hr * 0.19);
+  nose.name = 'nose';
   face.add(nose);
 
   // ω 嘴
@@ -2296,6 +2302,7 @@ export function buildCat(params, quality = 'full') {
   for (const s of [-1, 1]) {
     const arc = new THREE.Mesh(new THREE.TorusGeometry(hr * 0.07, hr * 0.012, 6, 16, Math.PI * (2 / 3)), mouthMat);
     arc.position.set(muzzle.x + s * hr * 0.065, muzzle.y + hr * 0.04, muzzle.z + hr * 0.24);
+    arc.name = s < 0 ? 'closedMouthLeft' : 'closedMouthRight';
     arc.rotation.z = Math.PI * (7 / 6);
     face.add(arc);
   }
@@ -2334,6 +2341,12 @@ export function buildCat(params, quality = 'full') {
     { c: V(0, bbox.max.y * 0.35, (bbox.min.z + bbox.max.z) * 0.5), r: Math.min((bbox.max.x - bbox.min.x), bbox.max.y) * 0.48 },
     { c: headC.clone(), r: hr * 1.16 },
   ];
+  cat.userData.catAppearance = leafAppearance ? 'leaf' : 'native';
+  if (leafAppearance) decorateLeafCat(cat, {
+    params, headC, hr, muzzle, earDef, staticIdleState,
+    project: (direction, width, height, depth, segments) => makeSurfacePatch(prims, headC, direction, width, height, depth, segments),
+    decal: makeSurfaceDecal, innerEar: makeInnerEarDecal, gradientMap: toonGradientMap(),
+  });
   cat.userData.buildTimings = {
     meshMs: meshCompletedAt - buildStartedAt,
     vertexDataMs: vertexDataCompletedAt - meshCompletedAt,

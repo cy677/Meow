@@ -10,6 +10,6 @@ export function runtimeFiles(root){
       if(fs.statSync(full).isFile()&&file.endsWith('.mjs'))files.push(`pet/${folder}/${file.replaceAll('\\','/')}`);
     }
   }
-  return [...files,'src/coats.js','src/catMotion/motionScript.js','src/catMotion/clipCatalog.js'].sort();
+  return [...files,'src/coats.js','src/catAppearance/catalog.js','src/catMotion/motionScript.js','src/catMotion/clipCatalog.js'].sort();
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))console.log(JSON.stringify(runtimeFiles(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'))));

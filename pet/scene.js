@@ -173,7 +173,7 @@ export function createPetScene(host) {
       touchNormal.copy(child.userData.refPos).sub(cat.userData.headC).normalize();
       pokeOffsetAt(child.userData.refPos,touchNormal,touchOffset);child.position.copy(child.userData.basePos).add(touchOffset);
     }
-    for(const entry of entries)if(entry.object.visible){entry.cat.userData.updateEyeAnimation?.(t);if(!entry.player)entry.cat.userData.updateStaticIdle?.(t,!reduced.matches);}
+    for(const entry of entries)if(entry.object.visible){entry.cat.userData.updateEyeAnimation?.(t);entry.cat.userData.updateMouthAnimation?.(t);if(!entry.player)entry.cat.userData.updateStaticIdle?.(t,!reduced.matches);}
     pivot.position.y=0;pivot.rotation.y=-0.2;
     pivot.scale.setScalar(!reduced.matches&&petPulse&&now-petPulse<600?1+Math.sin((now-petPulse)/600*Math.PI)*0.025:1);
     if(dynamicEntry?.player&&(dynamicEntry.object.visible||dynamicEntry.player.active)){

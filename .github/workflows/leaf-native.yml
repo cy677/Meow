@@ -1,44 +1,33 @@
-name: Native leaf appearance integration
+name: Native cat leaf appearance
 on:
   push:
     branches: [feature/leaf-cat-native-components-20260924]
+  pull_request:
+    paths:
+      - 'src/catAppearance/**'
+      - 'src/catBuilder.js'
+      - 'src/main.js'
+      - 'pet/**'
+      - 'scripts/runtimeFiles.mjs'
+      - 'scripts/apply_ubuntu_update.mjs'
+      - '.github/workflows/leaf-native.yml'
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: leaf-native-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  integrate:
-    if: github.ref == 'refs/heads/feature/leaf-cat-native-components-20260924'
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
           cache: npm
-      - name: Apply hash-verified native integration
-        run: |
-          python3 - <<'PY'
-          import hashlib,json,pathlib
-          data=json.loads(pathlib.Path('.ci/leaf-native-edits.json').read_text())
-          for name,item in data.items():
-              path=pathlib.Path(name)
-              raw=path.read_bytes()
-              assert hashlib.sha256(raw).hexdigest()==item['before'], name+' baseline differs'
-              text=raw.decode('utf-8')
-              for start,end,replacement in reversed(item['edits']):
-                  text=text[:start]+replacement+text[end:]
-              output=text.encode('utf-8')
-              assert hashlib.sha256(output).hexdigest()==item['after'], name+' integration differs'
-              path.write_bytes(output)
-          pathlib.Path('/tmp/leaf-native-paths.txt').write_text('\n'.join(data)+'\n')
-          PY
-          git diff --exit-code 9fd0729bddee1825de0a184f850cdb956ea52747 -- src/sdf.js src/coats.js src/mesh2motionRig.js src/mesh2motionSkinRig.js src/mesh2motionSource.js src/mesh2motionClips.json src/staticIdle.js src/softPoke.js src/catMotion
       - run: npm ci
       - name: Tests and both production builds
         run: |
@@ -54,17 +43,6 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Original geometry, skeleton, all actions and editor
         run: node pet/tests/browser-leaf-native.mjs
-      - name: Commit tested integration to this feature branch only
-        if: success() && github.ref == 'refs/heads/feature/leaf-cat-native-components-20260924'
-        run: |
-          cp .ci/leaf-native-final.yml .github/workflows/leaf-native.yml
-          mapfile -t paths < /tmp/leaf-native-paths.txt
-          git add -- "${paths[@]}" .github/workflows/leaf-native.yml
-          git rm .ci/leaf-native-edits.json .ci/leaf-native-final.yml
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat: decorate main cat with leaf appearance and independent mouth channel'
-          git push origin HEAD:refs/heads/feature/leaf-cat-native-components-20260924
       - uses: actions/upload-artifact@v4
         if: always()
         with:
