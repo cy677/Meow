@@ -22,5 +22,7 @@ export const STUDIO_FIELDS={
 export function validateStudio(input) {
   object(input,Object.keys(STUDIO_FIELDS));
   for(const [key,values] of Object.entries(input))validateFields(values,STUDIO_FIELDS[key]);
-  return structuredClone(input);
+  const result = structuredClone(input);
+  if (result.params) delete result.params.mouthMode;
+  return result;
 }

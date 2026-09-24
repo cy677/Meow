@@ -56,7 +56,7 @@ export function planMotion(action,motion={},script) {
   for(const s of items){
     const c=CLIP_BY_ID.get(s.clip),duration=c.duration/(s.speed*speed);
     for(let i=0;i<s.cycles;i++){
-      const previous=segments.at(-1),overlap=previous?Math.min(transition,previous.duration*0.3,duration*0.3):0;
+      const previous=segments.at(-1),overlap=previous&&previous.clip!==s.clip?Math.min(transition,previous.duration*0.3,duration*0.3):0;
       const start=end-overlap;end=start+duration;
       segments.push({clip:s.clip,start,end,duration,overlap});
     }
@@ -66,7 +66,10 @@ export function planMotion(action,motion={},script) {
 }
 export function timelineLayers(plan,time) {
   const t=Math.min(plan.duration,Math.max(0,time));
-  const active=plan.segments.filter(s=>t>=s.start-1e-9&&t<=s.end+1e-9).slice(-2);
+  let active=plan.segments.filter(s=>t>=s.start-1e-9&&t<=s.end+1e-9).slice(-2);
+  // Adjacent cycles of the same clip meet without overlap. At the exact seam
+  // choose the next cycle rather than dividing by a zero crossfade duration.
+  if(active.length===2&&active[1].overlap<=1e-9)active=active.slice(-1);
   return active.map((s,i)=>{
     let weight=1;
     if(active.length===2){const b=active[1],x=Math.max(0,Math.min(1,(t-b.start)/b.overlap));const smooth=x*x*(3-2*x);weight=i===0?1-smooth:smooth;}

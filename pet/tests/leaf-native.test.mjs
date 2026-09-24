@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isLeafCat, CAT_APPEARANCES, MOUTH_MODES } from '../../src/catAppearance/catalog.js';
-import { sampleMouth } from '../../src/catAppearance/mouth.js';
+import { isLeafCat, CAT_APPEARANCES, LEGACY_MOUTH_VALUES } from '../../src/catAppearance/catalog.js';
+import { sampleExpression } from '../../src/catMotion/expression.js';
 import { validateStudio } from '../studioSchema.mjs';
 import { PARAM_FIELDS, defaultsFor, fieldVisible } from '../presetSchema.mjs';
 import { validateFields } from '../validation.mjs';
@@ -18,30 +18,42 @@ test('leaf is an opt-in native appearance; legacy parameters remain native', () 
   assert.doesNotMatch(source,/return\s+buildLeafCat|pose\s*:\s*['"]reference/);
   assert.ok(source.includes('if (leafAppearance) decorateLeafCat(cat,'));
 });
-test('appearance and mouth settings use the existing strict preset/studio schema', () => {
-  for(const item of MOUTH_MODES){
-    const params={catAppearance:'leaf',mouthMode:item.id,pose:'loaf',headSize:1.3};
-    assert.deepEqual(validateStudio({params}), {params});
-    assert.doesNotThrow(()=>validateFields({catAppearance:'leaf',mouthMode:item.id},PARAM_FIELDS.shape));
+test('legacy mouth fields load but are removed from new studio output and never exposed', () => {
+  assert.ok(!PARAM_FIELDS.shape.some(f=>f.key==='mouthMode'));
+  assert.ok(!Object.hasOwn(defaultsFor('shape'), 'mouthMode'));
+  for(const value of LEGACY_MOUTH_VALUES){
+    const params={catAppearance:'leaf',mouthMode:value,pose:'loaf',headSize:1.3};
+    assert.deepEqual(validateStudio({params}), {params:{catAppearance:'leaf',pose:'loaf',headSize:1.3}});
+    assert.equal(params.mouthMode,value); // No mutation of old snapshots.
+    assert.doesNotThrow(()=>validateFields({catAppearance:'leaf',mouthMode:value},PARAM_FIELDS.shape));
   }
   assert.throws(()=>validateStudio({params:{catAppearance:'foreign-body'}}));
-  assert.throws(()=>validateStudio({params:{mouthMode:'execute-script'}}));
+  assert.throws(()=>validateStudio({params:{catAppearance:'leaf',mouthMode:'execute-script'}}));
   assert.equal(fieldVisible('shape','mouthMode',{}),false);
-  assert.equal(fieldVisible('shape','mouthMode',{catAppearance:'leaf'}),true);
+  assert.equal(fieldVisible('shape','mouthMode',{catAppearance:'leaf'}),false);
+  const main=readFileSync(new URL('../../src/main.js',import.meta.url),'utf8');
+  assert.doesNotMatch(main,/口型动作|mouthSelect|setMouthMode|mouthMode:/);
 });
-test('facial channel handles open/closed, smooth cycles, clip gating and invalid data', () => {
-  for(const t of [0,.1,.7,2.2,5]){
-    assert.equal(sampleMouth('closed',t),0); assert.equal(sampleMouth('open',t),1);
-    assert.equal(sampleMouth('auto',t,'walk',.25),0);
-    const value=sampleMouth('meow',t); assert.ok(value>=0&&value<=1);
+test('mouth comes from clip phases or closed static poses, never the wall clock', () => {
+  for(const pose of ['sit','loaf','sleeping','standing']){
+    assert.equal(sampleExpression(null,0,1,pose).mouthOpen,0);
   }
-  assert.ok(sampleMouth('auto',.5,'bark',.25)>.5);
-  assert.ok(sampleMouth('auto',.5,'howl',.4)>.5);
-  assert.equal(sampleMouth('meow',0),sampleMouth('meow',2.2));
-  assert.ok(Math.abs(sampleMouth('meow',2.2-1e-6)-sampleMouth('meow',2.2+1e-6))<1e-4);
-  assert.throws(()=>sampleMouth('script',0));
-  assert.throws(()=>sampleMouth('open',NaN));
-  assert.throws(()=>sampleMouth('open',0,'idle',Infinity));
+  assert.equal(sampleExpression(null,0,1,'stretch').mouthOpen,.25);
+  for(const action of ['walk','run','sneak','sit','idle','jump','rest-pose']){
+    for(let p=0;p<=1;p+=.05)assert.equal(sampleExpression(action,p).mouthOpen,0);
+  }
+  assert.ok(sampleExpression('bark',.2).mouthOpen>.5);
+  assert.ok(sampleExpression('howl',.4).mouthOpen>.5);
+  assert.ok(sampleExpression('bite',.25).mouthOpen>.5);
+  assert.equal(sampleExpression('bite',.5).mouthOpen,0);
+  assert.ok(sampleExpression('stretch',.5).mouthOpen>.4);
+  for(const action of ['bark','howl','bite','fetch','stretch']){
+    assert.equal(sampleExpression(action,0).mouthOpen,0);
+    assert.equal(sampleExpression(action,1).mouthOpen,0);
+    for(let p=0;p<=1;p+=.01)assert.ok(sampleExpression(action,p).mouthOpen>=0&&sampleExpression(action,p).mouthOpen<=1);
+  }
+  assert.throws(()=>sampleExpression('bark',NaN));
+  assert.throws(()=>sampleExpression('bark',0,Infinity));
 });
 test('server release includes the appearance schema dependency, without model/WebGL dependencies',()=>{
   const files=runtimeFiles(fileURLToPath(new URL('../../',import.meta.url)));

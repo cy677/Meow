@@ -3,12 +3,8 @@ export const CAT_APPEARANCES = Object.freeze([
   { id: 'native', name: '原版小猫' },
   { id: 'leaf', name: '叶猫外观（原版身体与动作）' },
 ]);
-export const MOUTH_MODES = Object.freeze([
-  { id: 'auto', name: '随原版叫唤动作开合' },
-  { id: 'closed', name: '闭口' },
-  { id: 'open', name: '开口' },
-  { id: 'meow', name: '连续开合口型' },
-]);
+// Read compatibility only. These values never control animation or appear in forms.
+export const LEGACY_MOUTH_VALUES = Object.freeze(['auto', 'closed', 'open', 'meow']);
 export const LEAF_PALETTE = Object.freeze({
   body: '#d3e9bc', under: '#e5f2d3', green: '#569e3b', inner: '#cce5ad',
   eye: '#d572a0', nose: '#bd638c', mouth: '#573556', tongue: '#b886c7',

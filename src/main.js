@@ -1,4 +1,4 @@
-import { CAT_APPEARANCES, MOUTH_MODES } from './catAppearance/catalog.js';
+import { CAT_APPEARANCES } from './catAppearance/catalog.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildCat, EYE_SPACING_RANGE } from './catBuilder.js';
@@ -178,7 +178,6 @@ const RANDOM_SLIDERS = [
 
 const params = {
   catAppearance: 'native',
-  mouthMode: 'auto',
   seed: randomSeed(),
   pose: 'stretch',
   containerSeed: randomSeed(),
@@ -1366,6 +1365,7 @@ function stepSim(dt) {
     }
     motionElapsed += dt;
     motionState = motionRig.update(motionElapsed, {
+      delta: dt,
       actionId: activeMotionAction,
       speed: params.motionSpeed,
       intensity: params.motionIntensity,
@@ -1713,18 +1713,14 @@ const appearanceSelect = selectRow(appearanceControls, '小猫外观', CAT_APPEA
   get: () => params.catAppearance,
   set: value => { params.catAppearance = value; rebuild('full'); refreshers.forEach(fn => fn()); },
 });
-const mouthSelect = selectRow(appearanceControls, '口型动作', MOUTH_MODES, {
-  get: () => params.mouthMode,
-  set: value => { params.mouthMode = value; cat?.userData.setMouthMode?.(value); },
-});
 const appearanceHint = document.createElement('p'); appearanceHint.className = 'container-status';
-appearanceHint.textContent = '叶猫仅叠加外观；身体、尾巴、姿势与骨骼动作沿用原版。配色固定，切回原版保留原花色与眼色。';
+appearanceHint.textContent = '叶猫仅叠加外观；身体、尾巴、姿势与骨骼动作沿用原版。口型随动作与姿势自动变化。切回原版保留原花色与眼色。';
 appearanceControls.appendChild(appearanceHint);
 refreshers.push(() => {
-  appearanceSelect.sync(); mouthSelect.sync();
-  mouthSelect.row.hidden = appearanceHint.hidden = params.catAppearance !== 'leaf';
+  appearanceSelect.sync();
+  appearanceHint.hidden = params.catAppearance !== 'leaf';
 });
-mouthSelect.row.hidden = appearanceHint.hidden = params.catAppearance !== 'leaf';
+appearanceHint.hidden = params.catAppearance !== 'leaf';
 
 const poseControls = controlGroup(bodySec, '姿势', { open: true });
 const staticPoseControls = document.createElement('div');
@@ -2978,6 +2974,7 @@ window.__shot = (w = 1280, h = 800, cam = null) => {
 };
 window.__setParams = (patch, quality = 'full') => {
   Object.assign(params, patch);
+  delete params.mouthMode; // Read old presets without restoring a manual expression channel.
   if (params.motionDebug) params.pose = 'standing';
   if (
     patch.coatId &&

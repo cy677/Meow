@@ -58,7 +58,8 @@ try{
        a.updateMatrixWorld(true);b.updateMatrixWorld(true);ra.skeleton.update();rb.skeleton.update();
        assert(equal(ra.skeleton.boneMatrices,rb.skeleton.boneMatrices),action.id+' bone matrices changed');
        for(const key of ['rootX','rootZ','rootLift','rootPitch','rootYaw','rootRoll','boneLengthError'])assert(sa[key]===sb[key],action.id+' '+key);
-       const before=Array.from(rb.skeleton.boneMatrices);b.userData.setMouthOpen(.8);b.userData.updateMouthAnimation(t);
+       const before=Array.from(rb.skeleton.boneMatrices);b.userData.updateMouthAnimation(t);
+       assert(Math.abs(b.userData.getMouthState().openness-sb.mouthOpen)<1e-8,'mouth not bound to published pose');
        assert(equal(before,Array.from(rb.skeleton.boneMatrices)),action.id+' mouth modifies body');
        assert(sb.boneLengthError<1e-6,'bone length error');
      }
@@ -66,11 +67,13 @@ try{
    }
    const attached=['face','innerEarLeafLeft','innerEarLeafRight'].map(name=>({name,parent:b.getObjectByName(name).parent.name}));
    for(const item of attached)assert(item.parent===rb.bones.get('head').name,'decoration not attached: '+item.name);
-   b.userData.setMouthOpen(null);b.userData.setMouthMode('auto');
+   assert(!b.userData.setMouthOpen&&!b.userData.setMouthMode,'manual mouth API remains');
    rb.update(.7,{actionId:'bark',intensity:.85});
    assert(b.userData.updateMouthAnimation(.7)>.5,'mouth does not follow native bark progress');
    rb.update(.7,{actionId:'walk',intensity:.85});
    assert(b.userData.updateMouthAnimation(.7)===0,'mouth remains open during walk');
+   rb.update(.6,{actionId:'bark',intensity:.85});rb.reset();
+   assert(b.userData.getMouthState().openness===0,'mouth not closed on reset');
    const nativeIndex=a.getObjectByName('fur').geometry.index.count;
    dispose(a);dispose(b);ra.skeleton.dispose();rb.skeleton.dispose();
    return {poses,actions,attached,bones:19,identicalSkinWeights:true,nativeIndex};
@@ -82,29 +85,31 @@ try{
  await page.getByLabel('小猫外观',{exact:true}).selectOption('leaf');
  assert.equal(await page.locator('#viewport').getAttribute('data-cat-pose'),before.pose);
  assert.equal(await page.evaluate(()=>window.__getCat().userData.hr),before.head);
- await page.getByLabel('口型动作',{exact:true}).selectOption('open');
+ assert.equal(await page.getByLabel('口型动作',{exact:true}).count(),0);
+ assert.equal(await page.evaluate(()=>window.__getCat().userData.getMouthState().openness),0);
+ await page.evaluate(()=>window.__setAnimation({enabled:true,stateMachine:false,action:'bark'}));
+ await page.waitForFunction(()=>window.__getCat().userData.getMouthState().openness>.5);
  const opened=await page.evaluate(()=>({mouth:window.__getCat().userData.getMouthState(),geometry:window.__getCat().getObjectByName('fur').geometry.uuid}));
- assert.equal(opened.mouth.openness,1);
- await page.screenshot({path:new URL('editor-mouth-open.png',out).pathname});
- await page.getByLabel('口型动作',{exact:true}).selectOption('closed');
+ await page.evaluate(()=>window.__setAnimation({enabled:true,stateMachine:false,action:'walk'}));
+ await page.waitForFunction(()=>window.__getCat().userData.getMouthState().openness===0);
  const closed=await page.evaluate(()=>({mouth:window.__getCat().userData.getMouthState(),geometry:window.__getCat().getObjectByName('fur').geometry.uuid}));
- assert.equal(closed.mouth.openness,0);assert.equal(opened.geometry,closed.geometry);
- await page.getByLabel('口型动作',{exact:true}).selectOption('meow');
- const mouthRange=await page.evaluate(()=>{const c=window.__getCat();c.userData.setMouthMode('meow');return [0,.45,1,1.35,2].map(t=>c.userData.updateMouthAnimation(t));});
- assert.ok(Math.max(...mouthRange)>.5);assert.ok(Math.min(...mouthRange)<.1);
+ assert.equal(opened.geometry,closed.geometry); // No body rebuild for action/mouth changes.
+ await page.evaluate(()=>window.__setAnimation({enabled:false}));
+ assert.equal(await page.evaluate(()=>window.__getCat().userData.getMouthState().openness),0);
+ await page.evaluate(()=>window.__setParams({pose:'stretch'}));
+ assert.equal(await page.evaluate(()=>window.__getCat().userData.getMouthState().openness),.25);
+ await page.evaluate(()=>window.__setParams({pose:'loaf'}));
  await page.evaluate(()=>window.__setAnimation({enabled:true,stateMachine:false,action:'sit'}));
  await page.waitForTimeout(600);
  assert.equal(await page.locator('#viewport').getAttribute('data-motion-binding-pose'),'standing');
- await page.screenshot({path:new URL('editor-native-sit.png',out).pathname});
  await page.evaluate(()=>window.__setAnimation({enabled:false}));
  assert.equal(await page.locator('#viewport').getAttribute('data-cat-pose'),'loaf');
- await page.screenshot({path:new URL('editor-native-loaf.png',out).pathname});
  await page.getByLabel('小猫外观',{exact:true}).selectOption('native');
  assert.equal(await page.evaluate(()=>window.__getCat().getObjectByName('leafNeckBow')===undefined),true);
  assert.equal(await page.evaluate(()=>window.__getCat().userData.hr),before.head);
  assert.deepEqual(errors,[]);
  const report={status:'passed',baseMain:'9fd0729bddee1825de0a184f850cdb956ea52747',...parity,
-   editor:['appearance preserves pose and size','mouth changes without rebuilding body','meow progresses','native sit and pose restoration','switching back removes decorations'],webglErrors:errors};
+   editor:['appearance preserves pose and size','no independent mouth controls','bark opens and walk closes without rebuilding body','static stretch owns its mouth pose','reset closes mouth','native sit and pose restoration','switching back removes decorations'],webglErrors:errors};
  writeFileSync(new URL('verification.json',out),JSON.stringify(report,null,2)+'\n');
  console.log('PASS native editor appearance, mouth, sit, restoration, and WebGL');
 }catch(error){writeFileSync(new URL('errors.json',out),JSON.stringify({message:error.message,errors},null,2));throw error;}

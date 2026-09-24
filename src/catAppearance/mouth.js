@@ -1,46 +1,18 @@
 import * as THREE from 'three';
-import { MOUTH_MODES, LEAF_PALETTE } from './catalog.js';
+import { LEAF_PALETTE } from './catalog.js';
+import { sampleExpression } from '../catMotion/expression.js';
 
-const smooth = x => { const t = THREE.MathUtils.clamp(x, 0, 1); return t * t * (3 - 2 * t); };
-const pulse = (phase, from, to) => smooth((phase - from) / .10) * (1 - smooth((phase - to) / .15));
-/** Independent facial channel; it never samples or modifies a body bone. */
-export function sampleMouth(mode, time, action = 'idle', actionPhase = 0) {
-  if (!MOUTH_MODES.some(item => item.id === mode)) throw new RangeError('未知口型模式');
-  if (!Number.isFinite(time) || !Number.isFinite(actionPhase)) throw new TypeError('口型时间必须为有限数值');
-  if (mode === 'closed') return 0;
-  if (mode === 'open') return 1;
-  const phase = ((time % 2.2) + 2.2) % 2.2 / 2.2;
-  if (mode === 'meow') return Math.max(pulse(phase, .1, .28), pulse(phase, .50, .64) * .8);
-  // Use the active native clip's phase, not a second body-motion timeline.
-  if (action === 'bark') return Math.max(pulse(actionPhase, .10, .28), pulse(actionPhase, .48, .66));
-  if (action === 'howl') return pulse(actionPhase, .10, .72) * (.86 + .1 * Math.sin(time * 13));
-  return 0;
-}
-
-/** The native eye/decal projection is reused for the mouth cavity, tongue and fangs.
- * Closed mouth remains the ORIGINAL two omega arcs. No jaw bone is introduced.
+const COLS = 8, ROWS = 4, FRAME_COUNT = COLS * ROWS, CELL = 128;
+/** Reuse native projected mouth; one atlas upload per model, no per-frame repaint.
+ * No manual mouth controls: the renderer consumes the body's published pose.
  */
-export function installMouth(cat, { face, headC, hr, muzzle, project, decal, mode = 'auto' }) {
-  if (!MOUTH_MODES.some(item => item.id === mode)) throw new RangeError('未知口型模式');
-  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+export function installMouth(cat, { face, headC, hr, muzzle, project, decal, pose = 'standing' }) {
+  const canvas = document.createElement('canvas'); canvas.width = COLS*CELL; canvas.height = ROWS*CELL;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('无法创建口型纹理');
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-  texture.generateMipmaps = false; texture.minFilter = THREE.LinearFilter;
-  const direction = new THREE.Vector3(0, -hr * .43, muzzle.z - headC.z + hr * .24).normalize();
-  const geometry = project(direction, hr * .48, hr * .46, hr, 18);
-  const mouth = decal(geometry, texture, 'leafOpenMouth', 5);
-  face.add(mouth);
-  const closed = [cat.getObjectByName('closedMouthLeft'), cat.getObjectByName('closedMouthRight')].filter(Boolean);
-  let amount = -1, manual = null, start = null, actionId = '', actionStart = 0;
-
-  function set(value) {
-    if (!Number.isFinite(value)) throw new TypeError('开口程度必须为有限数值');
-    const next = THREE.MathUtils.clamp(value, 0, 1);
-    mouth.visible = next > .025; for (const arc of closed) arc.visible = !mouth.visible;
-    if (Math.abs(next - amount) < .006) return amount;
-    amount = next; ctx.clearRect(0, 0, 256, 256);
-    if (mouth.visible) {
+  for (let frame=1; frame<FRAME_COUNT; frame++) {
+    const next=frame/(FRAME_COUNT-1);
+    ctx.save(); ctx.translate((frame%COLS)*CELL, Math.floor(frame/COLS)*CELL); ctx.scale(CELL/256,CELL/256);
       const top = 54, bottom = top + 158 * next;
       ctx.beginPath(); ctx.moveTo(40, top);
       ctx.bezierCurveTo(62, top + 18, 194, top + 18, 216, top);
@@ -56,24 +28,35 @@ export function installMouth(cat, { face, headC, hr, muzzle, project, decal, mod
         ctx.lineTo(x, top + 9 + 30 * next); ctx.closePath(); ctx.fill();
       }
       ctx.restore();
-    }
-    texture.needsUpdate = true; return amount;
+
+    ctx.restore();
   }
-  cat.userData.setMouthOpen = value => { manual = value === null ? null : set(value); return manual; };
-  cat.userData.setMouthMode = value => {
-    if (!MOUTH_MODES.some(item => item.id === value)) throw new RangeError('未知口型模式');
-    mode = value; manual = null; start = null; set(value === 'open' ? 1 : 0);
-  };
-  cat.userData.updateMouthAnimation = time => {
-    if (!Number.isFinite(time)) throw new TypeError('口型时间必须为有限数值');
-    if (manual !== null) return set(manual);
-    if (start === null || time < start) start = time;
-    const state = cat.userData.animationState ?? {};
-    if (actionId !== state.actionId || time < actionStart) { actionId = state.actionId; actionStart = time; }
-    // Native samples expose progress (normalised clip time); fallback is only for hosts without it.
-    const phase = Number.isFinite(state.progress) ? state.progress : ((time - actionStart) % 2.2) / 2.2;
-    return set(sampleMouth(mode, time - start, actionId, phase));
-  };
-  cat.userData.getMouthState = () => ({ mode, openness: Math.max(0, amount), manual: manual !== null });
-  set(mode === 'open' ? 1 : 0);
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false; texture.minFilter = texture.magFilter = THREE.LinearFilter;
+  // A texel inset protects adjacent atlas cells during minification.
+  texture.repeat.set((CELL-2)/canvas.width,(CELL-2)/canvas.height);
+  const direction = new THREE.Vector3(0, -hr*.43, muzzle.z-headC.z+hr*.24).normalize();
+  const mouth = decal(project(direction,hr*.48,hr*.46,hr,18), texture, 'leafOpenMouth', 5);
+  face.add(mouth);
+  const closed = ['closedMouthLeft','closedMouthRight'].map(name=>cat.getObjectByName(name)).filter(Boolean);
+  let amount=0, cell=-1, source=`pose:${pose}`;
+  function update() {
+    const state = cat.userData.animationState;
+    const sampled = !state || state.active === false
+      ? sampleExpression(null,0,1,pose)
+      : Number.isFinite(state.mouthOpen)
+        ? state : sampleExpression(state.actionId,state.progress??0,state.amount??1,pose);
+    amount=Math.max(0,Math.min(1,sampled.mouthOpen)); source=sampled.expressionSource??'blended-clips';
+    const frame=Math.round(amount*(FRAME_COUNT-1));
+    mouth.visible=frame>0; for(const arc of closed) arc.visible=!mouth.visible;
+    if(frame!==cell) {
+      texture.offset.set(((frame%COLS)*CELL+1)/canvas.width,
+        (canvas.height-(Math.floor(frame/COLS)+1)*CELL+1)/canvas.height);
+      cell=frame;
+    }
+    return amount;
+  }
+  cat.userData.updateMouthAnimation=update;
+  cat.userData.getMouthState=()=>({binding:'action-pose',openness:amount,source,atlasFrame:cell});
+  update();
 }

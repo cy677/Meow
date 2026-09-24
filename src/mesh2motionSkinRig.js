@@ -8,6 +8,9 @@ import { SOURCE_BONE_ORDER } from './mesh2motionSource.js';
 
 import { BONE_PARENT } from './catMotion/skeleton.js';
 import { authoredGlobalQuaternions } from './catMotion/authoredPoses.js';
+import { sampleExpression } from './catMotion/expression.js';
+import { createGrounding, groundWeightFor } from './catMotion/grounding.js';
+import { createRealtimePlayer } from './catMotion/realtimePlayer.js';
 
 const BONE_INDEX = new Map(SOURCE_BONE_ORDER.map((name, index) => [name, index]));
 const LEG_PREFIX_BY_ID = Object.freeze([
@@ -730,7 +733,12 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
   const attachments = attachSurfaceDetails(cat, bones);
   const qualityCapture = captureSkinQuality(fur);
   let lastQuality = measureSkinQuality(qualityCapture);
-  let lastState = sampleMesh2MotionAction('idle', 0, { intensity: 0, pose });
+  let lastState = { active: false, pose, mouthOpen: 0 };
+  const grounding = createGrounding(bones, anchors, { pose,
+    limitLocal: (name, quaternion, actionId) => limitRotation(quaternion,
+      BONE_ROTATION_LIMIT[name] * (ACTION_SAFETY_SCALE[actionId] ?? 1) * boneSafetyScale(name, rigSafety)),
+  });
+  let realtime = null;
 
   const reset = () => {
     applyGlobalBonePose(bones, anchors);
@@ -744,9 +752,13 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
     cat.userData.animationRootLift = 0;
     cat.userData.animationRootX = 0;
     cat.userData.animationRootZ = 0;
+    lastState = { active: false, pose, ...sampleExpression(null, 0, 1, pose) };
+    cat.userData.animationState = lastState;
+    cat.userData.updateMouthAnimation?.();
+    realtime?.reset();
   };
 
-  const update = (elapsed, options = {}) => {
+  const sample = (elapsed, options = {}) => {
     const state = sampleMesh2MotionAction(options.actionId, elapsed, {
       speed: options.speed,
       intensity: options.intensity,
@@ -776,6 +788,22 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
     applyGlobalBonePose(bones, anchors, null, safeQuaternions, {
       preserveBoneLengths: true,
     });
+    // Resolve bounded plane contact per source sample before blending. Applying
+    // it again to an already displayed transition entry would cause foot/root drift.
+    state.active = true;
+    state.pose = pose;
+    Object.assign(state, sampleExpression(state.actionId, state.progress, state.amount, pose));
+    state.groundWeight = groundWeightFor(state.actionId);
+    state.rootLift += Math.abs(Math.sin(state.rootRoll)) * metrics.width * 0.38;
+    const refined = grounding.apply(state);
+    if (options.sampleOnly) return refined;
+    return finalizePose(refined);
+  };
+
+  // Called once for the final displayed pose, not for either hidden crossfade
+  // sample. Body, surface attachments and mouth therefore see the same frame.
+  const finalizePose = (input) => {
+    const state = { ...input };
     skeleton.update();
     state.boneLengthError = measureBoneLengthError(bones, anchors);
 
@@ -799,17 +827,17 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
     // to make input and camera motion hitch even though rendering stayed on
     // the GPU. Keep the last explicit result until diagnostics are requested.
     state.geometryQuality = lastQuality;
-    const rollClearance = Math.abs(Math.sin(state.rootRoll)) * metrics.width * 0.38;
-    cat.userData.animationRootLift = state.rootLift + rollClearance;
+    cat.userData.animationRootLift = state.rootLift;
     cat.userData.animationRootX = state.rootX;
     cat.userData.animationRootZ = state.rootZ;
     cat.userData.animationState = state;
     lastState = state;
+    cat.userData.updateMouthAnimation?.();
     return state;
   };
 
   cat.userData.motionRigType = 'fixed-skinned-mesh';
-  return {
+  const api = {
     type: 'fixed-skinned-mesh',
     pose,
     metrics,
@@ -819,7 +847,11 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
     skeleton,
     fur,
     outline,
-    update,
+    // The editor supplies delta; the script player supplies an absolute clip
+    // phase. Both use one sampler/rig, without retiming a script a second time.
+    update: (elapsed, options = {}) => options.delta !== undefined
+      ? realtime.update(options.delta, { ...options, elapsed }) : sample(elapsed, options),
+    finalizePose,
     reset,
     getState: () => lastState,
     getDiagnostics: () => lastQuality,
@@ -832,4 +864,6 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
     outlineWeightStats,
     getCompatibility: (actionId) => getRigCompatibility(pose, actionId),
   };
+  realtime = createRealtimePlayer(api, cat);
+  return api;
 }

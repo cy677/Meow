@@ -95,7 +95,7 @@ export function decorateLeafCat(cat, {
     leaf.quaternion.setFromUnitVectors(V(0, 1, 0), V(i * .48, -1, .08).normalize()); bow.add(leaf);
   }
   face.add(bow);
-  installMouth(cat, { face, headC, hr, muzzle, project, decal, mode: params.mouthMode ?? 'auto' });
+  installMouth(cat, { face, headC, hr, muzzle, project, decal, pose: params.pose });
   // The native face soft-poke synchroniser moves child groups using their anchor.
   // Surface-projected decals already carry the native GPU poke shader.
   for (const node of face.children) if (!node.userData.skipPokeSync && !node.userData.basePos) {
