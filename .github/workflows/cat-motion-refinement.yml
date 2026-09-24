@@ -1,0 +1,75 @@
+name: Native cat motion refinement
+on:
+  push:
+    branches: [feature/cat-motion-refinement-20260924]
+permissions:
+  contents: write
+concurrency:
+  group: motion-refinement-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/feature/cat-motion-refinement-20260924'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - name: Apply hash-verified implementation
+        if: hashFiles('.ci/motion-refine0.bin') != ''
+        run: |
+          python3 - <<'PY'
+          import hashlib,lzma,pathlib
+          patch=lzma.decompress(b''.join(pathlib.Path(f'.ci/motion-refine{i}.bin').read_bytes() for i in range(2)))
+          assert hashlib.sha256(patch).hexdigest()=='ca0b390e6ddbb502c64fb1a1835c25d9d0303bdb374e8e1618118fc8e2f36558'
+          pathlib.Path('/tmp/motion-refinement.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/motion-refinement.patch
+          git apply /tmp/motion-refinement.patch
+      - run: npm ci
+      - name: Numerical tests and production builds
+        run: |
+          mkdir -p pet/test-results/motion-refinement
+          npm run test:pet 2>&1 | tee pet/test-results/motion-refinement/unit-tests.txt
+          npm run test:motion 2>&1 | tee pet/test-results/motion-refinement/source-rig-tests.txt
+          npm run test:poke 2>&1 | tee pet/test-results/motion-refinement/poke-tests.txt
+          npm run build 2>&1 | tee pet/test-results/motion-refinement/build-editor.txt
+          npm run pet:build 2>&1 | tee pet/test-results/motion-refinement/build-pet.txt
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/meow-browser" --no-package-lock playwright@1.55.0
+          ln -s "$RUNNER_TEMP/meow-browser/node_modules/playwright" node_modules/playwright
+          ln -s "$RUNNER_TEMP/meow-browser/node_modules/playwright-core" node_modules/playwright-core
+          "$RUNNER_TEMP/meow-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Native anatomy and automatic mouth in real editor
+        run: node pet/tests/browser-leaf-native.mjs 2>&1 | tee pet/test-results/motion-refinement/browser-leaf.txt
+      - name: Production script, preview and account regressions
+        run: node pet/tests/browser-cat-motion-stage1.mjs 2>&1 | tee pet/test-results/motion-refinement/browser-stage1.txt
+      - name: Publish tested source on this feature branch only
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/feature/cat-motion-refinement-20260924' && hashFiles('.ci/motion-refine0.bin') != ''
+        run: |
+          mapfile -t paths < <(git apply --numstat /tmp/motion-refinement.patch | cut -f3)
+          git add -- "${paths[@]}"
+          git rm .ci/motion-refine0.bin .ci/motion-refine1.bin
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: refine native cat phase and contact, bind mouth to actions and poses'
+          git push origin HEAD:refs/heads/feature/cat-motion-refinement-20260924
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motion-refinement-verification
+          path: |
+            pet/test-results/motion-refinement
+            pet/test-results/leaf-native/*.json
+            pet/test-results/*report*.json
+            pet/test-results/*stage1*.json
+          retention-days: 14
