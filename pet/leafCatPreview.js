@@ -25,7 +25,7 @@ key.shadow.camera.top = 4; key.shadow.camera.bottom = -3; key.shadow.normalBias 
 const fill = new THREE.DirectionalLight('#e7f5ff', .8); fill.position.set(3, 3, -4); scene.add(fill);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ color: '#61745b', opacity: .08 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = .002; ground.receiveShadow = true; scene.add(ground);
-const floorBase = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshBasicMaterial({ color: '#f6f7f1' }));
+const floorBase = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshBasicMaterial({ color: '#f6f7f1', toneMapped: false }));
 floorBase.rotation.x = -Math.PI / 2; floorBase.position.y = .001; scene.add(floorBase);
 const shadowCanvas = document.createElement('canvas'); shadowCanvas.width = shadowCanvas.height = 128;
 const context = shadowCanvas.getContext('2d'), gradient = context.createRadialGradient(64, 64, 2, 64, 64, 62);

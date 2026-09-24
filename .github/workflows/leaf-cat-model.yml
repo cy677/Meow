@@ -2,35 +2,31 @@ name: Leaf cat model
 on:
   push:
     branches: [feature/leaf-cat-model-20260924]
+  pull_request:
+    paths:
+      - 'src/models/leafCat/**'
+      - 'src/catBuilder.js'
+      - 'src/main.js'
+      - 'src/mesh2motionSkinRig.js'
+      - 'src/softPoke.js'
+      - 'pet/**'
+      - 'scripts/leaf-cat-review.mjs'
+      - '.github/workflows/leaf-cat-model.yml'
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: leaf-cat-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   validate:
-    if: github.ref == 'refs/heads/feature/leaf-cat-model-20260924'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-      - name: Apply reviewed implementation patch
-        run: |
-          python3 - <<'PY'
-          import hashlib,lzma,pathlib
-          root=pathlib.Path('.ci')
-          data=lzma.decompress(b''.join((root/f'leaf-cat-patch{i}.bin').read_bytes() for i in range(4)))
-          assert hashlib.sha256(data).hexdigest()=='c9ca1ccb73908d0e1489dea3b5973e52a30b8feb4a531e283805230fd2135772'
-          pathlib.Path('/tmp/leaf-cat.patch').write_bytes(data)
-          PY
-          git apply --check /tmp/leaf-cat.patch
-          git apply /tmp/leaf-cat.patch
       - run: npm ci
       - name: Model and regression tests
         run: |
@@ -44,25 +40,9 @@ jobs:
           npm install --no-save --package-lock=false playwright
           npx playwright install --with-deps chromium
           node scripts/leaf-cat-review.mjs
-      - name: Publish tested source on this feature branch only
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/feature/leaf-cat-model-20260924'
-        run: |
-          mapfile -t paths < <(git apply --numstat /tmp/leaf-cat.patch | cut -f3)
-          git add -- "${paths[@]}"
-          git rm .ci/leaf-cat-patch0.bin .ci/leaf-cat-patch1.bin .ci/leaf-cat-patch2.bin .ci/leaf-cat-patch3.bin
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat: add reference-sheet leaf cat, native editor integration and rigged GLB export'
-          git push origin HEAD:refs/heads/feature/leaf-cat-model-20260924
-      - name: Package source, runtime and review results
-        if: always()
-        run: |
-          mkdir -p /tmp/leaf-cat-review
-          tar --exclude=./.git --exclude=./dist --exclude=./pet/dist --exclude=./shots --exclude=./test-results --exclude=./.ci -czf /tmp/leaf-cat-review/meow-review-runtime.tar.gz .
-          if test -d test-results/leaf-cat; then cp -r test-results/leaf-cat /tmp/leaf-cat-review/; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: leaf-cat-review
-          path: /tmp/leaf-cat-review
-          retention-days: 7
+          path: test-results/leaf-cat
+          retention-days: 14
