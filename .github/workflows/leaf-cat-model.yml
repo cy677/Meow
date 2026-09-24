@@ -1,0 +1,53 @@
+name: Leaf cat model
+on:
+  push:
+    branches: [feature/leaf-cat-model-20260924]
+  pull_request:
+    paths:
+      - 'src/models/**'
+      - 'pet/models/**'
+      - 'pet/tests/leaf-cat*'
+      - 'scripts/leaf-cat*'
+      - 'leaf-cat.html'
+      - '.github/workflows/leaf-cat-model.yml'
+permissions:
+  contents: read
+concurrency:
+  group: leaf-cat-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Model tests
+        run: |
+          if test -f pet/tests/leaf-cat.test.mjs; then node --test pet/tests/leaf-cat.test.mjs; fi
+          npm run test:pet
+          npm run pet:build
+          npm run build
+      - name: Render and export review model
+        run: |
+          if test -f scripts/leaf-cat-review.mjs; then
+            npm install --no-save --package-lock=false playwright
+            npx playwright install --with-deps chromium
+            node scripts/leaf-cat-review.mjs
+          fi
+      - name: Package reproducible source and runtime for review
+        if: always()
+        run: |
+          mkdir -p /tmp/leaf-cat-review
+          tar --exclude=.git --exclude=dist --exclude=pet/dist --exclude=shots --exclude=docs --exclude=test-results -czf /tmp/leaf-cat-review/meow-review-runtime.tar.gz .
+          if test -d test-results/leaf-cat; then cp -r test-results/leaf-cat /tmp/leaf-cat-review/; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: leaf-cat-review
+          path: /tmp/leaf-cat-review
+          retention-days: 7
