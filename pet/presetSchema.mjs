@@ -28,6 +28,7 @@ export const PARAM_FIELDS = {
     number('dynamicCoatHeadIrregularity', '头部条纹不规则度', 0, 4, 0.28),
   ],
   shape: [
+    select('characterModel', '角色模型', [['meow', '原版小猫'], ['leaf-cat', '叶猫（参考图造型）']]),
     number('headSize', '头部大小', 0.35, 2.8, 1.08), number('chubbiness', '圆润程度', 0.3, 4.5, 1.15),
     number('legLength', '腿长', 0.05, 5, 0.85), number('earSize', '耳朵大小', 0.1, 4.5, 1),
     number('tailLength', '尾巴长度', 0.05, 4.5, 0.95), number('tailCurl', '尾巴卷曲', -0.75, 2.25, 0.35),

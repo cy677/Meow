@@ -105,7 +105,7 @@ const petStudio = {
     petMotion?.cancel();petProgramEnabled=false;petActivePlan=null;
     resetMotionWorld();
     if(value.rug)Object.assign(rugState,value.rug);
-    if(value.params){Object.assign(params,value.params);host.staticPoseBeforeMotion=params.pose;host.setParams(value.params);}
+    if(value.params){const restored={characterModel:'meow',...value.params};Object.assign(params,restored);host.staticPoseBeforeMotion=params.pose;host.setParams(restored);}
     if(value.floor){Object.assign(floorParams,value.floor);drawWoodFloor();}
     if(value.rug){rugLayer.setSeed(rugState.seed);rugLayer.setVisible(rugState.enabled);syncRugPlacement();}
     if(value.light){Object.assign(lightAngles,value.light);updateKeyLight();syncLightOrb();}

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildLeafCat } from './models/leafCat/buildLeafCat.js';
 import { createRng } from './rng.js';
 import { COATS, EYE_COLORS } from './coats.js';
 import {
@@ -1232,6 +1233,7 @@ function createTransientFluffController(furGeometry, outlineGeometry, seed, head
  * quality: 'draft' | 'full'
  */
 export function buildCat(params, quality = 'full') {
+  if (params.characterModel === 'leaf-cat') return buildLeafCat(params, quality);
   const buildStartedAt = performance.now();
   const rng = createRng(params.seed);
   // Static cats do not need the expensive 19-bone semantic field. Keeping

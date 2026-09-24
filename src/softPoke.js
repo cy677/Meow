@@ -23,6 +23,7 @@ const GLSL_DECL = `
 uniform vec3 uPokePos[${MAX_POKES}];
 uniform vec3 uPokeOff[${MAX_POKES}];
 uniform float uPokeRadius;
+uniform vec3 uPokeSpaceOffset;
 `;
 
 // 猫组只有整体平移/缩放，形变在 object space 做即可；normal 属性所有内置材质都有
@@ -30,7 +31,7 @@ const GLSL_APPLY = `
 for (int pi = 0; pi < ${MAX_POKES}; pi++) {
   float amp = length(uPokeOff[pi]);
   if (amp < 1e-4) continue;
-  float pd = distance(transformed, uPokePos[pi]);
+  float pd = distance(transformed + uPokeSpaceOffset, uPokePos[pi]);
   float r = uPokeRadius;
   float dent = exp(-(pd * pd) / (r * r));
   float bodyDrag = exp(-(pd * pd) / (r * r * 4.2));
@@ -42,11 +43,11 @@ for (int pi = 0; pi < ${MAX_POKES}; pi++) {
 `;
 
 // 往任意 three 内置材质的顶点着色器里注入形变
-export function injectPoke(material) {
+export function injectPoke(material, spaceOffset = new THREE.Vector3()) {
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     if (prev) prev(shader, renderer);
-    Object.assign(shader.uniforms, pokeUniforms);
+    Object.assign(shader.uniforms, pokeUniforms, { uPokeSpaceOffset: { value: spaceOffset } });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${GLSL_DECL}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${GLSL_APPLY}`);

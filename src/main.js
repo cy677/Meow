@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { frameCharacter } from './models/leafCat/frameCharacter.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildCat, EYE_SPACING_RANGE } from './catBuilder.js';
 import { COATS, EYE_COLORS, POSES } from './coats.js';
@@ -176,6 +177,7 @@ const RANDOM_SLIDERS = [
 ];
 
 const params = {
+  characterModel: 'meow',
   seed: randomSeed(),
   pose: 'stretch',
   containerSeed: randomSeed(),
@@ -619,6 +621,7 @@ let lastMotionAction = params.motionAction;
 let motionStatusEl = null;
 let staticPoseBeforeMotion = params.pose;
 let rebuildTimer = 0;
+let renderedCharacterModel = 'meow';
 
 function syncRugPlacement() {
   if (!cat) return;
@@ -684,6 +687,8 @@ function rebuild(quality = 'full') {
   }
   if (thunderFluffTimer > 0) syncThunderFluffVisual();
   scene.add(cat);
+  if (renderedCharacterModel !== params.characterModel) frameCharacter(cat, camera, controls);
+  renderedCharacterModel = params.characterModel;
   motionRig = params.motionDebug
     ? createMesh2MotionSkinRig(cat, 'standing')
     : null;
@@ -697,6 +702,7 @@ function rebuild(quality = 'full') {
   viewportEl.dataset.lastRebuildQuality = quality;
   viewportEl.dataset.lastRebuildMotion = String(!!params.motionDebug);
   viewportEl.dataset.catPose = params.pose;
+  viewportEl.dataset.characterModel = params.characterModel;
   viewportEl.dataset.catCoat = params.coatId;
   const rebuiltFurGeometry = cat.getObjectByName('fur')?.geometry;
   viewportEl.dataset.meshCellSize = Number(
@@ -1695,6 +1701,20 @@ const sliderSyncs = [];
 
 // 顶层保留四个常用分类；体型与花纹默认展开，细项按需要再展开。
 const bodySec = section('体型', { collapsible: true, collapsed: false });
+const characterSelect = selectRow(bodySec, '角色模型', [
+  { id: 'meow', name: '原版小猫' }, { id: 'leaf-cat', name: '叶猫（参考图造型）' },
+], {
+  get: () => params.characterModel,
+  set: value => {
+    params.characterModel = value;
+    if (value === 'leaf-cat') { params.pose = 'standing'; staticPoseBeforeMotion = 'standing'; }
+    rebuild('full'); refreshers.forEach(refresh => refresh());
+  },
+});
+const characterNote = document.createElement('p'); characterNote.className = 'experimental-note';
+characterNote.textContent = '叶猫保留参考图的薄荷绿、粉眼配色；支持头身、腿、耳、尾比例与骨骼动作。原版夸张静态姿势暂不用于叶猫。';
+characterNote.hidden = true; bodySec.appendChild(characterNote);
+refreshers.push(() => { characterSelect.sync(); characterNote.hidden = params.characterModel !== 'leaf-cat'; });
 const coatSec = section('花纹与眼睛', { collapsible: true, collapsed: false });
 const sceneSec = section('场景与渲染', { collapsible: true, collapsed: true });
 const motionSec = section('Motion', {
@@ -1779,7 +1799,7 @@ const motionToggle = toggleRow(motionSec, '动态模式', {
       params.pose = staticPoseBeforeMotion || 'standing';
     }
     params.motionDebug = on;
-    staticPoseControls.hidden = on;
+    staticPoseControls.hidden = on || params.characterModel === 'leaf-cat';
     containerPoseControls.hidden = on || params.pose !== 'containerCrouch';
     motionOptions.hidden = !on;
     motionElapsed = 0;
@@ -1850,12 +1870,12 @@ actionButton(motionOptions, '小猫归位', () => {
   if (cat) cat.position.set(0, lift.y + CAT_VISUAL_CONTACT_LIFT, 0);
 });
 motionOptions.hidden = !params.motionDebug;
-staticPoseControls.hidden = params.motionDebug;
+staticPoseControls.hidden = params.motionDebug || params.characterModel === 'leaf-cat';
 refreshers.push(() => {
   motionToggle.sync();
   motionMachineToggle.sync();
   motionOptions.hidden = !params.motionDebug;
-  staticPoseControls.hidden = params.motionDebug;
+  staticPoseControls.hidden = params.motionDebug || params.characterModel === 'leaf-cat';
   containerPoseControls.hidden = params.motionDebug || params.pose !== 'containerCrouch';
   const containerDescriptor = getContainerDescriptor(params.containerSeed);
   containerStatus.textContent = `当前猫窝：${containerDescriptor.name}`;
@@ -2955,7 +2975,7 @@ window.__shot = (w = 1280, h = 800, cam = null) => {
 };
 window.__setParams = (patch, quality = 'full') => {
   Object.assign(params, patch);
-  if (params.motionDebug) params.pose = 'standing';
+  if (params.motionDebug || params.characterModel === 'leaf-cat') params.pose = 'standing';
   if (
     patch.coatId &&
     patch.dynamicCoatBase == null &&
@@ -3018,6 +3038,7 @@ window.__setAnimation = ({
   } else if (wasEnabled) {
     params.pose = staticPoseBeforeMotion || 'standing';
   }
+  if (params.characterModel === 'leaf-cat') params.pose = 'standing';
   params.motionStateMachine = !!stateMachine;
   params.motionAction = action;
   params.motionSpeed = speed;

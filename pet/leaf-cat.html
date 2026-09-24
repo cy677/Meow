@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>叶猫 · Meow 模型工作室</title><link rel="stylesheet" href="./leafCatPreview.css"></head>
+<body>
+<header><a class="brand" href="./index.html">MEOW <span>MODEL STUDIO</span></a><span class="edition">REFERENCE EDITION · 01</span></header>
+<main>
+<aside>
+<div class="eyebrow">一个新的小伙伴</div><h1>叶猫<span class="dot">.</span></h1><p class="intro">薄荷色的小身体，叶片耳朵，<br>还有一条轻轻卷起的尾巴。</p>
+<div class="palette" aria-label="模型配色"><i></i><i></i><i></i><i></i><span>参考图配色</span></div>
+<section><h2>动作预览</h2><div class="actions"><button data-action="reference" class="active">参考姿态</button><button data-action="idle">待机</button><button data-action="walk">行走</button><button data-action="paw">轻拍</button><button data-action="jump">跳跃</button><button data-action="scratch">抓挠</button></div></section>
+<section><h2>调整比例 <button id="reset-shape" class="text-button">还原</button></h2><div id="shape-controls"></div><p class="small">保留叶猫专用比例范围和配色；松开滑块后更新模型。</p></section>
+<section class="inspect"><label><input id="collar-visible" type="checkbox" checked> 显示分层颈饰</label><label><input id="wireframe" type="checkbox"> 检查网格</label></section>
+<button id="export-glb" class="primary">下载 GLB 模型 <span>↗</span></button><p class="small export-note">包含 19 骨骼及待机、行走、轻拍、跳跃动画。<br>可导入 Blender 或 Three.js。</p>
+<p id="status" role="status">正在生成模型…</p>
+</aside>
+<div class="stage-shell"><div class="stage-title"><span>LEAF CAT</span><span id="model-stats"></span></div><div id="stage" aria-label="可旋转的三维叶猫模型"></div><div class="viewbar"><div class="views"><button data-view="three" class="active">3/4</button><button data-view="front">正面</button><button data-view="left">左侧</button><button data-view="right">右侧</button><button data-view="back">背面</button><button data-view="top">顶部</button><button data-view="bottom">足底</button></div><span>拖动旋转 · 双指缩放</span></div></div>
+</main>
+<footer>程序化几何 · 独立叶片组件 · 沿用 Meow 建模内核与动作系统 <span>无外部模型或贴图下载</span></footer>
+<script type="module" src="./leafCatPreview.js"></script>
+</body></html>

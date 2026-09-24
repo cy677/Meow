@@ -314,6 +314,7 @@ export function sampleLegSkinWeights(prefix, legU, weight = 1) {
 
 function installSkinAttributes(geometry, metrics) {
   const position = geometry.getAttribute('position');
+  const rigBodyBlend = geometry.getAttribute('rigBodyBlend');
   const rigInfluence = geometry.getAttribute('rigInfluence');
   const rigPart = geometry.getAttribute('rigPart');
   const rigTailU = geometry.getAttribute('rigTailU');
@@ -339,7 +340,11 @@ function installSkinAttributes(geometry, metrics) {
     const weights = new Map();
 
     const bodyT = clamp01((z - metrics.minZ) / metrics.depth);
-    if (legWeight > 0.05) {
+    if (rigBodyBlend) {
+      addWeight(weights, 'hips', bodyWeight * rigBodyBlend.getX(i));
+      addWeight(weights, 'spineLow', bodyWeight * rigBodyBlend.getY(i));
+      addWeight(weights, 'spineHigh', bodyWeight * rigBodyBlend.getZ(i));
+    } else if (legWeight > 0.05) {
       const bodyBone = bodyT < 0.38
         ? 'hips'
         : bodyT < 0.72
@@ -591,7 +596,11 @@ function attachSurfaceDetails(cat, bones) {
   const butt = cat.getObjectByName('buttDecal');
   const details = cat.getObjectByName('surfaceDetails');
   for (const child of [...(details?.children ?? [])]) {
-    if (child.name.startsWith('innerEar')) bones.get('head').attach(child);
+    // Optional rigid accessories declare a known bone. Bone.attach preserves
+    // their bind-world transform and leaves the original kitten path unchanged.
+    const target = child.userData.rigBone;
+    if (target && bones.has(target)) bones.get(target).attach(child);
+    else if (child.name.startsWith('innerEar')) bones.get('head').attach(child);
   }
   if (butt) bones.get('tailBase').attach(butt);
   return {
@@ -781,7 +790,7 @@ export function createMesh2MotionSkinRig(cat, pose = 'standing') {
 
     if (attachments.face && attachments.faceRestPosition) {
       const actionAmount = THREE.MathUtils.clamp(state.amount ?? 0, 0, 2);
-      const surfaceClearance = metrics.headRadius * (0.018 + actionAmount * 0.025);
+      const surfaceClearance = cat.userData.rigidFaceSurface ? 0 : metrics.headRadius * (0.018 + actionAmount * 0.025);
       attachments.face.position
         .copy(attachments.faceRestPosition)
         .addScaledVector(_pointB.set(0, 0, 1), surfaceClearance);
