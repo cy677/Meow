@@ -203,30 +203,20 @@ npm run pet:lan:https  # 配好受信任证书后使用
 | `pet/growthStore.mjs` | 年龄与目标、规则快照、日限、待确认、分类和更正 |
 | `pet/growthUI.js` / `pet/growth.css` | 家长表单、儿童成长花园及记录分布 |
 | `pet/store.mjs` / `pet/localLedger.mjs` / `pet/server.mjs` | SQLite账本、奖励、迁移、会话和本地接口 |
-| `pet/tests/` | 成长规则、HTTP权限、场景生命周期和浏览器回归 |
 | `pet/data/` / `pet-settings.json` | 默认运行数据目录与Windows启动配置，升级时保留 |
 | `docs/readme/` | 本文实际界面截图及其来源说明 |
 | `src/`、`public/`、`third_party/` | 原版小猫实现、素材、动作数据及第三方署名 |
 
 详细资料：[家长加分指南](pet/GROWTH_GUIDE.md) · [成长接口说明](pet/GROWTH_API.md) · [家庭应用说明](pet/README.md) · [平板部署](pet/PAD.md)。
 
-## 测试
+## 构建检查
 
 ```bash
-npm run test:pet
 npm run pet:build
 npm run build
 ```
 
-在独立测试环境安装浏览器测试工具，然后运行当前成长流程与原版首页回归：
-
-```bash
-npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
-npx playwright install chromium
-node pet/tests/browser-maintenance.mjs
-```
-
-测试使用临时数据库，不包含家庭真实记录。原版动作、触摸、玩具拾取和阴影检查分别由 `test:motion`、`test:poke`、`test:fish-pick`、`test:toy-shadow` 提供。旧的独立小屋浏览器脚本保留作历史参考，部分旧选择器不适用于当前iframe首页。
+测试脚本已从仓库移除；以上命令只检查两种网页构建。
 
 本文截图来自已通过的浏览器回归；部分图片仅裁取相关界面，没有修改界面数值或生成演示UI。截图来源、提交与裁剪范围见 [配图说明](docs/readme/README.md)。浏览器回归通过不等于真实iPad Safari认证。
 

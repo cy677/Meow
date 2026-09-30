@@ -1,5 +1,7 @@
 node_modules/
 dist/
+/pet/tests/
+/scripts/test_*.mjs
 参考图/
 *.log
 .env
