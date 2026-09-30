@@ -1,4 +1,5 @@
 import { CAT_APPEARANCES } from './catAppearance/catalog.js';
+import { loadSprigatito, buildSprigatito } from './catAppearance/sprigatito.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildCat, EYE_SPACING_RANGE } from './catBuilder.js';
@@ -644,12 +645,14 @@ function disposeCat() {
 
 function rebuild(quality = 'full') {
   const rebuildStartedAt = performance.now();
+  const requiredAppearance=MESH2MOTION_ACTIONS.find(clip=>clip.id===params.motionAction)?.appearance;
+  if(requiredAppearance&&requiredAppearance!==params.catAppearance){params.motionAction='idle';motionElapsed=0;}
   speechBubbles.hide();
   syncFloorPaletteToSeed(params.seed);
   resetContainerJiggle();
   disposeCat();
   let container = null;
-  if (params.pose === 'containerCrouch' && !params.motionDebug) {
+  if (params.pose === 'containerCrouch' && !params.motionDebug && params.catAppearance !== 'sprigatito') {
     const fittedCatScale = Math.max(
       Math.sqrt(params.chubbiness) * 1.02,
       params.headSize * 0.76,
@@ -671,7 +674,7 @@ function rebuild(quality = 'full') {
         containerOffsetZ: containerDescriptor.offsetZ,
       }
     : params;
-  cat = buildCat(catBuildParams, quality);
+  cat = params.catAppearance === 'sprigatito' ? buildSprigatito(catBuildParams) : buildCat(catBuildParams, quality);
   if (container) {
     const containerContents = new THREE.Group();
     containerContents.name = 'containerContents';
@@ -685,7 +688,7 @@ function rebuild(quality = 'full') {
   if (thunderFluffTimer > 0) syncThunderFluffVisual();
   scene.add(cat);
   motionRig = params.motionDebug
-    ? createMesh2MotionSkinRig(cat, 'standing')
+    ? cat.userData.motionRig ?? createMesh2MotionSkinRig(cat, 'standing')
     : null;
   const rugChanged = rugLayer.setSeed(rugState.seed);
   rugLayer.setVisible(rugState.enabled);
@@ -1376,6 +1379,7 @@ function stepSim(dt) {
     motionWasEnabled = false;
     resetMotionWorld();
   }
+  if(cat?.userData.catAppearance==='sprigatito'&&!params.motionDebug)motionState=cat.userData.animationState;
   if (cat) {
     const rootX = motionState?.rootX ?? 0;
     const rootZ = motionState?.rootZ ?? 0;
@@ -1432,6 +1436,8 @@ function stepSim(dt) {
     viewportEl.dataset.motionBoneLengthError = String(motionState?.boneLengthError ?? 0);
     viewportEl.dataset.motionButtVisible = String(!!motionState?.buttVisible);
     viewportEl.dataset.motionRigType = motionRig?.type ?? 'none';
+    viewportEl.dataset.modelMaterial = cat.userData.materialStyle ?? 'native';
+    for(const key of ['blinkLeft','blinkRight','mouthOpen'])viewportEl.dataset[key]=Number(cat.userData.animationState?.[key]??0).toFixed(4);
     const motionWeightStats = motionRig?.getWeightStats?.();
     viewportEl.dataset.motionSkinBones = String(motionRig?.skeleton?.bones?.length ?? 0);
     viewportEl.dataset.motionSkinMaxInfluences = String(motionWeightStats?.maxInfluences ?? 0);
@@ -1710,10 +1716,15 @@ const motionSec = section('Motion', {
 const appearanceControls = controlGroup(bodySec, '外观', { open: true });
 const appearanceSelect = selectRow(appearanceControls, '小猫外观', CAT_APPEARANCES, {
   get: () => params.catAppearance,
-  set: value => { params.catAppearance = value; rebuild('full'); refreshers.forEach(fn => fn()); },
+  set: async value => {
+    try {
+      if(value==='sprigatito')await loadSprigatito();
+      params.catAppearance=value; rebuild('full'); refreshers.forEach(fn=>fn());
+    } catch(error) { appearanceHint.textContent=error.message; appearanceSelect.sync(); }
+  },
 });
 const appearanceHint = document.createElement('p'); appearanceHint.className = 'container-status';
-appearanceHint.textContent = '叶猫仅叠加外观；身体、尾巴、姿势与骨骼动作沿用原版。口型随动作与姿势自动变化。切回原版保留原花色与眼色。';
+appearanceHint.textContent = '新叶喵保留原模型与原材质，沿用原版身体动作，支持眨眼和嘴巴开合。切回原版保留原花色与眼色。';
 appearanceControls.appendChild(appearanceHint);
 refreshers.push(() => {
   appearanceSelect.sync();
@@ -1881,6 +1892,10 @@ refreshers.push(() => {
   containerSoftBodyToggle.sync();
   containerSoftCollisionToggle.sync();
   motionSelect.sync();
+  for(const option of motionSelect.select.options){
+    const required=MESH2MOTION_ACTIONS.find(clip=>clip.id===option.value)?.appearance;
+    option.hidden=option.disabled=!!required&&required!==params.catAppearance;
+  }
   motionSelect.select.disabled = params.motionStateMachine;
   motionKeyboardHint.hidden = !params.motionStateMachine;
   motionSpeedControl.sync();

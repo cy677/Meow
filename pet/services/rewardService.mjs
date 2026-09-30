@@ -13,7 +13,7 @@ export function createRewardService(store) {
     config(context) {
       requireContext(context,['child']); const s=store.snapshot();
       return {version:s.version,params:s.params,sceneParams:s.sceneParams,creation:s.creation,equipped:s.equipped,
-        actions:store.catalog().rewards.filter(r=>r.category==='trick'&&s.owned.includes(r.id)).map(r=>({id:r.id,action:r.action,...(r.motion?{motion:r.motion}:{})}))};
+        actions:s.access.actions.map(({id,action,motion})=>({id,action,...(motion?{motion}:{})}))};
     },
   };
 }

@@ -13,6 +13,7 @@ output/
 References/Mesh2Motion/
 
 *.glb
+!src/assets/sprigatito-0906.glb
 scripts/mesh2motion_report.json
 
 # Local project operations and private release planning

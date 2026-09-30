@@ -61,17 +61,19 @@ if(parent)presetEditor=createPresetEditor({api,onSaved:(next,nextCatalog)=>{
 function renderLedger(){historyView?.update(state?.ledger[0]?.id);}
 function renderAppearanceMilestone(){
   const mount=$(parent?'#appearance-milestone-parent':'#appearance-milestone');
-  const {selected,unlockAt,unlocked}=state.appearance;
+  const {selected,options:choices}=state.appearance;
+  const {unlockAt,unlocked}=choices.find(item=>item.id==='sprigatito');
   const card=el('section','appearance-milestone');card.dataset.unlocked=String(unlocked);
   const heading=el('div','appearance-milestone-heading');
-  heading.append(el('strong','', '小猫外观'),el('span','',unlocked?'已解锁 · 可以切换':`累计 ${state.lifetime} / ${unlockAt} 成长分`));
-  const description=el('p','',unlocked?(parent?'叶猫外观已经解锁，孩子可以在成长记录中切换。':'叶猫外观已经解锁，可以随时切换。'):`累计成长分达到 ${unlockAt} 时自动解锁叶猫外观。`);
+  heading.append(el('strong','', '小猫外观'),el('span','',unlocked?'新叶喵已解锁':`累计 ${state.lifetime} / ${unlockAt} 成长分`));
+  const description=el('p','',unlocked?'新叶喵和专属表情已自动解锁，不扣积分。切换后可在奖励里加入表情动作。':`累计成长分达到 ${unlockAt} 时自动解锁新叶喵和专属表情，不扣积分。`);
   const options=el('div','appearance-options');
-  for(const [id,name] of [['native','原版小猫'],['leaf','叶猫外观']]){
-    const option=el(parent?'span':'button','appearance-option',parent&&selected===id?`${name} · 使用中`:name);
+  for(const {id,name,unlocked:available,unlockAt:at} of choices){
+    const label=available?name:`${name} · ${at} 分`;
+    const option=el(parent?'span':'button','appearance-option',parent&&selected===id?`${label} · 使用中`:label);
     option.dataset.appearance=id;option.dataset.selected=String(selected===id);
-    if(!parent){option.type='button';option.dataset.action='appearance';option.disabled=id==='leaf'&&!unlocked;option.setAttribute('aria-pressed',String(selected===id));}
-    else if(id==='leaf'&&!unlocked)option.classList.add('locked');
+    if(!parent){option.type='button';option.dataset.action='appearance';option.disabled=!available;option.setAttribute('aria-pressed',String(selected===id));}
+    else if(!available)option.classList.add('locked');
     options.append(option);
   }
   card.append(heading,description,options);mount.replaceChildren(card);

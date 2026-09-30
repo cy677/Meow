@@ -1,6 +1,7 @@
 import { COATS, POSES, EYE_COLORS } from '../src/coats.js';
 import { MOTION_REWARDS, defaultDuration } from './motionPrograms.mjs';
 import { SOURCE_CLIPS as CLIPS, BASIC_ACTIONS } from '../src/catMotion/clipCatalog.js';
+import { appearanceAllowsReward } from './sprigatitoRewards.mjs';
 export { BASIC_ACTIONS } from '../src/catMotion/clipCatalog.js';
 
 
@@ -24,8 +25,8 @@ export function missingUpstreamRewards(catalog) {
 
   return additions;
 }
-export function upstreamAccess(catalog, owned) {
-  const rewards=catalog.rewards.filter(r=>isFreeOriginal(r)||owned.includes(r.id));
+export function upstreamAccess(catalog, owned, appearance='native') {
+  const rewards=catalog.rewards.filter(r=>(isFreeOriginal(r)||owned.includes(r.id))&&appearanceAllowsReward(r,appearance));
 
   return {full:true, capabilities:['capture','music','weather','lighting','speech'],
     editors:[],

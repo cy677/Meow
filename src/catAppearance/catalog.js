@@ -1,7 +1,8 @@
-/** Appearance is a decoration of buildCat, never a model/pose/rig replacement. */
+/** Stable IDs preserve previously earned appearances when new models arrive. */
 export const CAT_APPEARANCES = Object.freeze([
-  { id: 'native', name: '原版小猫' },
-  { id: 'leaf', name: '叶猫外观（原版身体与动作）' },
+  { id: 'native', name: '原版小猫', unlockAt:0 },
+  { id: 'leaf', name: '叶猫外观', unlockAt:50 },
+  { id: 'sprigatito', name: '新叶喵', unlockAt:100 },
 ]);
 // Read compatibility only. These values never control animation or appear in forms.
 export const LEGACY_MOUTH_VALUES = Object.freeze(['auto', 'closed', 'open', 'meow']);

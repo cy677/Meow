@@ -84,6 +84,7 @@ const petToyInteraction=createToyInteraction({
     const point=new THREE.Vector3();let bone=host.motionRig?.skeleton.bones.find(b=>b.name==='m2m_frontLFoot');
     if(!bone)return {forward:.48,side:.2};
     while(bone?.isBone){point.add(bone.position);bone=bone.parent;}
+    point.multiplyScalar(host.cat?.userData.motionScale??1);
     return {forward:point.z,side:point.x};
   },
   blocked:(x,z,heading)=>toyWorld.catMoveBlocked(x,z,heading),
@@ -175,6 +176,7 @@ const petStudio = {
     const length=Math.hypot(shift.x,shift.z);
     if(length>.0001){petWander.targetX=petWander.x+shift.x/length*.7;petWander.targetZ=petWander.z+shift.z/length*.7;}
   },
+  prepareModels:()=>host.prepareModels?.(),
   motionState(){const state=petMotion?.getState()||{active:false,status:'idle',targetsApplied:false};return {...state,active:state.active||petToyInteraction.active,interaction:petToyInteraction.getState()};},
   motion:{
     play(action,motion={},options={}){return petStudio.playProgram(petPlanMotion(action,motion,motion.script),options);},

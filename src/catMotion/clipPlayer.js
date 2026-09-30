@@ -26,6 +26,8 @@ export function createClipPlayer(rig,cat,{applyRoot=true}={}) {
     for(let i=0;i<bones.length;i++)mixed.rotations[i].copy(from.rotations[i]).slerp(other.rotations[i],w).normalize();
     mixed.state={...(w<.5?from:other).state,active:true,
       mouthOpen:THREE.MathUtils.lerp(from.state.mouthOpen??0,other.state.mouthOpen??0,w),
+      blinkLeft:THREE.MathUtils.lerp(from.state.blinkLeft??0,other.state.blinkLeft??0,w),
+      blinkRight:THREE.MathUtils.lerp(from.state.blinkRight??0,other.state.blinkRight??0,w),
       groundWeight:THREE.MathUtils.lerp(from.state.groundWeight??0,other.state.groundWeight??0,w),
       expressionSource:w===0?from.state.expressionSource:w===1?other.state.expressionSource:'blended-clips',
     };
@@ -33,6 +35,7 @@ export function createClipPlayer(rig,cat,{applyRoot=true}={}) {
   }
   function sample(id,progress,out,motion={}) {
     const clip=requireClip(id);
+    if(clip.appearance && clip.appearance!==cat.userData.catAppearance)throw new Error('此表情仅适用于新叶喵');
     const state=rig.update(Math.min(1-1e-7,Math.max(0,progress))*clip.duration,
       {actionId:id,speed:1,intensity:motion.intensity??.85,travelDirection:motion.travelDirection,sampleOnly:true});
     for(let i=0;i<bones.length;i++)out.rotations[i].copy(bones[i].quaternion);

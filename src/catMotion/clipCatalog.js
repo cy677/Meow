@@ -55,7 +55,12 @@ function freezeClip(clip, source) {
 }
 export const SOURCE_CLIPS = Object.freeze(sourceClips.map(c=>freezeClip(c,'mesh2motion')));
 export const AUTHORED_CLIPS = Object.freeze(authoredClips.map(c=>freezeClip(c,'meow-authored')));
-export const CAT_MOTION_CLIPS = Object.freeze([...SOURCE_CLIPS,...AUTHORED_CLIPS]);
+export const SPRIGATITO_CLIPS = Object.freeze([
+  {id:'sprigatito-wink-left',name:'新叶喵 · 左眼眨眼',duration:1.4},
+  {id:'sprigatito-wink-right',name:'新叶喵 · 右眼眨眼',duration:1.4},
+  {id:'sprigatito-mouth',name:'新叶喵 · 张嘴招呼',duration:1.8},
+].map(clip=>freezeClip({...clip,loop:false,family:'expression',appearance:'sprigatito'},'0906-facial-morph')));
+export const CAT_MOTION_CLIPS = Object.freeze([...SOURCE_CLIPS,...AUTHORED_CLIPS,...SPRIGATITO_CLIPS]);
 export const CLIPS = CAT_MOTION_CLIPS;
 // Read-only lookup facade: callers cannot accidentally change global catalog state.
 const byId = new Map(CLIPS.map(c=>[c.id,c]));

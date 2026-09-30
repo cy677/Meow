@@ -51,6 +51,7 @@ function render({state,view,category,online,page,overlayOpen}){
         b.textContent=reward.inRandomScript?'从脚本中删除':'加入随机脚本';
         b.dataset.action='random-script';b.dataset.enabled=String(!reward.inRandomScript);b.disabled=!online;
         b.setAttribute('aria-pressed',String(!!reward.inRandomScript));
+        if(reward.availableForAppearance===false){b.disabled=true;b.textContent=reward.category==='trick'?'切换新叶喵后使用':'切换原版小猫后使用';}
       }
     }
     else if(!reward.eligible){b=button(`还差 ${reward.unlockAt-state.lifetime} 成长分`,'purchase','button small');b.disabled=true;}

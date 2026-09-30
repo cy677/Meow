@@ -28,6 +28,7 @@ export async function createPetServer({ dbPath=resolve(here,'data/pet.sqlite'), 
   store.installUpstreamRewards();
   store.installGrowthReward();
   store.installModelRewards();
+  store.installSprigatitoRewards();
   const auth=createAuthService(store,publicOrigin);
   const api=createApiRouter({store,auth});
   const knownHosts=new Set(['localhost','127.0.0.1','[::1]',hostname().toLowerCase()]);

@@ -4,7 +4,7 @@ export function createMeowCatModel(native) {
   const ensure=()=>{if(disposed)throw new Error('小猫模型已销毁');};
   return {
     id:'meow-procedural',externallyDriven:true,
-    load(){ensure();return this;},
+    load(){ensure();const ready=native.prepareModels?.();return ready?ready.then(()=>this):this;},
     applyAppearance(params){ensure();native.restore({params});},
     playAction(plan,options){ensure();return native.playProgram(plan,options);},
     setPose(pose){ensure();native.restore({params:{pose}});},
