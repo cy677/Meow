@@ -1,14 +1,146 @@
 {
-  "source_commit": "f06c8def41f5958ffd8281aced4ec48722a99fb1",
-  "source_run": 35312056885,
-  "source_artifact": 10533756177,
-  "description": "Actual Chromium regression screenshots using temporary demonstration accounts, not family records. Cropped images retain original pixels; no generated interface or edited values.",
+  "schema_version": 2,
+  "description": "Actual application screenshots using temporary demonstration accounts. Each image identifies its own source version. No generated UI or edited interface values.",
+  "sources": {
+    "main-preview-20261001": {
+      "source_commit": "94e84849d70cc4807b60ebd8304b3c4cd9ed3588",
+      "captured_on": "2026-10-01",
+      "capture_agent": "Luna max",
+      "mode": "static built app served from pet/dist",
+      "database": "SQLite :memory:",
+      "browser": "Chromium 151.0.7922.34 with bundled Playwright",
+      "headless": true,
+      "viewport": [
+        1366,
+        1024
+      ],
+      "device_scale_factor": 1,
+      "webgl": "SwiftShader software rendering",
+      "demo_data": {
+        "child_name": "演示宝宝",
+        "pet_name": "小橘",
+        "age": 7,
+        "mode": "school_basic",
+        "balance": 100,
+        "lifetime_growth_points": 100
+      },
+      "verification": "All four images were visually reviewed after the scene loading overlay disappeared. These are interface previews, not a full regression suite or physical iPad Safari certification."
+    },
+    "growth-regression": {
+      "source_commit": "f06c8def41f5958ffd8281aced4ec48722a99fb1",
+      "source_run": 35312056885,
+      "source_artifact": 10533756177,
+      "description": "Actual Chromium regression screenshots using temporary demonstration accounts, not family records. Cropped images retain original pixels; no generated interface or edited values."
+    }
+  },
   "images": [
-    {"path":"docs/readme/home.png","source":"luna-creation-child.png","crop":null,"source_sha256":"aefe2f2525bd02c222442d17c5e769ae5cea132a4db47763d5b3d2df68bd6e2d","size":[1024,768],"blob_sha":"3bc7940ba2b002051354e26c2e1dff1ed0cfd4e5"},
-    {"path":"docs/readme/growth-garden.png","source":"growth-child-garden.png","crop":null,"source_sha256":"8f4eef9fe30348d7c8e214696a096faab81e529308507e7b5fe572dd1028605f","size":[1180,820],"blob_sha":"7daf2cd3616ce17602269067c8e4d40a40b19640"},
-    {"path":"docs/readme/parent-scoring.png","source":"growth-parent.png","crop":[20,520,550,1590],"source_sha256":"96a399dfbc52f48303ac19183defd71638480d772df76e7960e6a4db2121ca99","size":[530,1070],"blob_sha":"a067d65d9bfd10997531757f3bb2b52b6d66c6de"},
-    {"path":"docs/readme/task-library.png","source":"growth-targets.png","crop":[55,852,1125,1667],"source_sha256":"3eaba6315a3f860225463cc7f17866e3e0993c9a4d2116c0eea9d3ec51fa31ac","size":[1070,815],"blob_sha":"d799056fa45c462ba0fd9f70a7e26ca273da9675"},
-    {"path":"docs/readme/parent-studio.png","source":"luna-creation-parent.png","crop":null,"source_sha256":"288d6d0dcb2b4cf4571aa456720c0ed94ddd8ecc5cb25ec588d91c6e503589db","size":[1280,900],"blob_sha":"cd16ba95f0f5097e3c4fffbed8a2757ad0432760"},
-    {"path":"docs/readme/family-records.png","source":"growth-family-distribution.png","crop":[18,520,1165,955],"source_sha256":"f46da0dc64487af794b7db4352aaa18260dc57a954d5887e37011be76c2b4933","size":[1147,435],"blob_sha":"215d2869b40f11944176b0463edb699e9e495c3b"}
+    {
+      "path": "docs/readme/home.png",
+      "source_id": "main-preview-20261001",
+      "source": "home.png",
+      "crop": null,
+      "scroll_offset_px": 0,
+      "source_sha256": "fdce2fcec395654a7bfe8079132f9b68f2f153e71b0c191bd82120f363e6f071",
+      "sha256": "fdce2fcec395654a7bfe8079132f9b68f2f153e71b0c191bd82120f363e6f071",
+      "size": [
+        1366,
+        1024
+      ],
+      "bytes": 419839,
+      "previous_sha256": "80fa68e30b39ca17330d6036a8f9cf5cd0ad9eeeeb6d20998aa356db849cc624"
+    },
+    {
+      "path": "docs/readme/sprigatito.png",
+      "source_id": "main-preview-20261001",
+      "source": "sprigatito.png",
+      "crop": null,
+      "scroll_offset_px": 0,
+      "source_sha256": "c54c4af294dfad4460d322b733174a09361437c2bae16051f7bfbbd769b08baa",
+      "sha256": "c54c4af294dfad4460d322b733174a09361437c2bae16051f7bfbbd769b08baa",
+      "size": [
+        1366,
+        1024
+      ],
+      "bytes": 532746
+    },
+    {
+      "path": "docs/readme/parent-studio.png",
+      "source_id": "main-preview-20261001",
+      "source": "parent-studio.png",
+      "crop": null,
+      "scroll_offset_px": 0,
+      "source_sha256": "b6517b89f2d2c8f6d7e30f4fc16ad702942e50acee4617b87453f929a9f97db8",
+      "sha256": "b6517b89f2d2c8f6d7e30f4fc16ad702942e50acee4617b87453f929a9f97db8",
+      "size": [
+        1366,
+        1024
+      ],
+      "bytes": 601020,
+      "previous_sha256": "96b935ffcb5b759886b61ee95f73d0ac3d17e5c8e12d90c0771afddcf14196b5"
+    },
+    {
+      "path": "docs/readme/parent-scoring.png",
+      "source_id": "main-preview-20261001",
+      "source": "parent-scoring.png",
+      "crop": null,
+      "scroll_offset_px": 267,
+      "source_sha256": "48fbcb9a6b26de588f2f310d9e5f03e4a1c0c5b112fcb156451ac3e466618751",
+      "sha256": "48fbcb9a6b26de588f2f310d9e5f03e4a1c0c5b112fcb156451ac3e466618751",
+      "size": [
+        1366,
+        1024
+      ],
+      "bytes": 85322,
+      "previous_sha256": "eccf81270a269ae57a4e825394c97c1361af529a57b6a719e672d612755cf6e5"
+    },
+    {
+      "path": "docs/readme/growth-garden.png",
+      "source": "growth-child-garden.png",
+      "crop": null,
+      "source_sha256": "8f4eef9fe30348d7c8e214696a096faab81e529308507e7b5fe572dd1028605f",
+      "size": [
+        1180,
+        820
+      ],
+      "blob_sha": "7daf2cd3616ce17602269067c8e4d40a40b19640",
+      "source_id": "growth-regression",
+      "sha256": "7d127011dd84634aa60abdff7f773691aed770860ca51d4af154bedcec278351"
+    },
+    {
+      "path": "docs/readme/task-library.png",
+      "source": "growth-targets.png",
+      "crop": [
+        55,
+        852,
+        1125,
+        1667
+      ],
+      "source_sha256": "3eaba6315a3f860225463cc7f17866e3e0993c9a4d2116c0eea9d3ec51fa31ac",
+      "size": [
+        1070,
+        815
+      ],
+      "blob_sha": "d799056fa45c462ba0fd9f70a7e26ca273da9675",
+      "source_id": "growth-regression",
+      "sha256": "93a8d5b3a682180420c6d93c3be4d33b8d64ef550ba2f07f0e638cdcdb7685bf"
+    },
+    {
+      "path": "docs/readme/family-records.png",
+      "source": "growth-family-distribution.png",
+      "crop": [
+        18,
+        520,
+        1165,
+        955
+      ],
+      "source_sha256": "f46da0dc64487af794b7db4352aaa18260dc57a954d5887e37011be76c2b4933",
+      "size": [
+        1147,
+        435
+      ],
+      "blob_sha": "215d2869b40f11944176b0463edb699e9e495c3b",
+      "source_id": "growth-regression",
+      "sha256": "3686c4feda2fb4cc49a1817a296b82eaa52f6e5129e43ea03e9a9935aab05572"
+    }
   ]
 }
